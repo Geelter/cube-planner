@@ -29,10 +29,19 @@ func main() {
 				log.Fatalf("database: %v", err)
 			}
 			queries := dbgen.New(pool)
+			oauthProviders := map[string]*auth.ProviderConfig{}
+			if cfg.Discord.ClientID != "" {
+				oauthProviders["discord"] = auth.DiscordProvider(cfg.Discord, cfg.BaseURL+"/auth/oauth/discord/callback")
+			}
+			if cfg.Google.ClientID != "" {
+				oauthProviders["google"] = auth.GoogleProvider(cfg.Google, cfg.BaseURL+"/auth/oauth/google/callback")
+			}
+			sessions := auth.NewSessions(queries, cfg.Secure())
 			deps := httpapi.Deps{
 				Auth:     auth.NewService(queries, mail.FromConfig(cfg), cfg.BaseURL),
-				Sessions: auth.NewSessions(queries, cfg.Secure()),
+				Sessions: sessions,
 				Queries:  queries,
+				OAuth:    auth.NewOAuth(queries, sessions, cfg.BaseURL, cfg.Secure(), oauthProviders).Routes(),
 			}
 			_, handler := httpapi.Build(deps)
 			log.Printf("listening on :%d", cfg.Port)

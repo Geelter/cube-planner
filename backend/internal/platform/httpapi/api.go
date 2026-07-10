@@ -19,6 +19,7 @@ type Deps struct {
 	Auth     *auth.Service
 	Sessions *auth.Sessions
 	Queries  *db.Queries
+	OAuth    http.Handler
 }
 
 func Build(deps Deps) (huma.API, http.Handler) {
@@ -31,5 +32,8 @@ func Build(deps Deps) (huma.API, http.Handler) {
 	registerAuth(api, deps)
 	registerSession(api, deps)
 	registerPasswordReset(api, deps)
+	if deps.OAuth != nil {
+		router.Mount("/auth/oauth", deps.OAuth)
+	}
 	return api, router
 }
