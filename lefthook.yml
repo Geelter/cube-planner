@@ -10,5 +10,6 @@ pre-commit:
       glob: "*.{ts,tsx,css,json}"
       run: pnpm exec oxfmt {staged_files} && git add {staged_files}
     gofumpt:
-      glob: "backend/**/*.go"
-      run: cd backend && go run mvdan.cc/gofumpt@latest -l -w . && git add -u
+      root: backend/
+      glob: "*.go"
+      run: go run mvdan.cc/gofumpt@latest -l -w {staged_files} && git add {staged_files}
