@@ -15,6 +15,11 @@ update users set email_verified_at = now() where id = sqlc.arg(id) and email_ver
 -- name: SetPasswordHash :exec
 update users set password_hash = sqlc.arg(password_hash) where id = sqlc.arg(id);
 
+-- name: UpdateUnverifiedUser :one
+update users set password_hash = sqlc.arg(password_hash), display_name = sqlc.arg(display_name)
+where id = sqlc.arg(id) and email_verified_at is null
+returning *;
+
 -- name: CreateSession :exec
 insert into sessions (token_hash, user_id, expires_at)
 values (sqlc.arg(token_hash), sqlc.arg(user_id), sqlc.arg(expires_at));

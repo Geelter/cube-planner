@@ -18,6 +18,7 @@ var (
 	ErrInvalidToken       = errors.New("invalid or expired token")
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrEmailNotVerified   = errors.New("email not verified")
+	ErrInvalidDisplayName = errors.New("display name contains invalid characters")
 )
 
 const (
@@ -39,6 +40,9 @@ func NewService(q *db.Queries, mailer mail.Mailer, baseURL string) *Service {
 }
 
 func (s *Service) Register(ctx context.Context, email, displayName, password string) error {
+	if !isValidDisplayName(displayName) {
+		return ErrInvalidDisplayName
+	}
 	hash, err := HashPassword(password)
 	if err != nil {
 		return err
@@ -51,11 +55,56 @@ func (s *Service) Register(ctx context.Context, email, displayName, password str
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+			return s.registerOverExisting(ctx, email, displayName, hash)
+		}
+		return err
+	}
+	return s.sendVerification(ctx, u)
+}
+
+// registerOverExisting handles re-registration attempts against an email
+// that already has a user row. If that account is still unverified, it is
+// safe to overwrite (a pre-registration hijack target): the password and
+// display name are replaced and a fresh verification email is sent. If the
+// account is already verified, the email is considered taken.
+func (s *Service) registerOverExisting(ctx context.Context, email, displayName, hash string) error {
+	existing, err := s.q.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Row disappeared between the insert conflict and this lookup
+			// (e.g. concurrent delete); treat as taken rather than retry.
+			return ErrEmailTaken
+		}
+		return err
+	}
+	if existing.EmailVerifiedAt != nil {
+		return ErrEmailTaken
+	}
+	u, err := s.q.UpdateUnverifiedUser(ctx, db.UpdateUnverifiedUserParams{
+		ID:           existing.ID,
+		PasswordHash: &hash,
+		DisplayName:  displayName,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Became verified concurrently; treat as taken.
 			return ErrEmailTaken
 		}
 		return err
 	}
 	return s.sendVerification(ctx, u)
+}
+
+// isValidDisplayName rejects control characters (runes < 0x20, or 0x7F,
+// i.e. DEL), which could be used to inject content into the plain-text
+// verification email.
+func isValidDisplayName(name string) bool {
+	for _, r := range name {
+		if r < 0x20 || r == 0x7F {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) sendVerification(ctx context.Context, u db.User) error {

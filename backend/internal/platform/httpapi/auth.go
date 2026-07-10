@@ -37,6 +37,9 @@ func registerAuth(api huma.API, deps Deps) {
 		if errors.Is(err, auth.ErrEmailTaken) {
 			return nil, huma.Error409Conflict("email already registered")
 		}
+		if errors.Is(err, auth.ErrInvalidDisplayName) {
+			return nil, huma.Error422UnprocessableEntity("display name contains invalid characters")
+		}
 		return nil, err
 	})
 

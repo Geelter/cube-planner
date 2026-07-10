@@ -250,3 +250,29 @@ func (q *Queries) SetPasswordHash(ctx context.Context, arg SetPasswordHashParams
 	_, err := q.db.Exec(ctx, setPasswordHash, arg.PasswordHash, arg.ID)
 	return err
 }
+
+const updateUnverifiedUser = `-- name: UpdateUnverifiedUser :one
+update users set password_hash = $1, display_name = $2
+where id = $3 and email_verified_at is null
+returning id, email, display_name, password_hash, email_verified_at, created_at
+`
+
+type UpdateUnverifiedUserParams struct {
+	PasswordHash *string
+	DisplayName  string
+	ID           uuid.UUID
+}
+
+func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverifiedUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUnverifiedUser, arg.PasswordHash, arg.DisplayName, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.PasswordHash,
+		&i.EmailVerifiedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
