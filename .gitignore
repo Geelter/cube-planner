@@ -1,0 +1,7 @@
+.superpowers/
+node_modules/
+dist/
+*.local
+.env
+backend/bin/
+coverage/

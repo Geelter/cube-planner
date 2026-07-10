@@ -1,0 +1,14 @@
+{
+  "name": "cube-planner",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "dev": "pnpm --filter @cube-planner/frontend dev",
+    "gen:api": "bash scripts/gen-api.sh",
+    "check:api": "bash scripts/check-api-fresh.sh",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "lefthook": "^2.0.0"
+  }
+}
