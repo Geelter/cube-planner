@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+  "/api/auth/forgot-password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Request a password reset email */
+    post: operations["forgot-password"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/auth/login": {
     parameters: {
       query?: never;
@@ -49,6 +66,23 @@ export interface paths {
     put?: never;
     /** Register with email and password */
     post: operations["register"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/auth/reset-password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Reset password with a token */
+    post: operations["reset-password"];
     delete?: never;
     options?: never;
     head?: never;
@@ -157,6 +191,16 @@ export interface components {
        */
       type: string;
     };
+    ForgotPasswordInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ForgotPasswordInputBody.json
+       */
+      readonly $schema?: string;
+      /** Format: email */
+      email: string;
+    };
     HealthOutputBody: {
       /**
        * Format: uri
@@ -190,6 +234,16 @@ export interface components {
       email: string;
       password: string;
     };
+    ResetPasswordInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ResetPasswordInputBody.json
+       */
+      readonly $schema?: string;
+      newPassword: string;
+      token: string;
+    };
     UserBody: {
       /**
        * Format: uri
@@ -220,6 +274,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  "forgot-password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ForgotPasswordInputBody"];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   login: {
     parameters: {
       query?: never;
@@ -294,6 +379,37 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": components["schemas"]["RegisterInputBody"];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  "reset-password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ResetPasswordInputBody"];
       };
     };
     responses: {

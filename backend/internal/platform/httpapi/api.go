@@ -30,5 +30,6 @@ func Build(deps Deps) (huma.API, http.Handler) {
 	registerHealth(api)
 	registerAuth(api, deps)
 	registerSession(api, deps)
+	registerPasswordReset(api, deps)
 	return api, router
 }

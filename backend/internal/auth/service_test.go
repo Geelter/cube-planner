@@ -170,3 +170,45 @@ func TestRegisterInvalidDisplayName(t *testing.T) {
 		})
 	}
 }
+
+func TestPasswordReset(t *testing.T) {
+	pool := testdb.New(t)
+	q := db.New(pool)
+	mailer := &capturingMailer{}
+	svc := auth.NewService(q, mailer, "http://localhost:5173")
+	ctx := context.Background()
+
+	if err := svc.Register(ctx, "carol@x.y", "Carol", "oldpassword"); err != nil {
+		t.Fatal(err)
+	}
+	m := tokenRe.FindStringSubmatch(mailer.last)
+	if err := svc.VerifyEmail(ctx, m[1]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Unknown email: no error, no mail.
+	mailer.last = ""
+	if err := svc.RequestPasswordReset(ctx, "nobody@x.y"); err != nil {
+		t.Fatal(err)
+	}
+	if mailer.last != "" {
+		t.Fatal("mail must not be sent for unknown email")
+	}
+
+	if err := svc.RequestPasswordReset(ctx, "carol@x.y"); err != nil {
+		t.Fatal(err)
+	}
+	m = tokenRe.FindStringSubmatch(mailer.last)
+	if m == nil {
+		t.Fatalf("no token in mail: %q", mailer.last)
+	}
+	if err := svc.ResetPassword(ctx, m[1], "newpassword1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Login(ctx, "carol@x.y", "oldpassword"); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatal("old password must stop working")
+	}
+	if _, err := svc.Login(ctx, "carol@x.y", "newpassword1"); err != nil {
+		t.Fatal(err)
+	}
+}
