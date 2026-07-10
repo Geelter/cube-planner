@@ -4,7 +4,7 @@ pre-commit:
     oxlint:
       root: frontend/
       glob: "*.{ts,tsx}"
-      run: pnpm exec oxlint {staged_files}
+      run: pnpm exec oxlint --no-error-on-unmatched-pattern {staged_files}
     oxfmt:
       root: frontend/
       glob: "*.{ts,tsx,css,json}"

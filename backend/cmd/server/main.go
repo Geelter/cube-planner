@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,8 +9,12 @@ import (
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/spf13/cobra"
 
+	"github.com/mjabloniec/cube-planner/backend/internal/auth"
+	dbgen "github.com/mjabloniec/cube-planner/backend/internal/db"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/config"
+	"github.com/mjabloniec/cube-planner/backend/internal/platform/db"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/httpapi"
+	"github.com/mjabloniec/cube-planner/backend/internal/platform/mail"
 )
 
 type options struct{}
@@ -17,8 +22,17 @@ type options struct{}
 func main() {
 	cli := humacli.New(func(hooks humacli.Hooks, _ *options) {
 		cfg := config.Load()
-		_, handler := httpapi.Build(httpapi.Deps{})
 		hooks.OnStart(func() {
+			ctx := context.Background()
+			pool, err := db.Connect(ctx, cfg.DatabaseURL)
+			if err != nil {
+				log.Fatalf("database: %v", err)
+			}
+			queries := dbgen.New(pool)
+			deps := httpapi.Deps{
+				Auth: auth.NewService(queries, mail.FromConfig(cfg), cfg.BaseURL),
+			}
+			_, handler := httpapi.Build(deps)
 			log.Printf("listening on :%d", cfg.Port)
 			if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), handler); err != nil {
 				log.Fatal(err)
