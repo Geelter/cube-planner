@@ -76,6 +76,26 @@ components:
       required:
         - status
       type: object
+    LoginInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/LoginInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        email:
+          format: email
+          type: string
+        password:
+          minLength: 1
+          type: string
+      required:
+        - email
+        - password
+      type: object
     RegisterInputBody:
       additionalProperties: false
       properties:
@@ -103,6 +123,34 @@ components:
         - displayName
         - password
       type: object
+    UserBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/UserBody.json
+          format: uri
+          readOnly: true
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+        id:
+          type: string
+        providers:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - id
+        - email
+        - displayName
+        - providers
+      type: object
     VerifyEmailInputBody:
       additionalProperties: false
       properties:
@@ -124,6 +172,59 @@ info:
   version: 0.1.0
 openapi: 3.1.0
 paths:
+  /api/auth/login:
+    post:
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserBody"
+          description: OK
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Log in with email and password
+      tags:
+        - auth
+  /api/auth/logout:
+    post:
+      operationId: logout
+      parameters:
+        - in: cookie
+          name: cp_session
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Log out
+      tags:
+        - auth
   /api/auth/register:
     post:
       operationId: register
@@ -185,4 +286,23 @@ paths:
       summary: Health check
       tags:
         - meta
+  /api/me:
+    get:
+      operationId: me
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Current user
+      tags:
+        - auth
 

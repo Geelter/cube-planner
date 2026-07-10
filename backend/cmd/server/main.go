@@ -30,7 +30,9 @@ func main() {
 			}
 			queries := dbgen.New(pool)
 			deps := httpapi.Deps{
-				Auth: auth.NewService(queries, mail.FromConfig(cfg), cfg.BaseURL),
+				Auth:     auth.NewService(queries, mail.FromConfig(cfg), cfg.BaseURL),
+				Sessions: auth.NewSessions(queries, cfg.Secure()),
+				Queries:  queries,
 			}
 			_, handler := httpapi.Build(deps)
 			log.Printf("listening on :%d", cfg.Port)
