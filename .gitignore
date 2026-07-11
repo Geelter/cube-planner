@@ -5,3 +5,4 @@ dist/
 .env
 backend/bin/
 coverage/
+frontend/src/routeTree.gen.ts

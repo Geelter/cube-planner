@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
+    "gen": "tsr generate",
+    "build": "pnpm gen && tsc --noEmit && vite build",
+    "typecheck": "pnpm gen && tsc --noEmit",
     "test": "vitest run",
     "lint": "oxlint .",
     "fmt": "oxfmt .",
@@ -19,6 +20,7 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@tanstack/router-cli": "^1.167.18",
     "@tanstack/router-plugin": "^1.168.19",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
