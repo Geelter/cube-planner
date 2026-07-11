@@ -116,6 +116,11 @@ sub-project 1 — do not change).
   which shadcn/ui components already use): one component file per
   component, variants as typed cva config — never `ButtonPrimary.tsx` /
   `Button2.tsx` files.
+- **Class composition:** `clsx` + `tailwind-merge`, unified behind the
+  standard `cn()` helper in `shared/lib` (installed with shadcn setup).
+  All conditional classes go through `cn()`; components merge incoming
+  `className` with `cn()` so consumer overrides reliably win over
+  defaults.
 
 ### Dark mode (shipped now, token-driven)
 
