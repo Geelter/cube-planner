@@ -22,7 +22,11 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   server: {
-    proxy: { "/api": "http://localhost:8080" },
+    // /auth/oauth lives on the backend (mirrors deploy/Caddyfile routing)
+    proxy: {
+      "/api": "http://localhost:8080",
+      "/auth/oauth": "http://localhost:8080",
+    },
   },
   test: {
     environment: "happy-dom",
