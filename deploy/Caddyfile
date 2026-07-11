@@ -1,0 +1,15 @@
+{$DOMAIN:localhost}
+
+handle /api/* {
+	reverse_proxy api:8080
+}
+
+handle /auth/oauth/* {
+	reverse_proxy api:8080
+}
+
+handle {
+	root * /srv
+	try_files {path} /index.html
+	file_server
+}
