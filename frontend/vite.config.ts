@@ -9,7 +9,7 @@ export default defineConfig({
     proxy: { "/api": "http://localhost:8080" },
   },
   test: {
-    environment: "jsdom",
+    environment: "happy-dom",
     setupFiles: ["./src/vitest-setup.ts"],
   },
 });

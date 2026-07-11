@@ -1,4 +1,7 @@
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
+import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
+import { TanStackDevtools } from "@tanstack/react-devtools";
+import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useLogout, useMe } from "../api/auth";
 
 export const Route = createRootRoute({ component: RootLayout });
@@ -22,6 +25,14 @@ function RootLayout() {
         )}
       </nav>
       <Outlet />
+      {import.meta.env.DEV && (
+        <TanStackDevtools
+          plugins={[
+            { name: "TanStack Router", render: <TanStackRouterDevtoolsPanel /> },
+            { name: "TanStack Query", render: <ReactQueryDevtoolsPanel /> },
+          ]}
+        />
+      )}
     </>
   );
 }
