@@ -1,0 +1,26 @@
+# LOCAL DEVELOPMENT ONLY. Credentials are intentionally hardcoded for
+# convenience and MUST NOT be reused in any shared or production environment.
+name: cube-planner
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: cube
+      POSTGRES_PASSWORD: cube
+      POSTGRES_DB: cube
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cube -d cube"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025" # SMTP (backend -> mailpit)
+      - "8025:8025" # Web UI: http://localhost:8025
+volumes:
+  pgdata:
