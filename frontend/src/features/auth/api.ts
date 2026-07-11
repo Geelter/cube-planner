@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { client } from "./client";
-import type { components } from "./schema";
+import { client } from "@/shared/api/client";
+import type { components } from "@/shared/api/schema";
 
 export type User = components["schemas"]["UserBody"];
 

@@ -6,5 +6,5 @@
     "react/react-in-jsx-scope": "off",
     "import/no-unassigned-import": "off"
   },
-  "ignorePatterns": ["dist", "src/routeTree.gen.ts", "src/api/schema.d.ts"]
+  "ignorePatterns": ["dist", "src/routeTree.gen.ts", "src/shared/api/schema.d.ts"]
 }

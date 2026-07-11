@@ -2,7 +2,7 @@ import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { useLogout, useMe } from "../api/auth";
+import { useLogout, useMe } from "@/features/auth/api";
 
 export const Route = createRootRoute({ component: RootLayout });
 

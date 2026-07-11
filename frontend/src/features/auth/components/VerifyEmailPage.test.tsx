@@ -2,13 +2,14 @@ import { QueryClient, QueryClientProvider, useMutation } from "@tanstack/react-q
 import { render, waitFor } from "@testing-library/react";
 import { StrictMode, useEffect, useRef } from "react";
 import { expect, test, vi } from "vitest";
-import { client } from "../api/client";
+import { client } from "@/shared/api/client";
 
-// verify-email.tsx is a route component (createFileRoute), which requires a
-// full router context to render. Rather than standing up a router in this
-// test, we exercise the same effect + mutation shape the component uses,
-// wrapped in StrictMode, to prove the fire-once guard prevents a double
-// network call when React double-invokes effects in development.
+// VerifyEmailPage.tsx is rendered via a route component (createFileRoute),
+// which requires a full router context to render. Rather than standing up a
+// router in this test, we exercise the same effect + mutation shape the
+// component uses, wrapped in StrictMode, to prove the fire-once guard
+// prevents a double network call when React double-invokes effects in
+// development.
 function VerifyEmailProbe({ token }: { token: string }) {
   const verify = useMutation({
     mutationFn: async (t: string) => {
