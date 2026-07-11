@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2/humacli"
@@ -17,9 +18,17 @@ import (
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/mail"
 )
 
+// Injected at build time via -ldflags (see backend/Dockerfile and Makefile).
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildTime = "unknown"
+)
+
 type options struct{}
 
 func main() {
+	slog.Info("cube-planner api", "version", version, "commit", commit, "buildTime", buildTime)
 	cli := humacli.New(func(hooks humacli.Hooks, _ *options) {
 		cfg := config.Load()
 		hooks.OnStart(func() {
