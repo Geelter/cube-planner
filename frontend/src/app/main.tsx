@@ -2,11 +2,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { getLocale } from "@/paraglide/runtime";
 import { routeTree } from "@/routeTree.gen";
 import { initTheme } from "@/shared/lib/theme";
 import "./styles.css";
 
 initTheme();
+document.documentElement.lang = getLocale();
 
 const queryClient = new QueryClient();
 const router = createRouter({ routeTree });
