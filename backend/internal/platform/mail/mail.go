@@ -35,6 +35,25 @@ type smtpMailer struct{ cfg config.SMTPConfig }
 
 func NewSMTPMailer(cfg config.SMTPConfig) Mailer { return &smtpMailer{cfg: cfg} }
 
+// smtpClientOptions builds the go-mail client options for cfg. TLS is
+// opportunistic (used when the server advertises STARTTLS, plain otherwise)
+// so both Mailpit (no STARTTLS) and a real relay work. SMTP AUTH is only
+// requested when credentials are configured, since Mailpit advertises no
+// AUTH mechanisms and forcing PLAIN auth against it fails.
+func smtpClientOptions(cfg config.SMTPConfig) []gomail.Option {
+	opts := []gomail.Option{
+		gomail.WithPort(cfg.Port),
+		gomail.WithTLSPolicy(gomail.TLSOpportunistic),
+	}
+	if cfg.User != "" {
+		opts = append(opts,
+			gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
+			gomail.WithUsername(cfg.User),
+			gomail.WithPassword(cfg.Pass))
+	}
+	return opts
+}
+
 func (m *smtpMailer) Send(ctx context.Context, to, subject, textBody string) error {
 	msg := gomail.NewMsg()
 	if err := msg.From(m.cfg.From); err != nil {
@@ -46,11 +65,7 @@ func (m *smtpMailer) Send(ctx context.Context, to, subject, textBody string) err
 	msg.Subject(subject)
 	msg.SetBodyString(gomail.TypeTextPlain, textBody)
 
-	client, err := gomail.NewClient(m.cfg.Host,
-		gomail.WithPort(m.cfg.Port),
-		gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
-		gomail.WithUsername(m.cfg.User),
-		gomail.WithPassword(m.cfg.Pass))
+	client, err := gomail.NewClient(m.cfg.Host, smtpClientOptions(m.cfg)...)
 	if err != nil {
 		return err
 	}
