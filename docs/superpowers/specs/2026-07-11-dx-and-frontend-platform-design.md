@@ -33,6 +33,9 @@ structure. That proves every piece of the platform end to end.
 |---|---|---|
 | Component layer | shadcn/ui copy-in (Radix + Tailwind) | Accessible primitives we own in-repo, freely restylable |
 | Styling engine | Tailwind v4, CSS-first config, `@tailwindcss/vite` | Utility CSS without hand-writing styles; v4 is current |
+| Component variants | `cva` (class-variance-authority) | Variants as typed props in one file; shadcn/ui already uses it |
+| Class sorting | oxfmt built-in `sortTailwindcss` | First-party since Jan 2026 — no Prettier plugin, no hack |
+| Dark mode | Ship now; two-tier semantic tokens + `data-theme`, light/dark/system | Dark-correct by construction, not per-component `dark:` overrides |
 | i18n | Paraglide JS (inlang) | Typed message functions — missing keys fail the build; matches our generated-artifact ethos |
 | Locale model | Runtime-switchable PL/EN, persisted, browser-detected initial, `en` fallback | Community is bilingual; no per-market builds needed |
 | Local dev | Hybrid: Postgres + Mailpit in Docker; Go + Vite on host; Makefile orchestrates | Fast iteration and debugger access; one command via `make up` |
@@ -105,9 +108,42 @@ sub-project 1 — do not change).
   component we don't use.
 - Copied components are ours: adapt them to oxfmt formatting and the
   strict tsconfig; they are subject to normal review like hand-written code.
-- No Tailwind class-sorting plugin (oxfmt has no hook for it); class order
-  is not enforced.
-- Dark mode, theming beyond one default palette: out of scope.
+- **Class sorting:** oxfmt's built-in `sortTailwindcss` (v4 mode, pointed
+  at the global stylesheet) with `functions: ["cva", "cn", "clsx"]` so
+  sorting also applies inside variant definitions. Beta-fresh feature; if a
+  sorter bug bites, disable the option rather than work around it.
+- **Variants are props, implemented with `cva`** (class-variance-authority,
+  which shadcn/ui components already use): one component file per
+  component, variants as typed cva config — never `ButtonPrimary.tsx` /
+  `Button2.tsx` files.
+
+### Dark mode (shipped now, token-driven)
+
+Dark mode is not per-component `dark:` overrides — it falls out of a
+two-tier token architecture:
+
+- **Tier 1 — primitive palette:** raw scales (e.g. `--zinc-*`, brand
+  scale) defined once, theme-independent.
+- **Tier 2 — semantic role tokens:** `--color-surface`, `--color-surface-raised`,
+  `--color-text`, `--color-text-muted`, `--color-border`, `--color-accent`,
+  `--color-danger`, etc. Each theme assigns primitives to roles:
+  defaults on `:root`, overrides under `[data-theme="dark"]`. Exposed to
+  Tailwind via `@theme inline` so utilities like `bg-surface` /
+  `text-muted` exist.
+- **Components consume only semantic utilities** — never raw palette
+  colors, and `dark:` variants are a rare escape hatch (registered via
+  `@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *))`),
+  not the mechanism. A component written with role tokens is dark-mode
+  correct by construction. This rule goes in the structure doc.
+- **Theme switching:** three-way user setting (light / dark / system)
+  persisted in `localStorage`, `system` resolving via
+  `prefers-color-scheme` (and reacting to OS changes). A tiny inline
+  script in `index.html` sets `data-theme` before first paint (no flash).
+  `color-scheme` is set per theme so native form controls and scrollbars
+  match. Theme toggle lives in the app shell next to the language switcher.
+- shadcn/ui's stock variables are remapped onto these role tokens when
+  components are copied in, so primitives and hand-written code share one
+  vocabulary.
 
 ## 5. i18n: Paraglide JS
 
@@ -171,7 +207,9 @@ src/
 
 - Dependencies point inward only: `routes → features → shared`.
   **Never feature → feature; never shared → feature.**
-- Variants are props, never new component files.
+- Variants are props implemented with `cva`, never new component files.
+- Colors come from semantic role tokens (`bg-surface`, `text-muted`, …),
+  never raw palette utilities; `dark:` is a rare escape hatch (see §4).
 - No hardcoded user-facing strings (see §5).
 - Test files live next to what they test (`-` prefix inside `routes/`).
 
@@ -211,6 +249,8 @@ conventions, adjudicated auth decisions left alone).
   `vitest-axe` smoke assertion.
 - i18n: one test asserting the language switcher flips visible copy and
   `<html lang>`; key parity is enforced by the Paraglide compiler, not tests.
+- Theming: one test asserting the theme toggle cycles light/dark/system,
+  persists, and sets `data-theme` (system resolution via matchMedia mock).
 - Makefile/compose: verified by running the stack (`make up`, register a
   user, read the verification mail in Mailpit) — documented as the manual
   acceptance check, not automated.
@@ -220,7 +260,7 @@ conventions, adjudicated auth decisions left alone).
 ## 11. Out of scope
 
 - Any card-data / sub-project-2 functionality
-- Dark mode or multiple themes
+- Themes beyond light + dark (the token architecture permits more later)
 - Localizing backend-generated text
 - Playwright E2E and axe audits (come with the master design's E2E suite)
 - Restructuring the backend (already conforms)
@@ -229,7 +269,8 @@ conventions, adjudicated auth decisions left alone).
 
 `make up` brings the whole stack up from a clean checkout; the auth flow
 works end to end with mail visible in Mailpit; all auth screens are styled
-with shared/ui components, fully translated (PL/EN switchable at runtime),
-and pass axe smoke checks; `structure.md` and `CLAUDE.md` exist and the
+with shared/ui components, correct in both light and dark themes
+(switchable, persisted, system-aware), fully translated (PL/EN switchable
+at runtime), and pass axe smoke checks; `structure.md` and `CLAUDE.md` exist and the
 frontend tree matches them; CI is green with `routeTree.gen.ts` and
 Paraglide output untracked; pre-push hook blocks a push that would fail CI.
