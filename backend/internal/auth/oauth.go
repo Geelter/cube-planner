@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/endpoints"
 
@@ -21,7 +20,10 @@ import (
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/config"
 )
 
-var ErrIdentityTaken = errors.New("identity already linked to another user")
+var (
+	ErrIdentityTaken  = errors.New("identity already linked to another user")
+	ErrEmailCollision = errors.New("email already registered to another account")
+)
 
 const stateCookieName = "cp_oauth_state"
 
@@ -117,7 +119,7 @@ func (o *OAuth) CompleteLogin(ctx context.Context, provider string, pu ProviderU
 
 	userID := linkTo
 	if userID == uuid.Nil {
-		userID, err = o.matchOrCreateUser(ctx, provider, pu)
+		userID, err = o.matchOrCreateUser(ctx, pu)
 		if err != nil {
 			return uuid.Nil, err
 		}
@@ -133,14 +135,33 @@ func (o *OAuth) CompleteLogin(ctx context.Context, provider string, pu ProviderU
 	return userID, nil
 }
 
-func (o *OAuth) matchOrCreateUser(ctx context.Context, provider string, pu ProviderUser) (uuid.UUID, error) {
-	if pu.EmailVerified {
-		if u, err := o.q.GetUserByEmail(ctx, pu.Email); err == nil {
-			return u.ID, nil
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+func (o *OAuth) matchOrCreateUser(ctx context.Context, pu ProviderUser) (uuid.UUID, error) {
+	existing, err := o.q.GetUserByEmail(ctx, pu.Email)
+	switch {
+	case err == nil:
+		if !pu.EmailVerified {
+			// An unverified provider email must never silently attach to (or
+			// shadow-create alongside) an existing account's address.
+			return uuid.Nil, ErrEmailCollision
+		}
+		if existing.EmailVerifiedAt != nil {
+			// Already-verified local account: link as-is.
+			return existing.ID, nil
+		}
+		// Local account exists but never verified this email — a classic
+		// pre-account-hijack target. Wipe its password so the attacker's
+		// credentials stop working, then mark the email verified and link.
+		if err := o.q.SetPasswordHash(ctx, db.SetPasswordHashParams{PasswordHash: nil, ID: existing.ID}); err != nil {
 			return uuid.Nil, err
 		}
+		if err := o.q.MarkEmailVerified(ctx, existing.ID); err != nil {
+			return uuid.Nil, err
+		}
+		return existing.ID, nil
+	case !errors.Is(err, pgx.ErrNoRows):
+		return uuid.Nil, err
 	}
+
 	var verifiedAt *time.Time
 	if pu.EmailVerified {
 		now := time.Now()
@@ -151,21 +172,6 @@ func (o *OAuth) matchOrCreateUser(ctx context.Context, provider string, pu Provi
 		DisplayName:     pu.DisplayName,
 		EmailVerifiedAt: verifiedAt,
 	})
-	if err == nil {
-		return u.ID, nil
-	}
-	// An unverified provider email that collides with an existing account's
-	// address must not silently attach to it (see CompleteLogin doc) — but a
-	// distinct new account should still be created. Since email is unique,
-	// disambiguate with the provider identity rather than erroring out.
-	var pgErr *pgconn.PgError
-	if !pu.EmailVerified && errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		u, err = o.q.CreateUser(ctx, db.CreateUserParams{
-			Email:           fmt.Sprintf("%s+%s.%s", provider, pu.ID, pu.Email),
-			DisplayName:     pu.DisplayName,
-			EmailVerifiedAt: nil,
-		})
-	}
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -257,6 +263,10 @@ func (o *OAuth) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := o.CompleteLogin(r.Context(), provider, pu, linkTo)
 	if err != nil {
+		if errors.Is(err, ErrEmailCollision) {
+			http.Redirect(w, r, o.baseURL+"/login?error=email-taken", http.StatusFound)
+			return
+		}
 		fail()
 		return
 	}
