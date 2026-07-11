@@ -4,12 +4,39 @@ pre-commit:
     oxlint:
       root: frontend/
       glob: "*.{ts,tsx}"
+      fail_text: "Lint failed. Run: make frontend-lint"
       run: pnpm exec oxlint --no-error-on-unmatched-pattern {staged_files}
     oxfmt:
       root: frontend/
       glob: "*.{ts,tsx,css,json}"
+      fail_text: "Formatting failed. Run: pnpm --filter @cube-planner/frontend fmt"
       run: pnpm exec oxfmt {staged_files} && git add {staged_files}
     gofumpt:
       root: backend/
       glob: "*.go"
+      fail_text: "gofumpt failed."
       run: go run mvdan.cc/gofumpt@latest -l -w {staged_files} && git add {staged_files}
+
+# Mirrors CI so pushes don't bounce. Heavy checks live here, not on commit.
+pre-push:
+  parallel: true
+  commands:
+    frontend-typecheck:
+      root: frontend/
+      fail_text: "TypeScript failed. Run: make frontend-typecheck"
+      run: pnpm typecheck
+    frontend-test:
+      root: frontend/
+      fail_text: "Frontend tests failed. Run: make frontend-test"
+      run: pnpm test
+    backend-vet:
+      root: backend/
+      fail_text: "go vet failed."
+      run: go vet ./...
+    backend-test:
+      root: backend/
+      fail_text: "Backend tests failed. Run: make backend-test"
+      run: go test ./...
+    api-fresh:
+      fail_text: "Generated API client is stale. Run: make api-generate and commit."
+      run: pnpm check:api
