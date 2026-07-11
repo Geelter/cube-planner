@@ -21,8 +21,9 @@ import (
 )
 
 var (
-	ErrIdentityTaken  = errors.New("identity already linked to another user")
-	ErrEmailCollision = errors.New("email already registered to another account")
+	ErrIdentityTaken   = errors.New("identity already linked to another user")
+	ErrEmailCollision  = errors.New("email already registered to another account")
+	ErrInvalidIdentity = errors.New("provider identity missing id or email")
 )
 
 const stateCookieName = "cp_oauth_state"
@@ -106,6 +107,9 @@ func NewOAuth(q *db.Queries, sessions *Sessions, baseURL string, secure bool, pr
 // linking as needed. linkTo is the logged-in user during explicit linking,
 // uuid.Nil otherwise.
 func (o *OAuth) CompleteLogin(ctx context.Context, provider string, pu ProviderUser, linkTo uuid.UUID) (uuid.UUID, error) {
+	if pu.ID == "" || pu.Email == "" {
+		return uuid.Nil, ErrInvalidIdentity
+	}
 	ident, err := o.q.GetOAuthIdentity(ctx, db.GetOAuthIdentityParams{Provider: provider, ProviderUserID: pu.ID})
 	switch {
 	case err == nil:

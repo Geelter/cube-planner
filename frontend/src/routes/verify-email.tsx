@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { client } from "../api/client";
 
 export const Route = createFileRoute("/verify-email")({
@@ -19,9 +19,12 @@ function VerifyEmailPage() {
     },
   });
   const mutate = verify.mutate;
+  const fired = useRef(false);
 
   useEffect(() => {
-    if (token) mutate(token);
+    if (!token || fired.current) return;
+    fired.current = true;
+    mutate(token);
   }, [token, mutate]);
 
   if (!token) return <p role="alert">Missing verification token.</p>;

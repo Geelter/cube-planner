@@ -127,3 +127,49 @@ func TestCompleteLogin(t *testing.T) {
 		t.Fatal("victim account password hash should be wiped after linking")
 	}
 }
+
+// TestCompleteLogin_EmptyProviderIdentity guards against providers (e.g.
+// Discord accounts with a null email) supplying an empty ID or Email: JSON
+// decodes a null email field to "", which must never reach GetUserByEmail/
+// CreateUser and produce a users row with an empty-string email or an
+// unidentifiable linked identity.
+func TestCompleteLogin_EmptyProviderIdentity(t *testing.T) {
+	pool := testdb.New(t)
+	q := db.New(pool)
+	sessions := auth.NewSessions(q, false)
+	o := auth.NewOAuth(q, sessions, "http://test", false, nil)
+	ctx := context.Background()
+
+	cases := []struct {
+		name string
+		pu   auth.ProviderUser
+	}{
+		{
+			name: "empty email",
+			pu:   auth.ProviderUser{ID: "d001", Email: "", DisplayName: "NoEmail", EmailVerified: false},
+		},
+		{
+			name: "empty id",
+			pu:   auth.ProviderUser{ID: "", Email: "noid@x.y", DisplayName: "NoID", EmailVerified: true},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := o.CompleteLogin(ctx, "discord", tc.pu, uuid.Nil)
+			if !errors.Is(err, auth.ErrInvalidIdentity) {
+				t.Fatalf("err = %v, want ErrInvalidIdentity", err)
+			}
+			if tc.pu.Email != "" {
+				if _, err := q.GetUserByEmail(ctx, tc.pu.Email); !errors.Is(err, pgx.ErrNoRows) {
+					t.Fatalf("expected no user created for rejected identity, got err=%v", err)
+				}
+			}
+			if tc.pu.ID != "" {
+				if _, err := q.GetOAuthIdentity(ctx, db.GetOAuthIdentityParams{Provider: "discord", ProviderUserID: tc.pu.ID}); !errors.Is(err, pgx.ErrNoRows) {
+					t.Fatalf("expected no oauth identity created for rejected identity, got err=%v", err)
+				}
+			}
+		})
+	}
+}
