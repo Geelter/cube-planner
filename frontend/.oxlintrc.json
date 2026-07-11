@@ -1,10 +1,15 @@
 {
-  "plugins": ["typescript", "react", "import", "oxc"],
+  "plugins": ["typescript", "react", "import", "oxc", "jsx-a11y"],
   "categories": { "correctness": "error", "suspicious": "error", "perf": "warn" },
   "env": { "browser": true },
   "rules": {
     "react/react-in-jsx-scope": "off",
     "import/no-unassigned-import": "off"
   },
-  "ignorePatterns": ["dist", "src/routeTree.gen.ts", "src/shared/api/schema.d.ts"]
+  "ignorePatterns": [
+    "dist",
+    "src/routeTree.gen.ts",
+    "src/shared/api/schema.d.ts",
+    "src/paraglide/**"
+  ]
 }

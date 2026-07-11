@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* dark: variant is an escape hatch — components should use semantic tokens. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Tier 2: semantic role tokens. Tier 1 is Tailwind's built-in palette
+   (--color-zinc-*, --color-violet-*, --color-red-*). Themes assign
+   primitives to roles; components only ever use the roles. */
+:root {
+  color-scheme: light;
+  --surface: var(--color-zinc-50);
+  --surface-raised: var(--color-white);
+  --fg: var(--color-zinc-900);
+  --fg-muted: var(--color-zinc-600);
+  --border-color: var(--color-zinc-200);
+  --accent: var(--color-violet-600);
+  --accent-fg: var(--color-white);
+  --danger: var(--color-red-600);
+  --danger-fg: var(--color-white);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: var(--color-zinc-950);
+  --surface-raised: var(--color-zinc-900);
+  --fg: var(--color-zinc-100);
+  --fg-muted: var(--color-zinc-400);
+  --border-color: var(--color-zinc-800);
+  --accent: var(--color-violet-500);
+  --accent-fg: var(--color-zinc-950);
+  --danger: var(--color-red-500);
+  --danger-fg: var(--color-zinc-950);
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-border: var(--border-color);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+}
+
+body {
+  @apply bg-surface text-fg antialiased;
+}

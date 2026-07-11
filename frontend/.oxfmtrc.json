@@ -1,3 +1,7 @@
 {
-  "ignorePatterns": ["src/routeTree.gen.ts", "src/paraglide/**"]
+  "ignorePatterns": ["src/routeTree.gen.ts", "src/paraglide/**", "src/shared/api/openapi.yaml"],
+  "sortTailwindcss": {
+    "stylesheet": "./src/app/styles.css",
+    "functions": ["cva", "cn", "clsx"]
+  }
 }
