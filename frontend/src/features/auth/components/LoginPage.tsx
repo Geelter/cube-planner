@@ -1,5 +1,11 @@
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { m } from "@/paraglide/messages";
+import { Alert } from "@/shared/ui/alert";
+import { Button } from "@/shared/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
 import { useLogin } from "../api";
 
 const route = getRouteApi("/login");
@@ -12,48 +18,69 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
 
   return (
-    <main>
-      <h1>Log in</h1>
-      {error === "oauth" && <p role="alert">Social login failed. Try again.</p>}
-      {error === "email-taken" && (
-        <p role="alert">
-          That email is already registered. Log in and link accounts from your account page.
-        </p>
-      )}
-      {error !== undefined && error !== "oauth" && error !== "email-taken" && (
-        <p role="alert">Something went wrong. Try again.</p>
-      )}
-      {login.isError && <p role="alert">{login.error.message}</p>}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          login.mutate({ email, password }, { onSuccess: () => void navigate({ to: "/" }) });
-        }}
-      >
-        <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </label>
-        <button type="submit" disabled={login.isPending}>
-          Log in
-        </button>
-      </form>
-      <p>
-        <a href="/auth/oauth/discord/start">Log in with Discord</a> ·{" "}
-        <a href="/auth/oauth/google/start">Log in with Google</a>
-      </p>
-      <p>
-        <Link to="/register">Register</Link> · <Link to="/forgot-password">Forgot password?</Link>
-      </p>
-    </main>
+    <div className="mx-auto w-full max-w-sm">
+      <Card>
+        <CardHeader>
+          <CardTitle as="h1">{m.login_title()}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {error === "oauth" && <Alert variant="danger">{m.login_error_oauth()}</Alert>}
+          {error === "email-taken" && <Alert variant="danger">{m.login_error_email_taken()}</Alert>}
+          {error !== undefined && error !== "oauth" && error !== "email-taken" && (
+            <Alert variant="danger">{m.error_generic()}</Alert>
+          )}
+          {login.isError && <Alert variant="danger">{login.error.message}</Alert>}
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              login.mutate({ email, password }, { onSuccess: () => void navigate({ to: "/" }) });
+            }}
+          >
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="login-email">{m.field_email()}</Label>
+              <Input
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="login-password">{m.field_password()}</Label>
+              <Input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" disabled={login.isPending}>
+              {m.login_submit()}
+            </Button>
+          </form>
+          <p className="text-sm text-fg-muted">
+            <a className="text-accent hover:underline" href="/auth/oauth/discord/start">
+              {m.login_with_discord()}
+            </a>
+            {" · "}
+            <a className="text-accent hover:underline" href="/auth/oauth/google/start">
+              {m.login_with_google()}
+            </a>
+          </p>
+          <p className="text-sm text-fg-muted">
+            <Link className="text-accent hover:underline" to="/register">
+              {m.login_register_link()}
+            </Link>
+            {" · "}
+            <Link className="text-accent hover:underline" to="/forgot-password">
+              {m.login_forgot_link()}
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
