@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/mjabloniec/cube-planner/backend/internal/auth"
+	"github.com/mjabloniec/cube-planner/backend/internal/cards"
 	"github.com/mjabloniec/cube-planner/backend/internal/db"
 )
 
@@ -19,6 +20,7 @@ type Deps struct {
 	Auth     *auth.Service
 	Sessions *auth.Sessions
 	Queries  *db.Queries
+	Cards    *cards.Service
 	OAuth    http.Handler
 }
 
@@ -32,6 +34,7 @@ func Build(deps Deps) (huma.API, http.Handler) {
 	registerAuth(api, deps)
 	registerSession(api, deps)
 	registerPasswordReset(api, deps)
+	registerCards(api, deps)
 	if deps.OAuth != nil {
 		router.Mount("/auth/oauth", deps.OAuth)
 	}

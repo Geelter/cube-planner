@@ -57,6 +57,7 @@ func main() {
 				Auth:     auth.NewService(queries, mail.FromConfig(cfg), cfg.BaseURL),
 				Sessions: sessions,
 				Queries:  queries,
+				Cards:    cards.NewService(queries),
 				OAuth:    auth.NewOAuth(queries, sessions, cfg.BaseURL, cfg.Secure(), oauthProviders).Routes(),
 			}
 			_, handler := httpapi.Build(deps)
