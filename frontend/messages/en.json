@@ -43,5 +43,13 @@
   "account_not_logged_in": "You are not logged in.",
   "account_linked_title": "Linked logins",
   "account_linked": "linked",
-  "account_link_now": "link now"
+  "account_link_now": "link now",
+  "nav_cards": "Cards",
+  "cards_title": "Card search",
+  "cards_search_label": "Card name",
+  "cards_search_placeholder": "Search for a card…",
+  "cards_no_results": "No cards found.",
+  "cards_select_hint": "Search and select a card to see its details.",
+  "cards_set_line": "{setName} · #{collectorNumber}",
+  "cards_printings_count": "Printings: {count}"
 }

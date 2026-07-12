@@ -43,5 +43,13 @@
   "account_not_logged_in": "Nie jesteś zalogowany(-a).",
   "account_linked_title": "Połączone logowania",
   "account_linked": "połączone",
-  "account_link_now": "połącz teraz"
+  "account_link_now": "połącz teraz",
+  "nav_cards": "Karty",
+  "cards_title": "Wyszukiwarka kart",
+  "cards_search_label": "Nazwa karty",
+  "cards_search_placeholder": "Szukaj karty…",
+  "cards_no_results": "Nie znaleziono kart.",
+  "cards_select_hint": "Wyszukaj i wybierz kartę, aby zobaczyć szczegóły.",
+  "cards_set_line": "{setName} · #{collectorNumber}",
+  "cards_printings_count": "Wydania: {count}"
 }
