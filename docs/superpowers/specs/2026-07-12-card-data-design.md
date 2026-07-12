@@ -66,7 +66,7 @@ both in production compose and testcontainers.
 | `rarity` | `text` NOT NULL | `common\|uncommon\|rare\|mythic\|special\|bonus` |
 | `layout` | `text` NOT NULL | `normal`, `transform`, `split`, … |
 | `mana_cost` | `text` NOT NULL DEFAULT `''` | top-level when Scryfall provides it, else front face |
-| `cmc` | `numeric` NOT NULL | |
+| `cmc` | `double precision` NOT NULL | maps cleanly to Go `float64` via sqlc |
 | `type_line` | `text` NOT NULL | combined, e.g. `Instant // Instant` |
 | `oracle_text` | `text` NOT NULL DEFAULT `''` | faces joined with `\n//\n` |
 | `colors` | `text[]` NOT NULL | `{W,U,B,R,G}` subset; faces' union when only per-face |
