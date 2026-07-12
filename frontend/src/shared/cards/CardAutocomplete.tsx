@@ -2,7 +2,7 @@ import { useState } from "react";
 import { m } from "@/paraglide/messages";
 import { useDebouncedValue } from "@/shared/lib/useDebouncedValue";
 import { Combobox } from "@/shared/ui/combobox";
-import { useCardAutocomplete, type CardSummary } from "../api";
+import { useCardAutocomplete, type CardSummary } from "./api";
 
 type CardAutocompleteProps = {
   id: string;

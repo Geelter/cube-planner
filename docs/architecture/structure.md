@@ -43,6 +43,7 @@ src/
 ├── shared/               # domain-blind, feature-blind
 │   ├── ui/               # primitives (button, input, card, …) — cva + cn
 │   ├── api/              # GENERATED OpenAPI client + fetch wrapper (tracked)
+│   ├── cards/            # promoted domain widgets (CardAutocomplete)
 │   ├── i18n/             # locale UI glue (LanguageSwitcher)
 │   └── lib/              # generic utilities (cn, theme)
 ├── features/<feature>/   # vertical slices: components/, api.ts, hooks
@@ -56,6 +57,9 @@ src/
 1. **Dependency direction:** `app`/`routes` → `features` → `shared`.
    Never feature → feature. Never shared → feature. If two features need
    the same thing, it moves down into `shared/` (promote, don't copy).
+   Promoted domain widgets live in `shared/<domain>/` (e.g.
+   `shared/cards/CardAutocomplete`): `shared/` stays *feature*-blind, but
+   — like the generated `shared/api/` — not necessarily domain-blind.
 2. **Routes are thin.** A route file declares path config
    (`validateSearch`, etc.) and points `component` at a feature component.
    No markup or logic in route files. Components read search params via

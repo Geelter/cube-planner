@@ -2,8 +2,9 @@ import { useState } from "react";
 import { m } from "@/paraglide/messages";
 import { Alert } from "@/shared/ui/alert";
 import { Label } from "@/shared/ui/label";
-import { useCardPrintings, type CardSummary } from "../api";
-import { CardAutocomplete } from "./CardAutocomplete";
+import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
+import { type CardSummary } from "@/shared/cards/api";
+import { useCardPrintings } from "../api";
 
 function SelectedCardPanel({ card }: { card: CardSummary }) {
   const printings = useCardPrintings(card.oracleId);
