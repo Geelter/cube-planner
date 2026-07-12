@@ -1,55 +1,68 @@
-import { QueryClient, QueryClientProvider, useMutation } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
-import { StrictMode, useEffect, useRef } from "react";
-import { expect, test, vi } from "vitest";
-import { client } from "@/shared/api/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { cleanup, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { m } from "@/paraglide/messages";
+import { routeTree } from "@/routeTree.gen";
 
-// VerifyEmailPage.tsx is rendered via a route component (createFileRoute),
-// which requires a full router context to render. Rather than standing up a
-// router in this test, we exercise the same effect + mutation shape the
-// component uses, wrapped in StrictMode, to prove the fire-once guard
-// prevents a double network call when React double-invokes effects in
-// development.
-function VerifyEmailProbe({ token }: { token: string }) {
-  const verify = useMutation({
-    mutationFn: async (t: string) => {
-      const { error } = await client.POST("/api/auth/verify-email", { body: { token: t } });
-      if (error) throw new Error(error.detail ?? "verification failed");
-    },
-  });
-  const mutate = verify.mutate;
-  const fired = useRef(false);
+// Renders the real /verify-email route under StrictMode, which double-invokes
+// effects and remounts components in development. The token is single-use, so
+// the page must fire the verify request exactly once — and the retained
+// component instance must still observe the result. Driving the request
+// through useMutation breaks the second half: the mutation fires on the
+// StrictMode-discarded observer and the surviving one stays idle forever
+// (TanStack/query#5341, closed wontfix), leaving the page stuck on
+// "Verifying…". The page therefore tracks the request with component state.
+let fetchMock: ReturnType<typeof vi.fn>;
 
-  useEffect(() => {
-    if (!token || fired.current) return;
-    fired.current = true;
-    mutate(token);
-  }, [token, mutate]);
-
-  if (verify.isPending || verify.isIdle) return <p>Verifying…</p>;
-  if (verify.isError) return <p role="alert">{verify.error.message}</p>;
-  return <p>Email verified</p>;
-}
-
-test("fire-once guard calls verify-email endpoint exactly once under StrictMode double-invoke", async () => {
-  const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+beforeEach(() => {
+  fetchMock = vi.fn(async (input: Request) =>
+    input.url.includes("/api/auth/verify-email")
+      ? new Response(null, { status: 204 })
+      : new Response("{}", { status: 401 }),
+  );
   vi.stubGlobal("fetch", fetchMock);
+  // Same devtools mount/unmount race as a11y.test.tsx — irrelevant here.
+  vi.stubEnv("DEV", false);
+});
 
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
+function renderVerifyRoute() {
+  const router = createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: ["/verify-email?token=abc123"] }),
   });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <StrictMode>
       <QueryClientProvider client={qc}>
-        <VerifyEmailProbe token="abc123" />
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </StrictMode>,
   );
+  return router;
+}
 
-  await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-  // Give any second (buggy) invocation a chance to fire before asserting.
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  expect(fetchMock).toHaveBeenCalledTimes(1);
+test("verify-email reaches the success screen under StrictMode", async () => {
+  const router = renderVerifyRoute();
+  await router.load();
 
-  vi.unstubAllGlobals();
+  await screen.findByRole("heading", { name: m.verify_done_title() });
+});
+
+test("verify-email consumes the single-use token exactly once under StrictMode", async () => {
+  const router = renderVerifyRoute();
+  await router.load();
+
+  await screen.findByRole("heading", { name: m.verify_done_title() });
+  const verifyCalls = fetchMock.mock.calls.filter(([input]) =>
+    (input as Request).url.includes("/api/auth/verify-email"),
+  );
+  expect(verifyCalls).toHaveLength(1);
 });
