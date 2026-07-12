@@ -218,9 +218,12 @@ Per structure.md dependency rules (`routes` → `features` → `shared`):
 - **Go integration (testcontainers):** an `httptest` server serves a small
   fixture bulk file (metadata + download endpoints). Run `Sync` → assert
   inserted rows; mutate the fixture → second sync → assert upsert,
-  delete-missing, and skip-when-not-newer. Endpoint tests: ranking ("bolt" →
-  Lightning Bolt in results; putting it *first* needs a popularity signal —
-  future enhancement), typo tolerance, each search filter, printings order,
+  delete-missing, and skip-when-not-newer. Endpoint tests: ranking
+  (similarity tiebreak keeps exact names ahead of alphabetical burial;
+  note "bolt" → Lightning Bolt in the top 15 is NOT achievable on full
+  data with trigram signals alone — ~19 shorter "…Bolt" names outscore
+  it; needs a popularity signal, declared future work), typo tolerance
+  ("lighntin bol" must match), each search filter, printings order,
   422/404 problems.
 - **Frontend:** RTL (happy-dom) for combobox behavior — debounce, results
   render, keyboard navigation, selection callback. Axe smoke test for the

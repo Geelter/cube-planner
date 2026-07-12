@@ -132,6 +132,10 @@ func TestAutocomplete(t *testing.T) {
 	// Tiebreak regression guard: every name containing "bolt" scores
 	// word_similarity 1.0, so without a similarity() tiebreak the
 	// alphabetical fallback can bury the exact name outside the top 15.
+	// Fixture-scale only: against the full mirror, ~19 shorter "…Bolt"
+	// names legitimately outscore Lightning Bolt on similarity(), so this
+	// asserts the tiebreak exists, not full-data top-15 presence (that
+	// needs a popularity signal — declared future work in the spec).
 	rows, err = svc.Autocomplete(ctx, "bolt")
 	if err != nil {
 		t.Fatal(err)
