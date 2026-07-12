@@ -111,6 +111,41 @@ func TestAutocomplete(t *testing.T) {
 		t.Fatalf("typo query missed Lightning Bolt: %+v", rows)
 	}
 
+	// Spec's own typo example: word_similarity('lighntin bol', 'lightning
+	// bolt') = 0.368, below the default 0.6 GUC and even the old 0.4
+	// function-call threshold. Only matches with the 0.35 database-level
+	// GUC set by migration 00003 (proves the migration is effective here).
+	rows, err = svc.Autocomplete(ctx, "lighntin bol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found = false
+	for _, r := range rows {
+		if r.Name == "Lightning Bolt" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("spec typo example missed Lightning Bolt: %+v", rows)
+	}
+
+	// Tiebreak regression guard: every name containing "bolt" scores
+	// word_similarity 1.0, so without a similarity() tiebreak the
+	// alphabetical fallback can bury the exact name outside the top 15.
+	rows, err = svc.Autocomplete(ctx, "bolt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found = false
+	for _, r := range rows {
+		if r.Name == "Lightning Bolt" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("bolt query missed Lightning Bolt: %+v", rows)
+	}
+
 	// Diacritics fold both ways.
 	rows, err = svc.Autocomplete(ctx, "seance")
 	if err != nil {

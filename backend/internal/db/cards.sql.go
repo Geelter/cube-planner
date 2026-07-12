@@ -17,7 +17,7 @@ with matches as (
     select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at
     from cards
     where normalized_name like $1 || '%'
-       or word_similarity($2, normalized_name) >= 0.4
+       or $2::text <% normalized_name
     order by oracle_id, promo, released_at desc, (image_small is null)
 )
 select scryfall_id, oracle_id, name, mana_cost, type_line, image_small
@@ -25,6 +25,7 @@ from matches
 order by
     (normalized_name like $1 || '%') desc,
     word_similarity($2, normalized_name) desc,
+    similarity($2, normalized_name) desc,
     name asc
 limit 15
 `
@@ -47,6 +48,11 @@ type AutocompleteCardsRow struct {
 // first, then newest, then has-image). Prefix matches rank above fuzzy
 // word-similarity matches. The CTE selects * because DISTINCT ON needs to
 // order by promo/released_at, which are not in the output list.
+// The <% operator (word-similarity commutator) is index-backed by the trgm
+// GIN index on normalized_name; the threshold is set at the database level
+// via pg_trgm.word_similarity_threshold (see migration 00003), not inlined
+// here, because the function-call form defeats the index. ORDER BY still
+// uses word_similarity()/similarity() for ranking — that's fine post-filter.
 func (q *Queries) AutocompleteCards(ctx context.Context, arg AutocompleteCardsParams) ([]AutocompleteCardsRow, error) {
 	rows, err := q.db.Query(ctx, autocompleteCards, arg.Prefix, arg.Query)
 	if err != nil {
@@ -228,7 +234,7 @@ with matches as (
     from cards
     where ($1::text is null
            or normalized_name like $4 || '%'
-           or word_similarity($1, normalized_name) >= 0.4)
+           or $1::text <% normalized_name)
       and ($5::text[] is null or color_identity <@ $5::text[])
       and ($6::text is null or type_line ilike '%' || $6 || '%')
       and ($7::float8 is null or cmc >= $7)
@@ -242,6 +248,8 @@ from matches
 order by
     case when $1::text is not null
          then word_similarity($1, normalized_name) end desc nulls last,
+    case when $1::text is not null
+         then similarity($1, normalized_name) end desc nulls last,
     name asc
 limit $3::int offset $2::int
 `

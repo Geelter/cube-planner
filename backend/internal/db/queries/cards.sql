@@ -69,12 +69,17 @@ where scryfall_id not in (select scryfall_id from cards_staging);
 -- first, then newest, then has-image). Prefix matches rank above fuzzy
 -- word-similarity matches. The CTE selects * because DISTINCT ON needs to
 -- order by promo/released_at, which are not in the output list.
+-- The <% operator (word-similarity commutator) is index-backed by the trgm
+-- GIN index on normalized_name; the threshold is set at the database level
+-- via pg_trgm.word_similarity_threshold (see migration 00003), not inlined
+-- here, because the function-call form defeats the index. ORDER BY still
+-- uses word_similarity()/similarity() for ranking — that's fine post-filter.
 -- name: AutocompleteCards :many
 with matches as (
     select distinct on (oracle_id) *
     from cards
     where normalized_name like sqlc.arg(prefix) || '%'
-       or word_similarity(sqlc.arg(query), normalized_name) >= 0.4
+       or sqlc.arg(query)::text <% normalized_name
     order by oracle_id, promo, released_at desc, (image_small is null)
 )
 select scryfall_id, oracle_id, name, mana_cost, type_line, image_small
@@ -82,6 +87,7 @@ from matches
 order by
     (normalized_name like sqlc.arg(prefix) || '%') desc,
     word_similarity(sqlc.arg(query), normalized_name) desc,
+    similarity(sqlc.arg(query), normalized_name) desc,
     name asc
 limit 15;
 
@@ -94,7 +100,7 @@ with matches as (
     from cards
     where (sqlc.narg(name)::text is null
            or normalized_name like sqlc.narg(name_prefix) || '%'
-           or word_similarity(sqlc.narg(name), normalized_name) >= 0.4)
+           or sqlc.narg(name)::text <% normalized_name)
       and (sqlc.narg(colors)::text[] is null or color_identity <@ sqlc.narg(colors)::text[])
       and (sqlc.narg(card_type)::text is null or type_line ilike '%' || sqlc.narg(card_type) || '%')
       and (sqlc.narg(cmc_min)::float8 is null or cmc >= sqlc.narg(cmc_min))
@@ -108,6 +114,8 @@ from matches
 order by
     case when sqlc.narg(name)::text is not null
          then word_similarity(sqlc.narg(name), normalized_name) end desc nulls last,
+    case when sqlc.narg(name)::text is not null
+         then similarity(sqlc.narg(name), normalized_name) end desc nulls last,
     name asc
 limit sqlc.arg(page_limit)::int offset sqlc.arg(page_offset)::int;
 
