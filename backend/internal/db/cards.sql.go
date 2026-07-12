@@ -8,7 +8,71 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+const autocompleteCards = `-- name: AutocompleteCards :many
+with matches as (
+    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at
+    from cards
+    where normalized_name like $1 || '%'
+       or word_similarity($2, normalized_name) >= 0.4
+    order by oracle_id, promo, released_at desc, (image_small is null)
+)
+select scryfall_id, oracle_id, name, mana_cost, type_line, image_small
+from matches
+order by
+    (normalized_name like $1 || '%') desc,
+    word_similarity($2, normalized_name) desc,
+    name asc
+limit 15
+`
+
+type AutocompleteCardsParams struct {
+	Prefix *string
+	Query  string
+}
+
+type AutocompleteCardsRow struct {
+	ScryfallID uuid.UUID
+	OracleID   uuid.UUID
+	Name       string
+	ManaCost   string
+	TypeLine   string
+	ImageSmall *string
+}
+
+// Autocomplete: oracle-level with a representative printing (non-promo
+// first, then newest, then has-image). Prefix matches rank above fuzzy
+// word-similarity matches. The CTE selects * because DISTINCT ON needs to
+// order by promo/released_at, which are not in the output list.
+func (q *Queries) AutocompleteCards(ctx context.Context, arg AutocompleteCardsParams) ([]AutocompleteCardsRow, error) {
+	rows, err := q.db.Query(ctx, autocompleteCards, arg.Prefix, arg.Query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AutocompleteCardsRow
+	for rows.Next() {
+		var i AutocompleteCardsRow
+		if err := rows.Scan(
+			&i.ScryfallID,
+			&i.OracleID,
+			&i.Name,
+			&i.ManaCost,
+			&i.TypeLine,
+			&i.ImageSmall,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const countCards = `-- name: CountCards :one
 select count(*) from cards
@@ -107,6 +171,177 @@ func (q *Queries) GetLastSucceededSyncRun(ctx context.Context) (CardSyncRun, err
 		&i.Error,
 	)
 	return i, err
+}
+
+const getPrintingsByOracleID = `-- name: GetPrintingsByOracleID :many
+select scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at from cards
+where oracle_id = $1
+order by released_at desc, set_code asc, collector_number asc
+`
+
+func (q *Queries) GetPrintingsByOracleID(ctx context.Context, oracleID uuid.UUID) ([]Card, error) {
+	rows, err := q.db.Query(ctx, getPrintingsByOracleID, oracleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Card
+	for rows.Next() {
+		var i Card
+		if err := rows.Scan(
+			&i.ScryfallID,
+			&i.OracleID,
+			&i.Name,
+			&i.NormalizedName,
+			&i.ReleasedAt,
+			&i.SetCode,
+			&i.SetName,
+			&i.CollectorNumber,
+			&i.Rarity,
+			&i.Layout,
+			&i.ManaCost,
+			&i.Cmc,
+			&i.TypeLine,
+			&i.OracleText,
+			&i.Colors,
+			&i.ColorIdentity,
+			&i.Promo,
+			&i.ImageSmall,
+			&i.ImageNormal,
+			&i.BackImageSmall,
+			&i.BackImageNormal,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchCards = `-- name: SearchCards :many
+with matches as (
+    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at
+    from cards
+    where ($1::text is null
+           or normalized_name like $4 || '%'
+           or word_similarity($1, normalized_name) >= 0.4)
+      and ($5::text[] is null or color_identity <@ $5::text[])
+      and ($6::text is null or type_line ilike '%' || $6 || '%')
+      and ($7::float8 is null or cmc >= $7)
+      and ($8::float8 is null or cmc <= $8)
+      and ($9::text is null or rarity = $9)
+      and ($10::text is null or set_code = $10)
+    order by oracle_id, promo, released_at desc, (image_small is null)
+)
+select scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, count(*) over () as total
+from matches
+order by
+    case when $1::text is not null
+         then word_similarity($1, normalized_name) end desc nulls last,
+    name asc
+limit $3::int offset $2::int
+`
+
+type SearchCardsParams struct {
+	Name       *string
+	PageOffset int32
+	PageLimit  int32
+	NamePrefix *string
+	Colors     []string
+	CardType   *string
+	CmcMin     *float64
+	CmcMax     *float64
+	Rarity     *string
+	SetCode    *string
+}
+
+type SearchCardsRow struct {
+	ScryfallID      uuid.UUID
+	OracleID        uuid.UUID
+	Name            string
+	NormalizedName  string
+	ReleasedAt      time.Time
+	SetCode         string
+	SetName         string
+	CollectorNumber string
+	Rarity          string
+	Layout          string
+	ManaCost        string
+	Cmc             float64
+	TypeLine        string
+	OracleText      string
+	Colors          []string
+	ColorIdentity   []string
+	Promo           bool
+	ImageSmall      *string
+	ImageNormal     *string
+	BackImageSmall  *string
+	BackImageNormal *string
+	UpdatedAt       time.Time
+	Total           int64
+}
+
+// Filtered search, AND-combined, all filters optional. colors implements
+// cube semantics: color_identity ⊆ selected (empty array = colorless only).
+// total is a window count over the filtered oracle-level set.
+func (q *Queries) SearchCards(ctx context.Context, arg SearchCardsParams) ([]SearchCardsRow, error) {
+	rows, err := q.db.Query(
+		ctx, searchCards,
+		arg.Name,
+		arg.PageOffset,
+		arg.PageLimit,
+		arg.NamePrefix,
+		arg.Colors,
+		arg.CardType,
+		arg.CmcMin,
+		arg.CmcMax,
+		arg.Rarity,
+		arg.SetCode,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchCardsRow
+	for rows.Next() {
+		var i SearchCardsRow
+		if err := rows.Scan(
+			&i.ScryfallID,
+			&i.OracleID,
+			&i.Name,
+			&i.NormalizedName,
+			&i.ReleasedAt,
+			&i.SetCode,
+			&i.SetName,
+			&i.CollectorNumber,
+			&i.Rarity,
+			&i.Layout,
+			&i.ManaCost,
+			&i.Cmc,
+			&i.TypeLine,
+			&i.OracleText,
+			&i.Colors,
+			&i.ColorIdentity,
+			&i.Promo,
+			&i.ImageSmall,
+			&i.ImageNormal,
+			&i.BackImageSmall,
+			&i.BackImageNormal,
+			&i.UpdatedAt,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const truncateCardsStaging = `-- name: TruncateCardsStaging :exec

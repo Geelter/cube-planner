@@ -64,3 +64,54 @@ on conflict (scryfall_id) do update set
 -- name: DeleteCardsMissingFromStaging :execrows
 delete from cards
 where scryfall_id not in (select scryfall_id from cards_staging);
+
+-- Autocomplete: oracle-level with a representative printing (non-promo
+-- first, then newest, then has-image). Prefix matches rank above fuzzy
+-- word-similarity matches. The CTE selects * because DISTINCT ON needs to
+-- order by promo/released_at, which are not in the output list.
+-- name: AutocompleteCards :many
+with matches as (
+    select distinct on (oracle_id) *
+    from cards
+    where normalized_name like sqlc.arg(prefix) || '%'
+       or word_similarity(sqlc.arg(query), normalized_name) >= 0.4
+    order by oracle_id, promo, released_at desc, (image_small is null)
+)
+select scryfall_id, oracle_id, name, mana_cost, type_line, image_small
+from matches
+order by
+    (normalized_name like sqlc.arg(prefix) || '%') desc,
+    word_similarity(sqlc.arg(query), normalized_name) desc,
+    name asc
+limit 15;
+
+-- Filtered search, AND-combined, all filters optional. colors implements
+-- cube semantics: color_identity ⊆ selected (empty array = colorless only).
+-- total is a window count over the filtered oracle-level set.
+-- name: SearchCards :many
+with matches as (
+    select distinct on (oracle_id) *
+    from cards
+    where (sqlc.narg(name)::text is null
+           or normalized_name like sqlc.narg(name_prefix) || '%'
+           or word_similarity(sqlc.narg(name), normalized_name) >= 0.4)
+      and (sqlc.narg(colors)::text[] is null or color_identity <@ sqlc.narg(colors)::text[])
+      and (sqlc.narg(card_type)::text is null or type_line ilike '%' || sqlc.narg(card_type) || '%')
+      and (sqlc.narg(cmc_min)::float8 is null or cmc >= sqlc.narg(cmc_min))
+      and (sqlc.narg(cmc_max)::float8 is null or cmc <= sqlc.narg(cmc_max))
+      and (sqlc.narg(rarity)::text is null or rarity = sqlc.narg(rarity))
+      and (sqlc.narg(set_code)::text is null or set_code = sqlc.narg(set_code))
+    order by oracle_id, promo, released_at desc, (image_small is null)
+)
+select *, count(*) over () as total
+from matches
+order by
+    case when sqlc.narg(name)::text is not null
+         then word_similarity(sqlc.narg(name), normalized_name) end desc nulls last,
+    name asc
+limit sqlc.arg(page_limit)::int offset sqlc.arg(page_offset)::int;
+
+-- name: GetPrintingsByOracleID :many
+select * from cards
+where oracle_id = sqlc.arg(oracle_id)
+order by released_at desc, set_code asc, collector_number asc;
