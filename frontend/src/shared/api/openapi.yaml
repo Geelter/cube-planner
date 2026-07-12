@@ -139,6 +139,301 @@ components:
         - typeLine
         - imageSmall
       type: object
+    ChangelogEntry:
+      additionalProperties: false
+      properties:
+        adds:
+          items:
+            $ref: "#/components/schemas/ChangelogItem"
+          type:
+            - array
+            - "null"
+        authorName:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        note:
+          type: string
+        removes:
+          items:
+            $ref: "#/components/schemas/ChangelogItem"
+          type:
+            - array
+            - "null"
+        version:
+          format: int32
+          type: integer
+      required:
+        - id
+        - version
+        - authorName
+        - note
+        - createdAt
+        - adds
+        - removes
+      type: object
+    ChangelogItem:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        oracleId:
+          type: string
+        quantity:
+          format: int32
+          type: integer
+      required:
+        - oracleId
+        - name
+        - quantity
+      type: object
+    CommitCubeChangeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/CommitCubeChangeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        adds:
+          items:
+            $ref: "#/components/schemas/CubeChangeAdd"
+          maxItems: 1000
+          type:
+            - array
+            - "null"
+        expectedVersion:
+          format: int32
+          minimum: 0
+          type: integer
+        note:
+          maxLength: 500
+          type: string
+        removes:
+          items:
+            $ref: "#/components/schemas/CubeChangeRemove"
+          maxItems: 1000
+          type:
+            - array
+            - "null"
+      required:
+        - expectedVersion
+      type: object
+    CommitCubeChangeOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/CommitCubeChangeOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        change:
+          $ref: "#/components/schemas/ChangelogEntry"
+        version:
+          format: int32
+          type: integer
+      required:
+        - change
+        - version
+      type: object
+    CreateCubeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/CreateCubeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          maxLength: 2000
+          type: string
+        name:
+          maxLength: 100
+          minLength: 1
+          type: string
+        visibility:
+          enum:
+            - public
+            - private
+          type: string
+      required:
+        - name
+        - visibility
+      type: object
+    CubeCardEntry:
+      additionalProperties: false
+      properties:
+        cmc:
+          format: double
+          type: number
+        colorIdentity:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        colors:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        imageNormal:
+          type:
+            - string
+            - "null"
+        imageSmall:
+          type:
+            - string
+            - "null"
+        manaCost:
+          type: string
+        name:
+          type: string
+        oracleId:
+          type: string
+        quantity:
+          format: int32
+          type: integer
+        rarity:
+          type: string
+        scryfallId:
+          type: string
+        typeLine:
+          type: string
+      required:
+        - scryfallId
+        - oracleId
+        - name
+        - manaCost
+        - typeLine
+        - cmc
+        - colors
+        - colorIdentity
+        - rarity
+        - imageSmall
+        - imageNormal
+        - quantity
+      type: object
+    CubeChangeAdd:
+      additionalProperties: false
+      properties:
+        quantity:
+          format: int32
+          maximum: 99
+          minimum: 1
+          type: integer
+        scryfallId:
+          type: string
+      required:
+        - scryfallId
+        - quantity
+      type: object
+    CubeChangeRemove:
+      additionalProperties: false
+      properties:
+        oracleId:
+          type: string
+        quantity:
+          format: int32
+          maximum: 99
+          minimum: 1
+          type: integer
+      required:
+        - oracleId
+        - quantity
+      type: object
+    CubeDetail:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/CubeDetail.json
+          format: uri
+          readOnly: true
+          type: string
+        cardCount:
+          format: int64
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        description:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        ownerId:
+          type: string
+        ownerName:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          description: Optimistic-concurrency token for commits
+          format: int32
+          type: integer
+        visibility:
+          enum:
+            - public
+            - private
+          type: string
+      required:
+        - id
+        - name
+        - description
+        - ownerId
+        - ownerName
+        - cardCount
+        - visibility
+        - version
+        - createdAt
+        - updatedAt
+      type: object
+    CubeSummary:
+      additionalProperties: false
+      properties:
+        cardCount:
+          description: Sum of quantities
+          format: int64
+          type: integer
+        description:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        ownerName:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        visibility:
+          enum:
+            - public
+            - private
+          type: string
+      required:
+        - id
+        - name
+        - description
+        - ownerName
+        - cardCount
+        - visibility
+        - updatedAt
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -214,6 +509,29 @@ components:
       required:
         - email
       type: object
+    GetCubeCardsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/GetCubeCardsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        cards:
+          items:
+            $ref: "#/components/schemas/CubeCardEntry"
+          type:
+            - array
+            - "null"
+        version:
+          format: int32
+          type: integer
+      required:
+        - cards
+        - version
+      type: object
     HealthOutputBody:
       additionalProperties: false
       properties:
@@ -230,6 +548,52 @@ components:
           type: string
       required:
         - status
+      type: object
+    ListCubeChangesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/ListCubeChangesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        changes:
+          items:
+            $ref: "#/components/schemas/ChangelogEntry"
+          type:
+            - array
+            - "null"
+        total:
+          format: int64
+          type: integer
+      required:
+        - changes
+        - total
+      type: object
+    ListCubesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/ListCubesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        cubes:
+          items:
+            $ref: "#/components/schemas/CubeSummary"
+          type:
+            - array
+            - "null"
+        total:
+          format: int64
+          type: integer
+      required:
+        - cubes
+        - total
       type: object
     LoginInputBody:
       additionalProperties: false
@@ -321,6 +685,29 @@ components:
       required:
         - cards
         - total
+      type: object
+    UpdateCubeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/UpdateCubeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          maxLength: 2000
+          type: string
+        name:
+          maxLength: 100
+          minLength: 1
+          type: string
+        visibility:
+          enum:
+            - public
+            - private
+          type: string
       type: object
     UserBody:
       additionalProperties: false
@@ -675,6 +1062,257 @@ paths:
       summary: All printings of an oracle card, newest first
       tags:
         - cards
+  /api/cubes:
+    get:
+      operationId: listCubes
+      parameters:
+        - description: Fuzzy name filter (min 2 chars to take effect)
+          explode: false
+          in: query
+          name: q
+          schema:
+            description: Fuzzy name filter (min 2 chars to take effect)
+            maxLength: 100
+            type: string
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            default: 20
+            format: int32
+            maximum: 100
+            minimum: 1
+            type: integer
+        - explode: false
+          in: query
+          name: offset
+          schema:
+            default: 0
+            format: int32
+            minimum: 0
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListCubesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Browse public cubes
+      tags:
+        - cubes
+    post:
+      operationId: createCube
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCubeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CubeDetail"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a cube
+      tags:
+        - cubes
+  /api/cubes/{cubeId}:
+    delete:
+      operationId: deleteCube
+      parameters:
+        - in: path
+          name: cubeId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a cube
+      tags:
+        - cubes
+    get:
+      operationId: getCube
+      parameters:
+        - in: path
+          name: cubeId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CubeDetail"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Cube metadata
+      tags:
+        - cubes
+    patch:
+      operationId: updateCube
+      parameters:
+        - in: path
+          name: cubeId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCubeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CubeDetail"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update cube metadata
+      tags:
+        - cubes
+  /api/cubes/{cubeId}/cards:
+    get:
+      operationId: getCubeCards
+      parameters:
+        - in: path
+          name: cubeId
+          required: true
+          schema:
+            type: string
+        - description: -1 = current; otherwise a historical version to reconstruct
+          explode: false
+          in: query
+          name: atVersion
+          schema:
+            default: -1
+            description: -1 = current; otherwise a historical version to reconstruct
+            format: int32
+            minimum: -1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetCubeCardsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Cube card list, current or at a historical version
+      tags:
+        - cubes
+  /api/cubes/{cubeId}/changes:
+    get:
+      operationId: listCubeChanges
+      parameters:
+        - in: path
+          name: cubeId
+          required: true
+          schema:
+            type: string
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            default: 20
+            format: int32
+            maximum: 100
+            minimum: 1
+            type: integer
+        - explode: false
+          in: query
+          name: offset
+          schema:
+            default: 0
+            format: int32
+            minimum: 0
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListCubeChangesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Changelog, newest first
+      tags:
+        - cubes
+    post:
+      operationId: commitCubeChange
+      parameters:
+        - in: path
+          name: cubeId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommitCubeChangeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommitCubeChangeOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Commit a batched diff as one changelog entry
+      tags:
+        - cubes
   /api/healthz:
     get:
       operationId: healthz
@@ -713,4 +1351,23 @@ paths:
       summary: Current user
       tags:
         - auth
+  /api/me/cubes:
+    get:
+      operationId: listMyCubes
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListCubesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List own cubes (both visibilities)
+      tags:
+        - cubes
 

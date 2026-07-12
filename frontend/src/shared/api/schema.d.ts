@@ -160,6 +160,78 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/cubes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Browse public cubes */
+    get: operations["listCubes"];
+    put?: never;
+    /** Create a cube */
+    post: operations["createCube"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/cubes/{cubeId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Cube metadata */
+    get: operations["getCube"];
+    put?: never;
+    post?: never;
+    /** Delete a cube */
+    delete: operations["deleteCube"];
+    options?: never;
+    head?: never;
+    /** Update cube metadata */
+    patch: operations["updateCube"];
+    trace?: never;
+  };
+  "/api/cubes/{cubeId}/cards": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Cube card list, current or at a historical version */
+    get: operations["getCubeCards"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/cubes/{cubeId}/changes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Changelog, newest first */
+    get: operations["listCubeChanges"];
+    put?: never;
+    /** Commit a batched diff as one changelog entry */
+    post: operations["commitCubeChange"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/healthz": {
     parameters: {
       query?: never;
@@ -186,6 +258,23 @@ export interface paths {
     };
     /** Current user */
     get: operations["me"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/me/cubes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List own cubes (both visibilities) */
+    get: operations["listMyCubes"];
     put?: never;
     post?: never;
     delete?: never;
@@ -247,6 +336,126 @@ export interface components {
       scryfallId: string;
       typeLine: string;
     };
+    ChangelogEntry: {
+      adds: components["schemas"]["ChangelogItem"][] | null;
+      authorName: string;
+      /** Format: date-time */
+      createdAt: string;
+      id: string;
+      note: string;
+      removes: components["schemas"]["ChangelogItem"][] | null;
+      /** Format: int32 */
+      version: number;
+    };
+    ChangelogItem: {
+      name: string;
+      oracleId: string;
+      /** Format: int32 */
+      quantity: number;
+    };
+    CommitCubeChangeInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/CommitCubeChangeInputBody.json
+       */
+      readonly $schema?: string;
+      adds?: components["schemas"]["CubeChangeAdd"][] | null;
+      /** Format: int32 */
+      expectedVersion: number;
+      note?: string;
+      removes?: components["schemas"]["CubeChangeRemove"][] | null;
+    };
+    CommitCubeChangeOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/CommitCubeChangeOutputBody.json
+       */
+      readonly $schema?: string;
+      change: components["schemas"]["ChangelogEntry"];
+      /** Format: int32 */
+      version: number;
+    };
+    CreateCubeInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/CreateCubeInputBody.json
+       */
+      readonly $schema?: string;
+      description?: string;
+      name: string;
+      /** @enum {string} */
+      visibility: "public" | "private";
+    };
+    CubeCardEntry: {
+      /** Format: double */
+      cmc: number;
+      colorIdentity: string[] | null;
+      colors: string[] | null;
+      imageNormal: string | null;
+      imageSmall: string | null;
+      manaCost: string;
+      name: string;
+      oracleId: string;
+      /** Format: int32 */
+      quantity: number;
+      rarity: string;
+      scryfallId: string;
+      typeLine: string;
+    };
+    CubeChangeAdd: {
+      /** Format: int32 */
+      quantity: number;
+      scryfallId: string;
+    };
+    CubeChangeRemove: {
+      oracleId: string;
+      /** Format: int32 */
+      quantity: number;
+    };
+    CubeDetail: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/CubeDetail.json
+       */
+      readonly $schema?: string;
+      /** Format: int64 */
+      cardCount: number;
+      /** Format: date-time */
+      createdAt: string;
+      description: string;
+      id: string;
+      name: string;
+      ownerId: string;
+      ownerName: string;
+      /** Format: date-time */
+      updatedAt: string;
+      /**
+       * Format: int32
+       * @description Optimistic-concurrency token for commits
+       */
+      version: number;
+      /** @enum {string} */
+      visibility: "public" | "private";
+    };
+    CubeSummary: {
+      /**
+       * Format: int64
+       * @description Sum of quantities
+       */
+      cardCount: number;
+      description: string;
+      id: string;
+      name: string;
+      ownerName: string;
+      /** Format: date-time */
+      updatedAt: string;
+      /** @enum {string} */
+      visibility: "public" | "private";
+    };
     ErrorDetail: {
       /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
       location?: string;
@@ -304,6 +513,17 @@ export interface components {
       /** Format: email */
       email: string;
     };
+    GetCubeCardsOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/GetCubeCardsOutputBody.json
+       */
+      readonly $schema?: string;
+      cards: components["schemas"]["CubeCardEntry"][] | null;
+      /** Format: int32 */
+      version: number;
+    };
     HealthOutputBody: {
       /**
        * Format: uri
@@ -313,6 +533,28 @@ export interface components {
       readonly $schema?: string;
       /** @example ok */
       status: string;
+    };
+    ListCubeChangesOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ListCubeChangesOutputBody.json
+       */
+      readonly $schema?: string;
+      changes: components["schemas"]["ChangelogEntry"][] | null;
+      /** Format: int64 */
+      total: number;
+    };
+    ListCubesOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ListCubesOutputBody.json
+       */
+      readonly $schema?: string;
+      cubes: components["schemas"]["CubeSummary"][] | null;
+      /** Format: int64 */
+      total: number;
     };
     LoginInputBody: {
       /**
@@ -357,6 +599,18 @@ export interface components {
       cards: components["schemas"]["CardDetail"][] | null;
       /** Format: int64 */
       total: number;
+    };
+    UpdateCubeInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/UpdateCubeInputBody.json
+       */
+      readonly $schema?: string;
+      description?: string;
+      name?: string;
+      /** @enum {string} */
+      visibility?: "public" | "private";
     };
     UserBody: {
       /**
@@ -684,6 +938,271 @@ export interface operations {
       };
     };
   };
+  listCubes: {
+    parameters: {
+      query?: {
+        /** @description Fuzzy name filter (min 2 chars to take effect) */
+        q?: string;
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListCubesOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  createCube: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateCubeInputBody"];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CubeDetail"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  getCube: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        cubeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CubeDetail"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  deleteCube: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        cubeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  updateCube: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        cubeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateCubeInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CubeDetail"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  getCubeCards: {
+    parameters: {
+      query?: {
+        /** @description -1 = current; otherwise a historical version to reconstruct */
+        atVersion?: number;
+      };
+      header?: never;
+      path: {
+        cubeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GetCubeCardsOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  listCubeChanges: {
+    parameters: {
+      query?: {
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path: {
+        cubeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListCubeChangesOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  commitCubeChange: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        cubeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CommitCubeChangeInputBody"];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CommitCubeChangeOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   healthz: {
     parameters: {
       query?: never;
@@ -729,6 +1248,35 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["UserBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  listMyCubes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListCubesOutputBody"];
         };
       };
       /** @description Error */
