@@ -39,10 +39,16 @@ function RootLayout() {
             <Link to="/cards" className="text-sm text-fg-muted hover:text-fg">
               {m.nav_cards()}
             </Link>
+            <Link to="/cubes" className="text-sm text-fg-muted hover:text-fg">
+              {m.nav_cubes()}
+            </Link>
           </nav>
           <div className="flex items-center gap-2">
             {me.data ? (
               <>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/cubes/mine">{m.cubes_mine_title()}</Link>
+                </Button>
                 <Button asChild variant="ghost" size="sm">
                   <Link to="/account">{me.data.displayName}</Link>
                 </Button>
