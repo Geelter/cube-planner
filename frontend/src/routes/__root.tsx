@@ -32,9 +32,14 @@ function RootLayout() {
     <div className="min-h-svh">
       <header className="border-b border-border bg-surface-raised">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between gap-4 px-4">
-          <Link to="/" className="font-semibold text-fg hover:text-accent">
-            {m.app_name()}
-          </Link>
+          <nav className="flex items-center gap-4">
+            <Link to="/" className="font-semibold text-fg hover:text-accent">
+              {m.app_name()}
+            </Link>
+            <Link to="/cards" className="text-sm text-fg-muted hover:text-fg">
+              {m.nav_cards()}
+            </Link>
+          </nav>
           <div className="flex items-center gap-2">
             {me.data ? (
               <>
