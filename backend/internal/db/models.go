@@ -77,6 +77,42 @@ type CardsStaging struct {
 	BackImageNormal *string
 }
 
+type Cube struct {
+	ID          uuid.UUID
+	OwnerID     uuid.UUID
+	Name        string
+	Description string
+	Visibility  string
+	Version     int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type CubeCard struct {
+	CubeID     uuid.UUID
+	OracleID   uuid.UUID
+	ScryfallID uuid.UUID
+	Quantity   int32
+	AddedAt    time.Time
+}
+
+type CubeChange struct {
+	ID        uuid.UUID
+	CubeID    uuid.UUID
+	Version   int32
+	AuthorID  uuid.UUID
+	Note      string
+	CreatedAt time.Time
+}
+
+type CubeChangeItem struct {
+	ChangeID   uuid.UUID
+	Kind       string
+	OracleID   uuid.UUID
+	ScryfallID uuid.UUID
+	Quantity   int32
+}
+
 type OauthIdentity struct {
 	Provider       string
 	ProviderUserID string

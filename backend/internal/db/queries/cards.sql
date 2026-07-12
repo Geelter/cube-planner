@@ -61,9 +61,14 @@ on conflict (scryfall_id) do update set
     back_image_normal = excluded.back_image_normal,
     updated_at = now();
 
+-- Cards referenced by cubes (current lists or changelog history) are kept
+-- even if they vanish from the Scryfall bulk file: cube views and history
+-- join to cards, and the cube tables have FKs to cards.
 -- name: DeleteCardsMissingFromStaging :execrows
 delete from cards
-where scryfall_id not in (select scryfall_id from cards_staging);
+where scryfall_id not in (select scryfall_id from cards_staging)
+  and scryfall_id not in (select scryfall_id from cube_cards)
+  and scryfall_id not in (select scryfall_id from cube_change_items);
 
 -- Autocomplete: oracle-level with a representative printing (non-promo
 -- first, then newest, then has-image). Prefix matches rank above fuzzy
