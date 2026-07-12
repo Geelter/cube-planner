@@ -163,8 +163,23 @@ func (s *Service) ListMine(ctx context.Context, ownerID uuid.UUID) ([]db.ListMyC
 // GetCards returns the cube list at a version. atVersion -1 (or the
 // current version) serves the materialized list; older versions replay
 // the changelog backwards. Returns the version actually served.
+//
+// All reads below must share one snapshot: ApplyChange can commit
+// concurrently between two separate pool statements, which would either
+// replay a change never applied to the quantities we read (older-version
+// branch) or pair a freshly-committed card list with a stale cube.Version
+// (current-version branch). A REPEATABLE READ transaction pins one
+// snapshot for the whole read; READ COMMITTED (the pool's default) takes
+// a fresh snapshot per statement and would not fix this.
 func (s *Service) GetCards(ctx context.Context, cubeID, viewerID uuid.UUID, atVersion int32) ([]CardEntry, int32, error) {
-	cube, err := s.Get(ctx, cubeID, viewerID)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // read-only tx; rollback after commit/read is a no-op
+	qtx := s.queries.WithTx(tx)
+
+	cube, err := s.getVisible(ctx, qtx, cubeID, viewerID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -172,7 +187,7 @@ func (s *Service) GetCards(ctx context.Context, cubeID, viewerID uuid.UUID, atVe
 		return nil, 0, ErrNotFound
 	}
 	if atVersion == -1 || atVersion == cube.Version {
-		rows, err := s.queries.GetCubeCards(ctx, cubeID)
+		rows, err := qtx.GetCubeCards(ctx, cubeID)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -189,7 +204,7 @@ func (s *Service) GetCards(ctx context.Context, cubeID, viewerID uuid.UUID, atVe
 		return entries, cube.Version, nil
 	}
 
-	quantities, err := s.queries.GetCubeCardQuantities(ctx, cubeID)
+	quantities, err := qtx.GetCubeCardQuantities(ctx, cubeID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -197,7 +212,7 @@ func (s *Service) GetCards(ctx context.Context, cubeID, viewerID uuid.UUID, atVe
 	for i, q := range quantities {
 		current[i] = Entry{OracleID: q.OracleID, ScryfallID: q.ScryfallID, Quantity: q.Quantity}
 	}
-	items, err := s.queries.ListChangeItemsAfterVersion(ctx, db.ListChangeItemsAfterVersionParams{
+	items, err := qtx.ListChangeItemsAfterVersion(ctx, db.ListChangeItemsAfterVersionParams{
 		CubeID: cubeID, AfterVersion: atVersion,
 	})
 	if err != nil {
@@ -209,7 +224,7 @@ func (s *Service) GetCards(ctx context.Context, cubeID, viewerID uuid.UUID, atVe
 	for i, e := range past {
 		ids[i] = e.ScryfallID
 	}
-	cards, err := s.queries.GetCardsDisplayByScryfallIDs(ctx, ids)
+	cards, err := qtx.GetCardsDisplayByScryfallIDs(ctx, ids)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -234,6 +249,23 @@ func (s *Service) GetCards(ctx context.Context, cubeID, viewerID uuid.UUID, atVe
 		})
 	}
 	return entries, atVersion, nil
+}
+
+// getVisible replicates Get's visibility rule (private + non-owner →
+// ErrNotFound) against a tx-bound queries handle, so GetCards can enforce
+// it inside the same snapshot as the rest of its reads.
+func (s *Service) getVisible(ctx context.Context, qtx *db.Queries, cubeID, viewerID uuid.UUID) (db.GetCubeRow, error) {
+	row, err := qtx.GetCube(ctx, cubeID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.GetCubeRow{}, ErrNotFound
+	}
+	if err != nil {
+		return db.GetCubeRow{}, err
+	}
+	if row.Visibility == "private" && row.OwnerID != viewerID {
+		return db.GetCubeRow{}, ErrNotFound
+	}
+	return row, nil
 }
 
 // groupChanges folds the flat newest-first item rows into per-version
