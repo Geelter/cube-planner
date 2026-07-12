@@ -219,7 +219,8 @@ Per structure.md dependency rules (`routes` → `features` → `shared`):
   fixture bulk file (metadata + download endpoints). Run `Sync` → assert
   inserted rows; mutate the fixture → second sync → assert upsert,
   delete-missing, and skip-when-not-newer. Endpoint tests: ranking ("bolt" →
-  Lightning Bolt first; typo tolerance), each search filter, printings order,
+  Lightning Bolt in results; putting it *first* needs a popularity signal —
+  future enhancement), typo tolerance, each search filter, printings order,
   422/404 problems.
 - **Frontend:** RTL (happy-dom) for combobox behavior — debounce, results
   render, keyboard navigation, selection callback. Axe smoke test for the
