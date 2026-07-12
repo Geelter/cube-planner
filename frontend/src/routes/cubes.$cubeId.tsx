@@ -1,5 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/cubes/$cubeId")({
-  component: () => <div>Cube detail page (Task 10)</div>,
+  component: () => (
+    <div className="mx-auto max-w-5xl px-4 py-6">
+      <Outlet />
+    </div>
+  ),
 });
