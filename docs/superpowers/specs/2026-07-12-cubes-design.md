@@ -75,8 +75,13 @@ Migration `backend/migrations/00004_cubes.sql` (+ goose down).
 - `oracle_id` uuid, `scryfall_id` uuid FK → `cards(scryfall_id)`
 - `quantity` int CHECK (quantity >= 1)
 - One row per (change, kind, oracle card).
-- No denormalized card name: the Scryfall mirror's staging-swap import
-  never deletes rows, so history joins to `cards` safely.
+- No denormalized card name: history joins to `cards`. The mirror's sync
+  CAN delete cards that vanish from the Scryfall bulk file
+  (`DeleteCardsMissingFromStaging`), which would orphan these joins and
+  violate the FKs — so that query gains a guard: never delete cards
+  referenced by `cube_cards` or `cube_change_items`. (Correction found
+  during planning; the original spec wrongly claimed the mirror never
+  deletes.)
 
 ### Save semantics
 
