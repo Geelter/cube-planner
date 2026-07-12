@@ -144,4 +144,5 @@ export function Combobox<T>({
       )}
     </div>
   );
+  /* eslint-enable jsx-a11y/interactive-supports-focus, jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role, jsx-a11y/click-events-have-key-events */
 }
