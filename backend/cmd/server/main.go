@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/mjabloniec/cube-planner/backend/internal/auth"
+	"github.com/mjabloniec/cube-planner/backend/internal/cards"
 	dbgen "github.com/mjabloniec/cube-planner/backend/internal/db"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/config"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/db"
@@ -46,6 +47,12 @@ func main() {
 				oauthProviders["google"] = auth.GoogleProvider(cfg.Google, cfg.BaseURL+"/auth/oauth/google/callback")
 			}
 			sessions := auth.NewSessions(queries, cfg.Secure())
+			if cfg.CardsSyncEnabled {
+				syncer := cards.NewSyncer(pool,
+					cards.NewScryfallClient(cfg.ScryfallBaseURL, "cube-planner/"+version),
+					slog.Default())
+				go syncer.RunScheduler(ctx, cards.DefaultSyncCheckInterval)
+			}
 			deps := httpapi.Deps{
 				Auth:     auth.NewService(queries, mail.FromConfig(cfg), cfg.BaseURL),
 				Sessions: sessions,

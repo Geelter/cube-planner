@@ -19,13 +19,15 @@ type OAuthCredentials struct {
 }
 
 type Config struct {
-	Port        int
-	Env         string
-	DatabaseURL string
-	BaseURL     string
-	SMTP        SMTPConfig
-	Discord     OAuthCredentials
-	Google      OAuthCredentials
+	Port             int
+	Env              string
+	DatabaseURL      string
+	BaseURL          string
+	SMTP             SMTPConfig
+	Discord          OAuthCredentials
+	Google           OAuthCredentials
+	CardsSyncEnabled bool
+	ScryfallBaseURL  string
 }
 
 func (c Config) Secure() bool { return c.Env == "prod" }
@@ -43,8 +45,10 @@ func Load() Config {
 			Pass: env("SMTP_PASS", ""),
 			From: env("SMTP_FROM", "cube-planner@localhost"),
 		},
-		Discord: OAuthCredentials{ClientID: env("DISCORD_CLIENT_ID", ""), ClientSecret: env("DISCORD_CLIENT_SECRET", "")},
-		Google:  OAuthCredentials{ClientID: env("GOOGLE_CLIENT_ID", ""), ClientSecret: env("GOOGLE_CLIENT_SECRET", "")},
+		Discord:          OAuthCredentials{ClientID: env("DISCORD_CLIENT_ID", ""), ClientSecret: env("DISCORD_CLIENT_SECRET", "")},
+		Google:           OAuthCredentials{ClientID: env("GOOGLE_CLIENT_ID", ""), ClientSecret: env("GOOGLE_CLIENT_SECRET", "")},
+		CardsSyncEnabled: envBool("CARDS_SYNC_ENABLED", true),
+		ScryfallBaseURL:  env("SCRYFALL_BASE_URL", "https://api.scryfall.com"),
 	}
 }
 
@@ -59,6 +63,15 @@ func envInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+func envBool(key string, fallback bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
 		}
 	}
 	return fallback
