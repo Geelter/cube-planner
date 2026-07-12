@@ -18,6 +18,65 @@ type AuthToken struct {
 	ExpiresAt time.Time
 }
 
+type Card struct {
+	ScryfallID      uuid.UUID
+	OracleID        uuid.UUID
+	Name            string
+	NormalizedName  string
+	ReleasedAt      time.Time
+	SetCode         string
+	SetName         string
+	CollectorNumber string
+	Rarity          string
+	Layout          string
+	ManaCost        string
+	Cmc             float64
+	TypeLine        string
+	OracleText      string
+	Colors          []string
+	ColorIdentity   []string
+	Promo           bool
+	ImageSmall      *string
+	ImageNormal     *string
+	BackImageSmall  *string
+	BackImageNormal *string
+	UpdatedAt       time.Time
+}
+
+type CardSyncRun struct {
+	ID            int64
+	StartedAt     time.Time
+	FinishedAt    *time.Time
+	Status        string
+	BulkUpdatedAt *time.Time
+	CardsCount    *int32
+	Error         *string
+}
+
+type CardsStaging struct {
+	ScryfallID      uuid.UUID
+	OracleID        uuid.UUID
+	Name            string
+	NormalizedName  string
+	ReleasedAt      time.Time
+	SetCode         string
+	SetName         string
+	CollectorNumber string
+	Rarity          string
+	Layout          string
+	ManaCost        string
+	Cmc             float64
+	TypeLine        string
+	OracleText      string
+	Colors          []string
+	ColorIdentity   []string
+	Promo           bool
+	ImageSmall      *string
+	ImageNormal     *string
+	BackImageSmall  *string
+	BackImageNormal *string
+}
+
 type OauthIdentity struct {
 	Provider       string
 	ProviderUserID string

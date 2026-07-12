@@ -19,3 +19,7 @@ sql:
             go_type:
               type: "time.Time"
               pointer: true
+          - db_type: "date"
+            go_type: "time.Time"
+          - db_type: "pg_catalog.date"
+            go_type: "time.Time"
