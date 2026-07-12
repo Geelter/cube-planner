@@ -11,6 +11,7 @@ import (
 
 	"github.com/mjabloniec/cube-planner/backend/internal/auth"
 	"github.com/mjabloniec/cube-planner/backend/internal/cards"
+	"github.com/mjabloniec/cube-planner/backend/internal/cubes"
 	"github.com/mjabloniec/cube-planner/backend/internal/db"
 )
 
@@ -21,6 +22,7 @@ type Deps struct {
 	Sessions *auth.Sessions
 	Queries  *db.Queries
 	Cards    *cards.Service
+	Cubes    *cubes.Service
 	OAuth    http.Handler
 }
 
@@ -35,6 +37,7 @@ func Build(deps Deps) (huma.API, http.Handler) {
 	registerSession(api, deps)
 	registerPasswordReset(api, deps)
 	registerCards(api, deps)
+	registerCubes(api, deps)
 	if deps.OAuth != nil {
 		router.Mount("/auth/oauth", deps.OAuth)
 	}

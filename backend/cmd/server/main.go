@@ -12,6 +12,7 @@ import (
 
 	"github.com/mjabloniec/cube-planner/backend/internal/auth"
 	"github.com/mjabloniec/cube-planner/backend/internal/cards"
+	"github.com/mjabloniec/cube-planner/backend/internal/cubes"
 	dbgen "github.com/mjabloniec/cube-planner/backend/internal/db"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/config"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/db"
@@ -58,6 +59,7 @@ func main() {
 				Sessions: sessions,
 				Queries:  queries,
 				Cards:    cards.NewService(queries),
+				Cubes:    cubes.NewService(queries, pool),
 				OAuth:    auth.NewOAuth(queries, sessions, cfg.BaseURL, cfg.Secure(), oauthProviders).Routes(),
 			}
 			_, handler := httpapi.Build(deps)
