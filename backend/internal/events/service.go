@@ -153,7 +153,8 @@ var legalTransitions = map[string][]string{
 	"publish": {"draft"},
 	"start":   {"published"},
 	"finish":  {"started"},
-	"cancel":  {"published", "started"},
+	// cancelled → cancel is a refund-retry no-op re-run (spec §3).
+	"cancel": {"published", "started", "cancelled"},
 }
 
 // Transition validates and applies a lifecycle action. start additionally
@@ -169,6 +170,7 @@ func (s *Service) Transition(ctx context.Context, eventID uuid.UUID, action stri
 	}[action]
 	var out db.Event
 	var emails []pendingEmail
+	var refundRows []db.ListActiveRegistrationsForEventRow
 	err := s.withTx(ctx, func(qtx *db.Queries) error {
 		ev, err := qtx.GetEventForUpdate(ctx, eventID)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -193,7 +195,7 @@ func (s *Service) Transition(ctx context.Context, eventID uuid.UUID, action stri
 			}
 		}
 		if action == "cancel" {
-			emails, err = s.cancelEventLocked(ctx, qtx, ev)
+			emails, refundRows, err = s.cancelEventLocked(ctx, qtx, ev)
 			if err != nil {
 				return err
 			}
@@ -205,6 +207,9 @@ func (s *Service) Transition(ctx context.Context, eventID uuid.UUID, action stri
 		return nil, err
 	}
 	s.sendEmails(ctx, emails)
+	if action == "cancel" {
+		s.refundCancelledEventRows(ctx, out, refundRows)
+	}
 	return &out, nil
 }
 
@@ -604,5 +609,491 @@ func (s *Service) closeRegistrationLocked(ctx context.Context, qtx *db.Queries, 
 			return err
 		}
 	}
+	return nil
+}
+
+// refundDeadlineFor: explicit deadline, else the event start.
+func refundDeadlineFor(ev db.Event) time.Time {
+	if ev.RefundDeadline != nil {
+		return *ev.RefundDeadline
+	}
+	return ev.StartsAt
+}
+
+// CancelRegistration is self-cancel. Cancelling always frees the spot
+// (waitlist promotion is never blocked); only the MONEY depends on the
+// deadline: in-window paid → automatic refund; past it → refund_requested
+// (organizer decides). Free-event rows never touch Stripe.
+func (s *Service) CancelRegistration(ctx context.Context, eventID, userID uuid.UUID) (*db.Registration, error) {
+	var out db.Registration
+	var emails []pendingEmail
+	refundIntent := ""
+	err := s.withTx(ctx, func(qtx *db.Queries) error {
+		ev, err := qtx.GetEventForUpdate(ctx, eventID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrEventNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if ev.Status == "draft" {
+			return ErrEventNotFound
+		}
+		if ev.Status != "published" {
+			return ErrRegistrationClosed
+		}
+		reg, err := qtx.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{
+			EventID: eventID, UserID: userID,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrRegistrationNotFound
+		}
+		if err != nil {
+			return err
+		}
+		switch reg.Status {
+		case "waitlisted":
+			out, err = qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+				ID: reg.ID, Status: "cancelled",
+			})
+			return err
+		case "pending_payment":
+			out, err = qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+				ID: reg.ID, Status: "cancelled",
+			})
+			if err != nil {
+				return err
+			}
+			emails, err = s.promoteLocked(ctx, qtx, ev)
+			return err
+		case "paid":
+			switch {
+			case reg.StripePaymentIntentID == nil:
+				// Free event: nothing to refund.
+				out, err = qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+					ID: reg.ID, Status: "cancelled",
+				})
+			case s.now().Before(refundDeadlineFor(ev)):
+				// Refund first, finalize after the call succeeds (below).
+				refundIntent = *reg.StripePaymentIntentID
+				out = reg
+				return nil
+			default:
+				out, err = qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+					ID: reg.ID, Status: "refund_requested",
+				})
+			}
+			if err != nil {
+				return err
+			}
+			more, err := s.promoteLocked(ctx, qtx, ev)
+			emails = append(emails, more...)
+			return err
+		default:
+			return ErrRegistrationNotFound
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.sendEmails(ctx, emails)
+	if refundIntent != "" {
+		return s.refundRegistration(ctx, out.ID, refundIntent, false)
+	}
+	return &out, nil
+}
+
+// refundRegistration calls Stripe, then finalizes the row to 'refunded'
+// under the event lock, promoting if the row still held a spot. Races
+// with the charge.refunded webhook are resolved by the status check.
+// apology selects the late-payment email instead of the plain refund one.
+func (s *Service) refundRegistration(ctx context.Context, regID uuid.UUID, paymentIntentID string, apology bool) (*db.Registration, error) {
+	if err := s.stripe.RefundPaymentIntent(ctx, paymentIntentID); err != nil {
+		return nil, err
+	}
+	var out db.Registration
+	var emails []pendingEmail
+	err := s.withTx(ctx, func(qtx *db.Queries) error {
+		reg, err := qtx.GetRegistration(ctx, regID)
+		if err != nil {
+			return err
+		}
+		ev, err := qtx.GetEventForUpdate(ctx, reg.EventID)
+		if err != nil {
+			return err
+		}
+		reg, err = qtx.GetRegistration(ctx, regID) // re-read under the lock
+		if err != nil {
+			return err
+		}
+		if reg.Status == "refunded" {
+			out = reg
+			return nil
+		}
+		wasHolding := reg.Status == "paid" || reg.Status == "pending_payment"
+		out, err = qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+			ID: regID, Status: "refunded",
+		})
+		if err != nil {
+			return err
+		}
+		u, err := qtx.GetUserByID(ctx, reg.UserID)
+		if err != nil {
+			return err
+		}
+		if apology {
+			emails = append(emails, paymentAfterExpiryEmail(u, ev, s.baseURL))
+		} else {
+			emails = append(emails, refundIssuedEmail(u, ev, s.baseURL))
+		}
+		if wasHolding {
+			more, err := s.promoteLocked(ctx, qtx, ev)
+			if err != nil {
+				return err
+			}
+			emails = append(emails, more...)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.sendEmails(ctx, emails)
+	return &out, nil
+}
+
+// OrganizerRefund resolves a refund_requested queue entry, or
+// kick-refunds a paid registration.
+func (s *Service) OrganizerRefund(ctx context.Context, eventID, registrationID uuid.UUID) (*db.Registration, error) {
+	reg, err := s.queries.GetRegistration(ctx, registrationID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && reg.EventID != eventID) {
+		return nil, ErrRegistrationNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if reg.Status != "refund_requested" && reg.Status != "paid" {
+		return nil, fmt.Errorf("%w: refund on %s registration", ErrInvalidTransition, reg.Status)
+	}
+	if reg.StripePaymentIntentID == nil {
+		return nil, fmt.Errorf("%w: nothing was paid", ErrInvalidTransition)
+	}
+	return s.refundRegistration(ctx, registrationID, *reg.StripePaymentIntentID, false)
+}
+
+// DenyRefund resolves a refund_requested entry as denied: the row is
+// cancelled, the money stays.
+func (s *Service) DenyRefund(ctx context.Context, eventID, registrationID uuid.UUID) (*db.Registration, error) {
+	var out db.Registration
+	var emails []pendingEmail
+	err := s.withTx(ctx, func(qtx *db.Queries) error {
+		reg, err := qtx.GetRegistration(ctx, registrationID)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && reg.EventID != eventID) {
+			return ErrRegistrationNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if reg.Status != "refund_requested" {
+			return fmt.Errorf("%w: deny-refund on %s registration", ErrInvalidTransition, reg.Status)
+		}
+		ev, err := qtx.GetEvent(ctx, reg.EventID)
+		if err != nil {
+			return err
+		}
+		out, err = qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+			ID: registrationID, Status: "cancelled",
+		})
+		if err != nil {
+			return err
+		}
+		u, err := qtx.GetUserByID(ctx, reg.UserID)
+		if err != nil {
+			return err
+		}
+		emails = append(emails, refundDeniedEmail(u, ev, s.baseURL))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.sendEmails(ctx, emails)
+	return &out, nil
+}
+
+// cancelEventLocked transitions every no-money row to cancelled and
+// returns the rows that need a Stripe refund (processed AFTER commit —
+// no IO under the event lock).
+func (s *Service) cancelEventLocked(ctx context.Context, qtx *db.Queries, ev db.Event) ([]pendingEmail, []db.ListActiveRegistrationsForEventRow, error) {
+	rows, err := qtx.ListActiveRegistrationsForEvent(ctx, ev.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var emails []pendingEmail
+	var refunds []db.ListActiveRegistrationsForEventRow
+	for _, r := range rows {
+		if (r.Status == "paid" || r.Status == "refund_requested") && r.StripePaymentIntentID != nil {
+			refunds = append(refunds, r)
+			continue
+		}
+		if _, err := qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+			ID: r.ID, Status: "cancelled",
+		}); err != nil {
+			return nil, nil, err
+		}
+		u := db.User{Email: r.Email, DisplayName: r.DisplayName}
+		emails = append(emails, eventCancelledEmail(u, ev, false, s.baseURL))
+	}
+	return emails, refunds, nil
+}
+
+// refundCancelledEventRows runs after the cancel transaction commits.
+// A failed Stripe call leaves that row untouched; re-running the cancel
+// action retries exactly the leftovers.
+func (s *Service) refundCancelledEventRows(ctx context.Context, ev db.Event, rows []db.ListActiveRegistrationsForEventRow) {
+	for _, r := range rows {
+		if err := s.stripe.RefundPaymentIntent(ctx, *r.StripePaymentIntentID); err != nil {
+			s.log.Error("events: cancel refund failed, re-run cancel to retry",
+				"registration", r.ID, "error", err)
+			continue
+		}
+		err := s.withTx(ctx, func(qtx *db.Queries) error {
+			_, err := qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+				ID: r.ID, Status: "refunded",
+			})
+			return err
+		})
+		if err != nil {
+			s.log.Error("events: mark refunded after cancel", "registration", r.ID, "error", err)
+			continue
+		}
+		u := db.User{Email: r.Email, DisplayName: r.DisplayName}
+		s.sendEmails(ctx, []pendingEmail{eventCancelledEmail(u, ev, true, s.baseURL)})
+	}
+}
+
+// WebhookEvent is the minimal, SDK-independent shape the chi handler
+// extracts from a verified Stripe event.
+type WebhookEvent struct {
+	ID                string
+	Type              string
+	CheckoutSessionID string
+	PaymentIntentID   string
+}
+
+// errAlreadySeen: duplicate delivery — acknowledged, never an error.
+var errAlreadySeen = errors.New("stripe event already processed")
+
+// HandleWebhookEvent processes a signature-verified Stripe event
+// idempotently (stripe_events insert-or-skip in the same transaction as
+// the state change). Unknown types are recorded and acknowledged.
+func (s *Service) HandleWebhookEvent(ctx context.Context, we WebhookEvent) error {
+	var err error
+	switch we.Type {
+	case "checkout.session.completed":
+		err = s.handleCheckoutCompleted(ctx, we)
+	case "checkout.session.expired":
+		err = s.handleCheckoutExpired(ctx, we)
+	case "charge.refunded":
+		err = s.handleChargeRefunded(ctx, we)
+	default:
+		err = s.withTx(ctx, func(qtx *db.Queries) error {
+			_, e := qtx.InsertStripeEvent(ctx, db.InsertStripeEventParams{
+				StripeEventID: we.ID, Type: we.Type,
+			})
+			return e
+		})
+	}
+	if errors.Is(err, errAlreadySeen) {
+		return nil
+	}
+	return err
+}
+
+func markSeen(ctx context.Context, qtx *db.Queries, we WebhookEvent) error {
+	n, err := qtx.InsertStripeEvent(ctx, db.InsertStripeEventParams{
+		StripeEventID: we.ID, Type: we.Type,
+	})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return errAlreadySeen
+	}
+	return nil
+}
+
+func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) error {
+	var emails []pendingEmail
+	lateRefund := ""
+	var lateRegID uuid.UUID
+	err := s.withTx(ctx, func(qtx *db.Queries) error {
+		if err := markSeen(ctx, qtx, we); err != nil {
+			return err
+		}
+		reg, err := qtx.GetRegistrationByCheckoutSession(ctx, &we.CheckoutSessionID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			s.log.Warn("stripe webhook: unknown checkout session", "session", we.CheckoutSessionID)
+			return nil // acknowledge; nothing to do
+		}
+		if err != nil {
+			return err
+		}
+		ev, err := qtx.GetEventForUpdate(ctx, reg.EventID)
+		if err != nil {
+			return err
+		}
+		reg, err = qtx.GetRegistration(ctx, reg.ID) // re-read under the lock
+		if err != nil {
+			return err
+		}
+		// Always record the intent so dashboard refunds stay traceable.
+		if we.PaymentIntentID != "" {
+			if err := qtx.SetRegistrationPaymentIntent(ctx, db.SetRegistrationPaymentIntentParams{
+				ID: reg.ID, PaymentIntentID: &we.PaymentIntentID,
+			}); err != nil {
+				return err
+			}
+		}
+		u, err := qtx.GetUserByID(ctx, reg.UserID)
+		if err != nil {
+			return err
+		}
+		switch reg.Status {
+		case "pending_payment":
+			pi := we.PaymentIntentID
+			paidAt := s.now()
+			if _, err := qtx.MarkRegistrationPaid(ctx, db.MarkRegistrationPaidParams{
+				ID: reg.ID, PaidAt: &paidAt, PaymentIntentID: &pi,
+			}); err != nil {
+				return err
+			}
+			emails = append(emails, confirmationEmail(u, ev, s.baseURL))
+			return nil
+		case "paid":
+			return nil // redundant delivery of a different event id
+		default:
+			// Late payment: the registration already expired/cancelled.
+			occupied, err := qtx.CountOccupiedSpots(ctx, ev.ID)
+			if err != nil {
+				return err
+			}
+			if ev.Status == "published" && occupied < int64(ev.MaxParticipants) {
+				pi := we.PaymentIntentID
+				paidAt := s.now()
+				if _, err := qtx.MarkRegistrationPaid(ctx, db.MarkRegistrationPaidParams{
+					ID: reg.ID, PaidAt: &paidAt, PaymentIntentID: &pi,
+				}); err != nil {
+					return err
+				}
+				emails = append(emails, confirmationEmail(u, ev, s.baseURL))
+				return nil
+			}
+			lateRefund = we.PaymentIntentID
+			lateRegID = reg.ID
+			return nil
+		}
+	})
+	if err != nil {
+		return err
+	}
+	s.sendEmails(ctx, emails)
+	if lateRefund != "" {
+		if _, err := s.refundRegistration(ctx, lateRegID, lateRefund, true); err != nil {
+			// The charge stays; a dashboard refund + charge.refunded webhook
+			// will sync state. Log loudly.
+			s.log.Error("events: late-payment auto-refund failed", "registration", lateRegID, "error", err)
+		}
+	}
+	return nil
+}
+
+func (s *Service) handleCheckoutExpired(ctx context.Context, we WebhookEvent) error {
+	var emails []pendingEmail
+	err := s.withTx(ctx, func(qtx *db.Queries) error {
+		if err := markSeen(ctx, qtx, we); err != nil {
+			return err
+		}
+		reg, err := qtx.GetRegistrationByCheckoutSession(ctx, &we.CheckoutSessionID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		ev, err := qtx.GetEventForUpdate(ctx, reg.EventID)
+		if err != nil {
+			return err
+		}
+		reg, err = qtx.GetRegistration(ctx, reg.ID)
+		if err != nil {
+			return err
+		}
+		if reg.Status != "pending_payment" {
+			return nil
+		}
+		if _, err := qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+			ID: reg.ID, Status: "expired",
+		}); err != nil {
+			return err
+		}
+		emails, err = s.promoteLocked(ctx, qtx, ev)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	s.sendEmails(ctx, emails)
+	return nil
+}
+
+func (s *Service) handleChargeRefunded(ctx context.Context, we WebhookEvent) error {
+	var emails []pendingEmail
+	err := s.withTx(ctx, func(qtx *db.Queries) error {
+		if err := markSeen(ctx, qtx, we); err != nil {
+			return err
+		}
+		reg, err := qtx.GetRegistrationByPaymentIntent(ctx, &we.PaymentIntentID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		ev, err := qtx.GetEventForUpdate(ctx, reg.EventID)
+		if err != nil {
+			return err
+		}
+		reg, err = qtx.GetRegistration(ctx, reg.ID)
+		if err != nil {
+			return err
+		}
+		if reg.Status == "refunded" {
+			return nil // we issued this refund ourselves
+		}
+		wasHolding := reg.Status == "paid" || reg.Status == "pending_payment"
+		if _, err := qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+			ID: reg.ID, Status: "refunded",
+		}); err != nil {
+			return err
+		}
+		u, err := qtx.GetUserByID(ctx, reg.UserID)
+		if err != nil {
+			return err
+		}
+		emails = append(emails, refundIssuedEmail(u, ev, s.baseURL))
+		if wasHolding {
+			more, err := s.promoteLocked(ctx, qtx, ev)
+			if err != nil {
+				return err
+			}
+			emails = append(emails, more...)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	s.sendEmails(ctx, emails)
 	return nil
 }

@@ -587,3 +587,398 @@ func TestPayValidation(t *testing.T) {
 		t.Fatalf("want ErrRegistrationNotPayable after expiry, got %v", err)
 	}
 }
+
+// ---- Task 6 tests ----
+
+// paidRegistration drives a registration through register → Pay →
+// checkout.session.completed, returning the paid row. If the user already
+// holds an active pending_payment registration (e.g. promoted from the
+// waitlist by an earlier expiry sweep), that row is reused instead of
+// registering fresh — Register rejects a second active registration.
+func (e *testEnv) paidRegistration(t *testing.T, eventID, userID uuid.UUID) *db.Registration {
+	t.Helper()
+	ctx := context.Background()
+	var reg *db.Registration
+	if existing, err := e.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{
+		EventID: eventID, UserID: userID,
+	}); err == nil {
+		reg = &existing
+	} else {
+		reg = e.register(t, eventID, userID)
+	}
+	if reg.Status != "pending_payment" {
+		t.Fatalf("expected pending_payment before pay, got %s", reg.Status)
+	}
+	if _, err := e.svc.Pay(ctx, eventID, userID); err != nil {
+		t.Fatal(err)
+	}
+	err := e.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID:                "evt_completed_" + reg.ID.String(),
+		Type:              "checkout.session.completed",
+		CheckoutSessionID: "cs_test_" + reg.ID.String(),
+		PaymentIntentID:   "pi_" + reg.ID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.q.GetRegistration(ctx, reg.ID)
+	if err != nil || got.Status != "paid" {
+		t.Fatalf("webhook should mark paid: %v %+v", err, got)
+	}
+	return &got
+}
+
+func TestWebhookCompletedIsIdempotent(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	reg := env.paidRegistration(t, ev.ID, alice)
+
+	mails := len(env.mailer.sent)
+	// Redelivery of the same Stripe event id must no-op.
+	err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_completed_" + reg.ID.String(), Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_test_" + reg.ID.String(), PaymentIntentID: "pi_" + reg.ID.String(),
+	})
+	if err != nil || len(env.mailer.sent) != mails {
+		t.Fatalf("duplicate delivery must no-op: %v (mails %d→%d)", err, mails, len(env.mailer.sent))
+	}
+}
+
+func TestSelfCancelWaitlistedAndPending(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	env.register(t, ev.ID, a) // pending, holds the spot
+	env.register(t, ev.ID, b) // waitlisted
+
+	// Waitlisted cancel: no promotion side effects, no refund.
+	got, err := env.svc.CancelRegistration(ctx, ev.ID, b)
+	if err != nil || got.Status != "cancelled" {
+		t.Fatalf("waitlist cancel: %v %+v", err, got)
+	}
+	// Re-waitlist b, then cancel the pending holder → b promotes.
+	env.register(t, ev.ID, b)
+	got, err = env.svc.CancelRegistration(ctx, ev.ID, a)
+	if err != nil || got.Status != "cancelled" {
+		t.Fatalf("pending cancel: %v %+v", err, got)
+	}
+	gotB, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: b})
+	if err != nil || gotB.Status != "pending_payment" {
+		t.Fatalf("b must be promoted after pending cancel: %v %+v", err, gotB)
+	}
+	if len(env.stripe.refunds) != 0 {
+		t.Fatalf("no refunds expected, got %v", env.stripe.refunds)
+	}
+}
+
+func TestSelfCancelPaidBeforeDeadlineRefunds(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	ra := env.paidRegistration(t, ev.ID, a)
+	env.register(t, ev.ID, b) // waitlisted
+
+	got, err := env.svc.CancelRegistration(ctx, ev.ID, a)
+	if err != nil || got.Status != "refunded" {
+		t.Fatalf("in-window paid cancel: %v %+v", err, got)
+	}
+	if len(env.stripe.refunds) != 1 || env.stripe.refunds[0] != "pi_"+ra.ID.String() {
+		t.Fatalf("want refund of a's payment intent, got %v", env.stripe.refunds)
+	}
+	gotB, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: b})
+	if err != nil || gotB.Status != "pending_payment" {
+		t.Fatalf("b must be promoted: %v %+v", err, gotB)
+	}
+}
+
+func TestSelfCancelPaidAfterDeadlineQueuesRefund(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	deadline := env.clock.Now().Add(time.Hour)
+	if _, err := env.svc.Update(ctx, ev.ID, UpdateEventParams{RefundDeadline: &deadline}); err != nil {
+		t.Fatal(err)
+	}
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	env.paidRegistration(t, ev.ID, a)
+	env.register(t, ev.ID, b)
+
+	env.clock.Advance(2 * time.Hour) // past the refund deadline, event not started
+
+	got, err := env.svc.CancelRegistration(ctx, ev.ID, a)
+	if err != nil || got.Status != "refund_requested" {
+		t.Fatalf("post-deadline cancel must queue: %v %+v", err, got)
+	}
+	if len(env.stripe.refunds) != 0 {
+		t.Fatalf("no automatic refund past deadline, got %v", env.stripe.refunds)
+	}
+	// Spot freed immediately: b promoted.
+	gotB, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: b})
+	if err != nil || gotB.Status != "pending_payment" {
+		t.Fatalf("b must be promoted: %v %+v", err, gotB)
+	}
+	// refund_requested blocks re-registering.
+	if _, err := env.svc.Register(ctx, ev.ID, a); !errors.Is(err, ErrAlreadyRegistered) {
+		t.Fatalf("refund_requested must block re-register, got %v", err)
+	}
+}
+
+func TestOrganizerRefundAndDeny(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	deadline := env.clock.Now().Add(time.Hour)
+	if _, err := env.svc.Update(ctx, ev.ID, UpdateEventParams{RefundDeadline: &deadline}); err != nil {
+		t.Fatal(err)
+	}
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	ra := env.paidRegistration(t, ev.ID, a)
+	rb := env.paidRegistration(t, ev.ID, b)
+	env.clock.Advance(2 * time.Hour)
+
+	// Both self-cancel post-deadline → queue.
+	if _, err := env.svc.CancelRegistration(ctx, ev.ID, a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.svc.CancelRegistration(ctx, ev.ID, b); err != nil {
+		t.Fatal(err)
+	}
+
+	// Organizer approves a → refunded + refund email.
+	got, err := env.svc.OrganizerRefund(ctx, ev.ID, ra.ID)
+	if err != nil || got.Status != "refunded" {
+		t.Fatalf("organizer refund: %v %+v", err, got)
+	}
+	if len(env.stripe.refunds) != 1 {
+		t.Fatalf("want 1 refund, got %v", env.stripe.refunds)
+	}
+	// Organizer denies b → cancelled + denied email.
+	got, err = env.svc.DenyRefund(ctx, ev.ID, rb.ID)
+	if err != nil || got.Status != "cancelled" {
+		t.Fatalf("deny refund: %v %+v", err, got)
+	}
+	deniedMail := env.mailer.sent[len(env.mailer.sent)-1]
+	if deniedMail.to != "b@test" {
+		t.Fatalf("denied email should go to b, got %+v", deniedMail)
+	}
+	// Deny on a non-queued row is invalid.
+	if _, err := env.svc.DenyRefund(ctx, ev.ID, ra.ID); !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("deny on refunded row must fail, got %v", err)
+	}
+}
+
+func TestOrganizerKickRefundsPaid(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	ra := env.paidRegistration(t, ev.ID, a)
+	env.register(t, ev.ID, b) // waitlisted
+
+	got, err := env.svc.OrganizerRefund(ctx, ev.ID, ra.ID)
+	if err != nil || got.Status != "refunded" {
+		t.Fatalf("kick+refund: %v %+v", err, got)
+	}
+	gotB, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: b})
+	if err != nil || gotB.Status != "pending_payment" {
+		t.Fatalf("b must be promoted after kick: %v %+v", err, gotB)
+	}
+}
+
+func TestEventCancelMassRefundsAndRetries(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	c := env.seedUser(t, "c@test")
+	env.paidRegistration(t, ev.ID, a)
+	env.register(t, ev.ID, b) // pending_payment
+	env.register(t, ev.ID, c) // waitlisted
+
+	// First cancel: the refund call fails → a's row stays paid, retryable.
+	env.stripe.refundErr = errors.New("stripe is down")
+	got, err := env.svc.Transition(ctx, ev.ID, "cancel")
+	if err != nil || got.Status != "cancelled" {
+		t.Fatalf("cancel: %v %+v", err, got)
+	}
+	rows, err := env.q.ListEventRegistrations(ctx, ev.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusByUser := map[uuid.UUID]string{}
+	for _, r := range rows {
+		statusByUser[r.UserID] = r.Status
+	}
+	if statusByUser[b] != "cancelled" || statusByUser[c] != "cancelled" {
+		t.Fatalf("pending+waitlisted must be cancelled: %+v", statusByUser)
+	}
+	if statusByUser[a] != "paid" {
+		t.Fatalf("failed refund must leave the row untouched: %+v", statusByUser)
+	}
+
+	// Retry: cancel again with Stripe healthy → a refunded.
+	env.stripe.refundErr = nil
+	if _, err := env.svc.Transition(ctx, ev.ID, "cancel"); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ = env.q.ListEventRegistrations(ctx, ev.ID)
+	for _, r := range rows {
+		if r.UserID == a && r.Status != "refunded" {
+			t.Fatalf("retry must refund a, got %s", r.Status)
+		}
+	}
+	if len(env.stripe.refunds) != 1 {
+		t.Fatalf("want exactly one successful refund, got %v", env.stripe.refunds)
+	}
+}
+
+func TestWebhookExpiredPromotesEarly(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	ra := env.register(t, ev.ID, a)
+	if _, err := env.svc.Pay(ctx, ev.ID, a); err != nil {
+		t.Fatal(err)
+	}
+	env.register(t, ev.ID, b)
+
+	err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_expired_1", Type: "checkout.session.expired",
+		CheckoutSessionID: "cs_test_" + ra.ID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotA, _ := env.q.GetRegistration(ctx, ra.ID)
+	if gotA.Status != "expired" {
+		t.Fatalf("session expiry must expire the registration, got %s", gotA.Status)
+	}
+	gotB, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: b})
+	if err != nil || gotB.Status != "pending_payment" {
+		t.Fatalf("b must be promoted: %v %+v", err, gotB)
+	}
+}
+
+func TestWebhookLatePaymentRefundsWhenFull(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	ra := env.register(t, ev.ID, a)
+	if _, err := env.svc.Pay(ctx, ev.ID, a); err != nil {
+		t.Fatal(err)
+	}
+	env.register(t, ev.ID, b)
+
+	// a's registration expires; b promotes and pays — the event is full again.
+	env.clock.Advance(PaymentWindow + 25*time.Hour) // past a's session expiry too
+	if err := env.svc.expireAndPromote(ctx, ev.ID); err != nil {
+		t.Fatal(err)
+	}
+	env.paidRegistration(t, ev.ID, b)
+
+	// a's payment lands anyway → immediate refund + apology email.
+	err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_late_1", Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_test_" + ra.ID.String(), PaymentIntentID: "pi_late",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotA, _ := env.q.GetRegistration(ctx, ra.ID)
+	if gotA.Status != "refunded" {
+		t.Fatalf("late payment with no spot must refund, got %s", gotA.Status)
+	}
+	if len(env.stripe.refunds) != 1 || env.stripe.refunds[0] != "pi_late" {
+		t.Fatalf("want pi_late refunded, got %v", env.stripe.refunds)
+	}
+}
+
+func TestWebhookLatePaymentReclaimsFreeSpot(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	ra := env.register(t, ev.ID, a)
+	if _, err := env.svc.Pay(ctx, ev.ID, a); err != nil {
+		t.Fatal(err)
+	}
+	env.clock.Advance(PaymentWindow + 25*time.Hour)
+	if err := env.svc.expireAndPromote(ctx, ev.ID); err != nil {
+		t.Fatal(err)
+	}
+	// No waitlist — the spot is still free when the late payment lands.
+	err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_late_2", Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_test_" + ra.ID.String(), PaymentIntentID: "pi_late2",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotA, _ := env.q.GetRegistration(ctx, ra.ID)
+	if gotA.Status != "paid" {
+		t.Fatalf("late payment with a free spot must reclaim it, got %s", gotA.Status)
+	}
+}
+
+func TestWebhookChargeRefundedSyncsDashboardRefunds(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	ra := env.paidRegistration(t, ev.ID, a)
+	env.register(t, ev.ID, b)
+
+	// Organizer refunds from the Stripe dashboard: only the webhook arrives.
+	err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_refund_1", Type: "charge.refunded",
+		PaymentIntentID: "pi_" + ra.ID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotA, _ := env.q.GetRegistration(ctx, ra.ID)
+	if gotA.Status != "refunded" {
+		t.Fatalf("dashboard refund must sync, got %s", gotA.Status)
+	}
+	gotB, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: b})
+	if err != nil || gotB.Status != "pending_payment" {
+		t.Fatalf("b must be promoted: %v %+v", err, gotB)
+	}
+}
