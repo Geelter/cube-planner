@@ -18,12 +18,14 @@ import {
   useImportItems,
   useSetQuantity,
 } from "../api";
+import { ImportDialog } from "./ImportDialog";
 import { QuantityStepper } from "./QuantityStepper";
 
 export function CollectionPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pickerItem, setPickerItem] = useState<CollectionItemEntry | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const debouncedSearch = useDebouncedValue(search, 300);
   const collection = useCollection(debouncedSearch, page);
   const setQuantity = useSetQuantity();
@@ -57,6 +59,9 @@ export function CollectionPage() {
             </p>
           )}
         </div>
+        <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
+          {m.collection_import_button()}
+        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -139,6 +144,8 @@ export function CollectionPage() {
           ))}
         </ul>
       )}
+
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
 
       {pickerItem && (
         <PrintingPickerDialog

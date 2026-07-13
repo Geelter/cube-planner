@@ -131,5 +131,19 @@
   "collection_remove_card": "Remove {name}",
   "collection_change_printing": "Change printing of {name}",
   "printing_picker_title": "Choose a printing — {name}",
-  "printing_picker_current": "Current"
+  "printing_picker_current": "Current",
+  "collection_import_button": "Import list",
+  "collection_import_title": "Import a card list",
+  "collection_import_hint": "One card per line: \"4 Lightning Bolt\", \"4x Lightning Bolt\" or just \"Lightning Bolt\".",
+  "collection_import_text_label": "Card list",
+  "collection_import_resolve_button": "Preview import",
+  "collection_import_matched": "Matched ({count})",
+  "collection_import_ambiguous": "Needs a choice ({count})",
+  "collection_import_unmatched": "Not found ({count})",
+  "collection_import_skip": "Skip this line",
+  "collection_import_choice_label": "Match for \"{raw}\"",
+  "collection_import_confirm": "Add to collection ({count})",
+  "collection_import_back": "Back",
+  "collection_import_result": "{added} new cards, {updated} updated.",
+  "collection_import_nothing": "Nothing to import."
 }

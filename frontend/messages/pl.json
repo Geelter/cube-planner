@@ -131,5 +131,19 @@
   "collection_remove_card": "Usuń {name}",
   "collection_change_printing": "Zmień wydanie {name}",
   "printing_picker_title": "Wybierz wydanie — {name}",
-  "printing_picker_current": "Obecne"
+  "printing_picker_current": "Obecne",
+  "collection_import_button": "Importuj listę",
+  "collection_import_title": "Import listy kart",
+  "collection_import_hint": "Jedna karta na linię: „4 Lightning Bolt”, „4x Lightning Bolt” albo samo „Lightning Bolt”.",
+  "collection_import_text_label": "Lista kart",
+  "collection_import_resolve_button": "Podgląd importu",
+  "collection_import_matched": "Dopasowane ({count})",
+  "collection_import_ambiguous": "Wymaga wyboru ({count})",
+  "collection_import_unmatched": "Nie znaleziono ({count})",
+  "collection_import_skip": "Pomiń tę linię",
+  "collection_import_choice_label": "Dopasowanie dla „{raw}”",
+  "collection_import_confirm": "Dodaj do kolekcji ({count})",
+  "collection_import_back": "Wstecz",
+  "collection_import_result": "Nowe karty: {added}, zaktualizowane: {updated}.",
+  "collection_import_nothing": "Nie ma nic do zaimportowania."
 }
