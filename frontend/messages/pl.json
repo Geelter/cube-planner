@@ -128,5 +128,8 @@
   "collection_no_results": "Żadna karta nie pasuje do wyszukiwania.",
   "collection_qty_increase": "Zwiększ liczbę {name}",
   "collection_qty_decrease": "Zmniejsz liczbę {name}",
-  "collection_remove_card": "Usuń {name}"
+  "collection_remove_card": "Usuń {name}",
+  "collection_change_printing": "Zmień wydanie {name}",
+  "printing_picker_title": "Wybierz wydanie — {name}",
+  "printing_picker_current": "Obecne"
 }

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
-import { useCardAutocomplete } from "./api";
+import { useCardAutocomplete, useCardPrintings } from "./api";
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -43,4 +43,27 @@ test("useCardAutocomplete returns cards", async () => {
   const { result } = renderHook(() => useCardAutocomplete("bolt"), { wrapper });
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
   expect(result.current.data).toEqual([bolt]);
+});
+
+test("useCardPrintings is disabled without an oracle id", () => {
+  const fetchSpy = vi.fn();
+  vi.stubGlobal("fetch", fetchSpy);
+  const { result } = renderHook(() => useCardPrintings(undefined), { wrapper });
+  expect(result.current.fetchStatus).toBe("idle");
+  expect(fetchSpy).not.toHaveBeenCalled();
+});
+
+test("useCardPrintings surfaces problem detail as error", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ title: "Not Found", status: 404, detail: "unknown card" }), {
+        status: 404,
+        headers: { "Content-Type": "application/problem+json" },
+      }),
+    ),
+  );
+  const { result } = renderHook(() => useCardPrintings(bolt.oracleId), { wrapper });
+  await waitFor(() => expect(result.current.isError).toBe(true));
+  expect(result.current.error?.message).toBe("unknown card");
 });

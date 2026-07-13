@@ -4,6 +4,7 @@ import { client } from "@/shared/api/client";
 import type { components } from "@/shared/api/schema";
 
 export type CardSummary = components["schemas"]["CardSummary"];
+export type CardDetail = components["schemas"]["CardDetail"];
 
 export function useCardAutocomplete(q: string) {
   const query = q.trim();
@@ -20,6 +21,22 @@ export function useCardAutocomplete(q: string) {
       if (error) throw new Error(error.detail ?? m.error_generic());
       if (!data) throw new Error(m.error_generic());
       return data.cards ?? [];
+    },
+  });
+}
+
+export function useCardPrintings(oracleId: string | undefined) {
+  return useQuery({
+    queryKey: ["cards", "printings", oracleId],
+    enabled: oracleId !== undefined,
+    queryFn: async (): Promise<CardDetail[]> => {
+      if (oracleId === undefined) throw new Error(m.error_generic());
+      const { data, error } = await client.GET("/api/cards/{oracleId}/printings", {
+        params: { path: { oracleId } },
+      });
+      if (error) throw new Error(error.detail ?? m.error_generic());
+      if (!data) throw new Error(m.error_generic());
+      return data.printings ?? [];
     },
   });
 }

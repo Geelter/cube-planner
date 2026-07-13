@@ -3,8 +3,7 @@ import { m } from "@/paraglide/messages";
 import { Alert } from "@/shared/ui/alert";
 import { Label } from "@/shared/ui/label";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
-import { type CardSummary } from "@/shared/cards/api";
-import { useCardPrintings } from "../api";
+import { type CardSummary, useCardPrintings } from "@/shared/cards/api";
 
 function SelectedCardPanel({ card }: { card: CardSummary }) {
   const printings = useCardPrintings(card.oracleId);

@@ -128,5 +128,8 @@
   "collection_no_results": "No cards match your search.",
   "collection_qty_increase": "Increase quantity of {name}",
   "collection_qty_decrease": "Decrease quantity of {name}",
-  "collection_remove_card": "Remove {name}"
+  "collection_remove_card": "Remove {name}",
+  "collection_change_printing": "Change printing of {name}",
+  "printing_picker_title": "Choose a printing — {name}",
+  "printing_picker_current": "Current"
 }

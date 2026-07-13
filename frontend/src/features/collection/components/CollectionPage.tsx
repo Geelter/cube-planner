@@ -3,14 +3,17 @@ import { useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
 import { CardHoverPreview } from "@/shared/cards/CardHoverPreview";
+import { PrintingPickerDialog } from "@/shared/cards/PrintingPickerDialog";
 import { useDebouncedValue } from "@/shared/lib/useDebouncedValue";
 import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import {
+  type CollectionItemEntry,
   COLLECTION_PAGE_SIZE,
   UnauthorizedError,
+  useChangePrinting,
   useCollection,
   useImportItems,
   useSetQuantity,
@@ -20,10 +23,12 @@ import { QuantityStepper } from "./QuantityStepper";
 export function CollectionPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [pickerItem, setPickerItem] = useState<CollectionItemEntry | null>(null);
   const debouncedSearch = useDebouncedValue(search, 300);
   const collection = useCollection(debouncedSearch, page);
   const setQuantity = useSetQuantity();
   const importItems = useImportItems();
+  const changePrinting = useChangePrinting();
 
   if (collection.isError && collection.error instanceof UnauthorizedError) {
     return (
@@ -115,6 +120,15 @@ export function CollectionPage() {
                   type="button"
                   variant="ghost"
                   size="sm"
+                  aria-label={m.collection_change_printing({ name: item.name })}
+                  onClick={() => setPickerItem(item)}
+                >
+                  ⇄
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
                   aria-label={m.collection_remove_card({ name: item.name })}
                   onClick={() => setQuantity.mutate({ scryfallId: item.scryfallId, quantity: 0 })}
                 >
@@ -124,6 +138,20 @@ export function CollectionPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {pickerItem && (
+        <PrintingPickerDialog
+          open
+          onClose={() => setPickerItem(null)}
+          oracleId={pickerItem.oracleId}
+          name={pickerItem.name}
+          currentScryfallId={pickerItem.scryfallId}
+          onPick={(newScryfallId) => {
+            changePrinting.mutate({ scryfallId: pickerItem.scryfallId, newScryfallId });
+            setPickerItem(null);
+          }}
+        />
       )}
 
       {collection.data && pages > 1 && (
