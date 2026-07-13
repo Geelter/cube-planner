@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/mjabloniec/cube-planner/backend/internal/cards"
 	"github.com/mjabloniec/cube-planner/backend/internal/db"
 )
 
@@ -165,4 +166,192 @@ func (s *Service) ChangePrinting(ctx context.Context, userID, fromID, toID uuid.
 		return nil, err
 	}
 	return s.getEntry(ctx, userID, toID)
+}
+
+// CardRef is a resolved card reference for import review (a match or a
+// suggestion) — display fields, no quantity.
+type CardRef struct {
+	ScryfallID      uuid.UUID
+	OracleID        uuid.UUID
+	Name            string
+	ManaCost        string
+	TypeLine        string
+	SetCode         string
+	SetName         string
+	CollectorNumber string
+	ImageSmall      *string
+	ImageNormal     *string
+}
+
+// ResolvedLine statuses.
+const (
+	StatusMatched   = "matched"
+	StatusAmbiguous = "ambiguous"
+	StatusUnmatched = "unmatched"
+)
+
+type ResolvedLine struct {
+	LineNumber  int32
+	Raw         string
+	Quantity    int32
+	Status      string
+	Match       *CardRef
+	Suggestions []CardRef
+}
+
+// ResolveImport parses pasted text and resolves each line. Pure read:
+// nothing is written. Exact (case-insensitive, normalized) name matches
+// resolve to the oracle card's representative printing; a name shared by
+// several oracle cards falls through to ambiguous; misses get fuzzy
+// suggestions or unmatched.
+func (s *Service) ResolveImport(ctx context.Context, text string) ([]ResolvedLine, error) {
+	lines, err := ParseImportText(text)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidImport, err)
+	}
+
+	nameSet := make(map[string]struct{})
+	var names []string
+	for _, l := range lines {
+		if !l.OK {
+			continue
+		}
+		n := cards.NormalizeName(l.Name)
+		if _, seen := nameSet[n]; !seen {
+			nameSet[n] = struct{}{}
+			names = append(names, n)
+		}
+	}
+	exact := make(map[string][]CardRef)
+	if len(names) > 0 {
+		rows, err := s.queries.GetCardsByNormalizedNames(ctx, names)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			exact[r.NormalizedName] = append(exact[r.NormalizedName], CardRef{
+				ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
+				ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
+				SetName: r.SetName, CollectorNumber: r.CollectorNumber,
+				ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
+			})
+		}
+	}
+
+	out := make([]ResolvedLine, len(lines))
+	for i, l := range lines {
+		rl := ResolvedLine{LineNumber: l.LineNumber, Raw: l.Raw, Quantity: l.Quantity}
+		switch {
+		case !l.OK:
+			rl.Status = StatusUnmatched
+		default:
+			matches := exact[cards.NormalizeName(l.Name)]
+			switch len(matches) {
+			case 1:
+				rl.Status = StatusMatched
+				m := matches[0]
+				rl.Match = &m
+			case 0:
+				// Only misses pay for a fuzzy query.
+				suggestions, err := s.suggest(ctx, l.Name)
+				if err != nil {
+					return nil, err
+				}
+				if len(suggestions) > 0 {
+					rl.Status = StatusAmbiguous
+					rl.Suggestions = suggestions
+				} else {
+					rl.Status = StatusUnmatched
+				}
+			default:
+				// One name, several oracle cards — the user must choose.
+				rl.Status = StatusAmbiguous
+				rl.Suggestions = matches
+			}
+		}
+		out[i] = rl
+	}
+	return out, nil
+}
+
+func (s *Service) suggest(ctx context.Context, name string) ([]CardRef, error) {
+	rows, err := s.queries.SuggestCardsByName(ctx, cards.NormalizeName(name))
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]CardRef, len(rows))
+	for i, r := range rows {
+		refs[i] = CardRef{
+			ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
+			ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
+			SetName: r.SetName, CollectorNumber: r.CollectorNumber,
+			ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
+		}
+	}
+	return refs, nil
+}
+
+type ImportItem struct {
+	ScryfallID uuid.UUID
+	Quantity   int32
+}
+
+// ApplyImport ADDS quantities onto existing rows. In-request duplicates
+// are summed first; results clamp at 999; any unknown printing fails the
+// whole batch (the review step should never produce one).
+func (s *Service) ApplyImport(ctx context.Context, userID uuid.UUID, items []ImportItem) (added, updated int32, err error) {
+	merged := make(map[uuid.UUID]int32, len(items))
+	order := make([]uuid.UUID, 0, len(items))
+	for _, it := range items {
+		if _, seen := merged[it.ScryfallID]; !seen {
+			order = append(order, it.ScryfallID)
+		}
+		q := merged[it.ScryfallID] + it.Quantity
+		if q > MaxItemQuantity {
+			q = MaxItemQuantity
+		}
+		merged[it.ScryfallID] = q
+	}
+
+	known, err := s.queries.GetCardsByScryfallIDs(ctx, order)
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(known) != len(order) {
+		return 0, 0, fmt.Errorf("%w: unknown printing in batch", ErrInvalidImport)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback after commit is a no-op
+	qtx := s.queries.WithTx(tx)
+
+	owned, err := qtx.GetOwnedScryfallIDs(ctx, db.GetOwnedScryfallIDsParams{
+		UserID: userID, Ids: order,
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	ownedSet := make(map[uuid.UUID]struct{}, len(owned))
+	for _, id := range owned {
+		ownedSet[id] = struct{}{}
+	}
+	for _, id := range order {
+		if err := qtx.AddCollectionItem(ctx, db.AddCollectionItemParams{
+			UserID: userID, ScryfallID: id, Quantity: merged[id],
+		}); err != nil {
+			return 0, 0, err
+		}
+		if _, ok := ownedSet[id]; ok {
+			updated++
+		} else {
+			added++
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, err
+	}
+	return added, updated, nil
 }

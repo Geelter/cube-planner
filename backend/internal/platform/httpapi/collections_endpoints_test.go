@@ -201,3 +201,120 @@ func TestChangePrinting(t *testing.T) {
 		}
 	}
 }
+
+type importLineBody struct {
+	LineNumber int32  `json:"lineNumber"`
+	Raw        string `json:"raw"`
+	Quantity   int32  `json:"quantity"`
+	Status     string `json:"status"`
+	Match      *struct {
+		ScryfallID string `json:"scryfallId"`
+		Name       string `json:"name"`
+	} `json:"match"`
+	Suggestions []struct {
+		ScryfallID string `json:"scryfallId"`
+		Name       string `json:"name"`
+	} `json:"suggestions"`
+}
+
+type resolveBody struct {
+	Lines []importLineBody `json:"lines"`
+}
+
+type importResultBody struct {
+	AddedRows   int32 `json:"addedRows"`
+	UpdatedRows int32 `json:"updatedRows"`
+}
+
+func TestResolveImport(t *testing.T) {
+	srv, pool, q := newCollectionsServer(t)
+	c := loggedInClient(t, srv, q, "imp1@test.dev")
+
+	boltO := uuid.New()
+	// Two printings of Bolt: representative = newer non-promo.
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: boltO, name: "Lightning Bolt", released: "1993-08-05"})
+	newBolt := uuid.New()
+	seedCard(t, pool, testCard{scryfallID: newBolt, oracleID: boltO, name: "Lightning Bolt", released: "2010-07-16"})
+	// Duplicate name across two oracle ids → ambiguous even on exact match.
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Twin Name"})
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Twin Name"})
+
+	resp := c.do(t, "POST", "/api/collection/import/resolve",
+		`{"text":"4 Lightning Bolt\nLihgtning Blot\nTwin Name\n17 Utter Gibberish Nonexistent\n0 Lightning Bolt"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("resolve = %d, want 200", resp.StatusCode)
+	}
+	body := decode[resolveBody](t, resp)
+	if len(body.Lines) != 5 {
+		t.Fatalf("lines = %d, want 5", len(body.Lines))
+	}
+
+	exact := body.Lines[0]
+	if exact.Status != "matched" || exact.Quantity != 4 ||
+		exact.Match == nil || exact.Match.ScryfallID != newBolt.String() {
+		t.Fatalf("exact line = %+v (want matched, representative printing)", exact)
+	}
+	fuzzy := body.Lines[1]
+	if fuzzy.Status != "ambiguous" || len(fuzzy.Suggestions) == 0 ||
+		fuzzy.Suggestions[0].Name != "Lightning Bolt" {
+		t.Fatalf("fuzzy line = %+v (want ambiguous with Bolt suggestion)", fuzzy)
+	}
+	twin := body.Lines[2]
+	if twin.Status != "ambiguous" || len(twin.Suggestions) != 2 {
+		t.Fatalf("duplicate-name line = %+v (want ambiguous, 2 suggestions)", twin)
+	}
+	if body.Lines[3].Status != "unmatched" {
+		t.Fatalf("gibberish line = %+v, want unmatched", body.Lines[3])
+	}
+	if body.Lines[4].Status != "unmatched" {
+		t.Fatalf("bad-quantity line = %+v, want unmatched", body.Lines[4])
+	}
+}
+
+func TestApplyImport(t *testing.T) {
+	srv, pool, q := newCollectionsServer(t)
+	c := loggedInClient(t, srv, q, "imp2@test.dev")
+
+	boltS, ringS := uuid.New(), uuid.New()
+	seedCard(t, pool, testCard{scryfallID: boltS, oracleID: uuid.New(), name: "Lightning Bolt"})
+	seedCard(t, pool, testCard{scryfallID: ringS, oracleID: uuid.New(), name: "Sol Ring", typeLine: "Artifact", colorIdentity: []string{}})
+	putQuantity(t, c, ringS, 2) // pre-existing row → "updated"
+
+	// In-request duplicates sum (2+2 bolt), adds stack on existing rows.
+	resp := c.do(t, "POST", "/api/collection/import", fmt.Sprintf(
+		`{"items":[{"scryfallId":%q,"quantity":2},{"scryfallId":%q,"quantity":2},{"scryfallId":%q,"quantity":1}]}`,
+		boltS, boltS, ringS,
+	))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("import = %d, want 200", resp.StatusCode)
+	}
+	res := decode[importResultBody](t, resp)
+	if res.AddedRows != 1 || res.UpdatedRows != 1 {
+		t.Fatalf("added=%d updated=%d, want 1/1", res.AddedRows, res.UpdatedRows)
+	}
+	list := decode[collectionListBody](t, c.do(t, "GET", "/api/collection", ""))
+	if list.TotalCopies != 7 { // 4 bolts + 3 rings
+		t.Fatalf("copies = %d, want 7", list.TotalCopies)
+	}
+
+	// Clamp at 999.
+	resp = c.do(t, "POST", "/api/collection/import", fmt.Sprintf(
+		`{"items":[{"scryfallId":%q,"quantity":999}]}`, boltS,
+	))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("clamp import = %d", resp.StatusCode)
+	}
+	list = decode[collectionListBody](t, c.do(t, "GET", "/api/collection", ""))
+	if list.Items[0].Quantity != 999 {
+		t.Fatalf("bolt quantity = %d, want clamped 999", list.Items[0].Quantity)
+	}
+
+	// Unknown id fails the whole batch.
+	resp = c.do(t, "POST", "/api/collection/import", fmt.Sprintf(
+		`{"items":[{"scryfallId":%q,"quantity":1},{"scryfallId":%q,"quantity":1}]}`,
+		boltS, uuid.New(),
+	))
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown id = %d, want 422", resp.StatusCode)
+	}
+}

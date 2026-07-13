@@ -37,6 +37,39 @@ func collectionEntryFrom(e collections.ItemEntry) CollectionItemEntry {
 	}
 }
 
+// ImportCardMatch is a resolved card for import review (match or
+// suggestion) — CollectionItemEntry shape without quantity.
+type ImportCardMatch struct {
+	ScryfallID      uuid.UUID `json:"scryfallId"`
+	OracleID        uuid.UUID `json:"oracleId"`
+	Name            string    `json:"name"`
+	ManaCost        string    `json:"manaCost"`
+	TypeLine        string    `json:"typeLine"`
+	SetCode         string    `json:"setCode"`
+	SetName         string    `json:"setName"`
+	CollectorNumber string    `json:"collectorNumber"`
+	ImageSmall      *string   `json:"imageSmall"`
+	ImageNormal     *string   `json:"imageNormal"`
+}
+
+type ImportResolveLine struct {
+	LineNumber  int32             `json:"lineNumber"`
+	Raw         string            `json:"raw"`
+	Quantity    int32             `json:"quantity"`
+	Status      string            `json:"status" enum:"matched,ambiguous,unmatched"`
+	Match       *ImportCardMatch  `json:"match,omitempty"`
+	Suggestions []ImportCardMatch `json:"suggestions,omitempty"`
+}
+
+func importCardMatchFrom(r collections.CardRef) ImportCardMatch {
+	return ImportCardMatch{
+		ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
+		ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
+		SetName: r.SetName, CollectorNumber: r.CollectorNumber,
+		ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
+	}
+}
+
 func mapCollectionErr(err error) error {
 	switch {
 	case errors.Is(err, collections.ErrCubeNotFound):
@@ -97,6 +130,34 @@ type changePrintingInput struct {
 type collectionItemOutput struct {
 	Body struct {
 		Item *CollectionItemEntry `json:"item" doc:"null after a quantity-0 delete"`
+	}
+}
+
+type resolveImportInput struct {
+	Body struct {
+		Text string `json:"text" minLength:"1" maxLength:"65536"`
+	}
+}
+
+type resolveImportOutput struct {
+	Body struct {
+		Lines []ImportResolveLine `json:"lines"`
+	}
+}
+
+type importItemsInput struct {
+	Body struct {
+		Items []struct {
+			ScryfallID uuid.UUID `json:"scryfallId"`
+			Quantity   int32     `json:"quantity" minimum:"1" maximum:"999"`
+		} `json:"items" minItems:"1" maxItems:"500"`
+	}
+}
+
+type importItemsOutput struct {
+	Body struct {
+		AddedRows   int32 `json:"addedRows"`
+		UpdatedRows int32 `json:"updatedRows"`
 	}
 }
 
@@ -175,6 +236,63 @@ func registerCollections(api huma.API, deps Deps) {
 		out := &collectionItemOutput{}
 		e := collectionEntryFrom(*entry)
 		out.Body.Item = &e
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "resolveCollectionImport",
+		Method:      http.MethodPost,
+		Path:        "/api/collection/import/resolve",
+		Summary:     "Resolve a pasted card list (pure read, nothing is written)",
+		Tags:        []string{"collection"},
+	}, func(ctx context.Context, in *resolveImportInput) (*resolveImportOutput, error) {
+		if _, ok := CurrentUserID(ctx); !ok {
+			return nil, huma.Error401Unauthorized("authentication required")
+		}
+		lines, err := deps.Collections.ResolveImport(ctx, in.Body.Text)
+		if err != nil {
+			return nil, mapCollectionErr(err)
+		}
+		out := &resolveImportOutput{}
+		out.Body.Lines = make([]ImportResolveLine, len(lines))
+		for i, l := range lines {
+			rl := ImportResolveLine{
+				LineNumber: l.LineNumber, Raw: l.Raw, Quantity: l.Quantity, Status: l.Status,
+			}
+			if l.Match != nil {
+				m := importCardMatchFrom(*l.Match)
+				rl.Match = &m
+			}
+			for _, s := range l.Suggestions {
+				rl.Suggestions = append(rl.Suggestions, importCardMatchFrom(s))
+			}
+			out.Body.Lines[i] = rl
+		}
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "importCollectionItems",
+		Method:      http.MethodPost,
+		Path:        "/api/collection/import",
+		Summary:     "Add quantities onto the collection (bulk import commit)",
+		Tags:        []string{"collection"},
+	}, func(ctx context.Context, in *importItemsInput) (*importItemsOutput, error) {
+		uid, ok := CurrentUserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("authentication required")
+		}
+		items := make([]collections.ImportItem, len(in.Body.Items))
+		for i, it := range in.Body.Items {
+			items[i] = collections.ImportItem{ScryfallID: it.ScryfallID, Quantity: it.Quantity}
+		}
+		added, updated, err := deps.Collections.ApplyImport(ctx, uid, items)
+		if err != nil {
+			return nil, mapCollectionErr(err)
+		}
+		out := &importItemsOutput{}
+		out.Body.AddedRows = added
+		out.Body.UpdatedRows = updated
 		return out, nil
 	})
 }
