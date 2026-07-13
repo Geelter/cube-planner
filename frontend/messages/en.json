@@ -145,5 +145,14 @@
   "collection_import_confirm": "Add to collection ({count})",
   "collection_import_back": "Back",
   "collection_import_result": "{added} new cards, {updated} updated.",
-  "collection_import_nothing": "Nothing to import."
+  "collection_import_nothing": "Nothing to import.",
+  "wantlist_compare_button": "Compare with my collection",
+  "wantlist_title": "Wantlist — {cube}",
+  "wantlist_col_card": "Card",
+  "wantlist_col_missing": "Missing",
+  "wantlist_col_in_cube": "In cube",
+  "wantlist_col_owned": "Owned",
+  "wantlist_total": "{count} cards missing",
+  "wantlist_empty": "You own everything in this cube.",
+  "wantlist_download": "Download for Cardmarket"
 }

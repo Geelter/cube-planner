@@ -145,5 +145,14 @@
   "collection_import_confirm": "Dodaj do kolekcji ({count})",
   "collection_import_back": "Wstecz",
   "collection_import_result": "Nowe karty: {added}, zaktualizowane: {updated}.",
-  "collection_import_nothing": "Nie ma nic do zaimportowania."
+  "collection_import_nothing": "Nie ma nic do zaimportowania.",
+  "wantlist_compare_button": "Porównaj z moją kolekcją",
+  "wantlist_title": "Lista braków — {cube}",
+  "wantlist_col_card": "Karta",
+  "wantlist_col_missing": "Brakuje",
+  "wantlist_col_in_cube": "W kostce",
+  "wantlist_col_owned": "Posiadane",
+  "wantlist_total": "Brakujące karty: {count}",
+  "wantlist_empty": "Masz wszystkie karty z tej kostki.",
+  "wantlist_download": "Pobierz dla Cardmarket"
 }

@@ -48,6 +48,11 @@ export function CubeDisplayPage() {
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm">
+            <Link to="/cubes/$cubeId/wantlist" params={{ cubeId }}>
+              {m.wantlist_compare_button()}
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
             <Link to="/cubes/$cubeId/history" params={{ cubeId }}>
               {m.cubes_history_button()}
             </Link>
