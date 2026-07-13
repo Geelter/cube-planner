@@ -11,6 +11,7 @@ import (
 
 	"github.com/mjabloniec/cube-planner/backend/internal/auth"
 	"github.com/mjabloniec/cube-planner/backend/internal/cards"
+	"github.com/mjabloniec/cube-planner/backend/internal/collections"
 	"github.com/mjabloniec/cube-planner/backend/internal/cubes"
 	"github.com/mjabloniec/cube-planner/backend/internal/db"
 )
@@ -18,12 +19,13 @@ import (
 // Deps carries everything handlers need. Build(Deps{}) must stay safe for
 // OpenAPI generation (no I/O at registration time).
 type Deps struct {
-	Auth     *auth.Service
-	Sessions *auth.Sessions
-	Queries  *db.Queries
-	Cards    *cards.Service
-	Cubes    *cubes.Service
-	OAuth    http.Handler
+	Auth        *auth.Service
+	Sessions    *auth.Sessions
+	Queries     *db.Queries
+	Cards       *cards.Service
+	Cubes       *cubes.Service
+	Collections *collections.Service
+	OAuth       http.Handler
 }
 
 func Build(deps Deps) (huma.API, http.Handler) {
@@ -38,6 +40,7 @@ func Build(deps Deps) (huma.API, http.Handler) {
 	registerPasswordReset(api, deps)
 	registerCards(api, deps)
 	registerCubes(api, deps)
+	registerCollections(api, deps)
 	if deps.OAuth != nil {
 		router.Mount("/auth/oauth", deps.OAuth)
 	}

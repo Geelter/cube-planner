@@ -12,6 +12,7 @@ import (
 
 	"github.com/mjabloniec/cube-planner/backend/internal/auth"
 	"github.com/mjabloniec/cube-planner/backend/internal/cards"
+	"github.com/mjabloniec/cube-planner/backend/internal/collections"
 	"github.com/mjabloniec/cube-planner/backend/internal/cubes"
 	dbgen "github.com/mjabloniec/cube-planner/backend/internal/db"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/config"
@@ -55,12 +56,13 @@ func main() {
 				go syncer.RunScheduler(ctx, cards.DefaultSyncCheckInterval)
 			}
 			deps := httpapi.Deps{
-				Auth:     auth.NewService(queries, mail.FromConfig(cfg), cfg.BaseURL),
-				Sessions: sessions,
-				Queries:  queries,
-				Cards:    cards.NewService(queries),
-				Cubes:    cubes.NewService(queries, pool),
-				OAuth:    auth.NewOAuth(queries, sessions, cfg.BaseURL, cfg.Secure(), oauthProviders).Routes(),
+				Auth:        auth.NewService(queries, mail.FromConfig(cfg), cfg.BaseURL),
+				Sessions:    sessions,
+				Queries:     queries,
+				Cards:       cards.NewService(queries),
+				Cubes:       cubes.NewService(queries, pool),
+				Collections: collections.NewService(queries, pool),
+				OAuth:       auth.NewOAuth(queries, sessions, cfg.BaseURL, cfg.Secure(), oauthProviders).Routes(),
 			}
 			_, handler := httpapi.Build(deps)
 			log.Printf("listening on :%d", cfg.Port)
