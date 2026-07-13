@@ -161,6 +161,30 @@ type importItemsOutput struct {
 	}
 }
 
+type WantlistEntry struct {
+	OracleID        uuid.UUID `json:"oracleId"`
+	ScryfallID      uuid.UUID `json:"scryfallId" doc:"The cube's chosen printing"`
+	Name            string    `json:"name"`
+	ManaCost        string    `json:"manaCost"`
+	ImageSmall      *string   `json:"imageSmall"`
+	ImageNormal     *string   `json:"imageNormal"`
+	MissingQuantity int32     `json:"missingQuantity"`
+	CubeQuantity    int32     `json:"cubeQuantity"`
+	OwnedQuantity   int32     `json:"ownedQuantity"`
+}
+
+type getWantlistInput struct {
+	CubeID string `path:"cubeId"`
+}
+
+type getWantlistOutput struct {
+	Body struct {
+		CubeName     string          `json:"cubeName"`
+		Items        []WantlistEntry `json:"items"`
+		TotalMissing int64           `json:"totalMissing"`
+	}
+}
+
 func registerCollections(api huma.API, deps Deps) {
 	huma.Register(api, huma.Operation{
 		OperationID: "getCollection",
@@ -293,6 +317,40 @@ func registerCollections(api huma.API, deps Deps) {
 		out := &importItemsOutput{}
 		out.Body.AddedRows = added
 		out.Body.UpdatedRows = updated
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getCubeWantlist",
+		Method:      http.MethodGet,
+		Path:        "/api/cubes/{cubeId}/wantlist",
+		Summary:     "Cards in the cube missing from the caller's collection",
+		Tags:        []string{"collection"},
+	}, func(ctx context.Context, in *getWantlistInput) (*getWantlistOutput, error) {
+		uid, ok := CurrentUserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("authentication required")
+		}
+		id, err := parseCubeID(in.CubeID)
+		if err != nil {
+			return nil, err
+		}
+		name, items, totalMissing, err := deps.Collections.Wantlist(ctx, id, uid)
+		if err != nil {
+			return nil, mapCollectionErr(err)
+		}
+		out := &getWantlistOutput{}
+		out.Body.CubeName = name
+		out.Body.TotalMissing = totalMissing
+		out.Body.Items = make([]WantlistEntry, len(items))
+		for i, it := range items {
+			out.Body.Items[i] = WantlistEntry{
+				OracleID: it.OracleID, ScryfallID: it.ScryfallID, Name: it.Name,
+				ManaCost: it.ManaCost, ImageSmall: it.ImageSmall, ImageNormal: it.ImageNormal,
+				MissingQuantity: it.MissingQuantity, CubeQuantity: it.CubeQuantity,
+				OwnedQuantity: it.OwnedQuantity,
+			}
+		}
 		return out, nil
 	})
 }

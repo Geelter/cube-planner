@@ -318,3 +318,94 @@ func TestApplyImport(t *testing.T) {
 		t.Fatalf("unknown id = %d, want 422", resp.StatusCode)
 	}
 }
+
+type wantlistEntryBody struct {
+	OracleID        string `json:"oracleId"`
+	Name            string `json:"name"`
+	MissingQuantity int32  `json:"missingQuantity"`
+	CubeQuantity    int32  `json:"cubeQuantity"`
+	OwnedQuantity   int32  `json:"ownedQuantity"`
+}
+
+type wantlistBody struct {
+	CubeName     string              `json:"cubeName"`
+	Items        []wantlistEntryBody `json:"items"`
+	TotalMissing int64               `json:"totalMissing"`
+}
+
+func TestCubeWantlist(t *testing.T) {
+	srv, pool, q := newCollectionsServer(t)
+	owner := loggedInClient(t, srv, q, "want-owner@test.dev")
+	viewer := loggedInClient(t, srv, q, "want-viewer@test.dev")
+
+	boltO := uuid.New()
+	boltAlpha, boltM10 := uuid.New(), uuid.New()
+	seedCard(t, pool, testCard{scryfallID: boltAlpha, oracleID: boltO, name: "Lightning Bolt", released: "1993-08-05"})
+	seedCard(t, pool, testCard{scryfallID: boltM10, oracleID: boltO, name: "Lightning Bolt", released: "2010-07-16"})
+	ringS := uuid.New()
+	seedCard(t, pool, testCard{scryfallID: ringS, oracleID: uuid.New(), name: "Sol Ring", typeLine: "Artifact", colorIdentity: []string{}})
+
+	cube := createCube(t, owner, "Wantlist Cube", "public")
+	resp := owner.do(t, "POST", "/api/cubes/"+cube.ID+"/changes", fmt.Sprintf(
+		`{"expectedVersion":0,"adds":[{"scryfallId":%q,"quantity":4},{"scryfallId":%q,"quantity":1}]}`,
+		boltAlpha, ringS,
+	))
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("seed cube = %d", resp.StatusCode)
+	}
+
+	// Viewer owns 1 alpha + 2 m10 bolts: 3 of 4 → missing 1; Sol Ring fully missing.
+	putQuantity(t, viewer, boltAlpha, 1)
+	putQuantity(t, viewer, boltM10, 2)
+
+	resp = viewer.do(t, "GET", "/api/cubes/"+cube.ID+"/wantlist", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("wantlist = %d, want 200", resp.StatusCode)
+	}
+	body := decode[wantlistBody](t, resp)
+	if body.CubeName != "Wantlist Cube" || body.TotalMissing != 2 || len(body.Items) != 2 {
+		t.Fatalf("wantlist = %+v", body)
+	}
+	// Name-sorted: Bolt first.
+	bolt, ring := body.Items[0], body.Items[1]
+	if bolt.Name != "Lightning Bolt" || bolt.MissingQuantity != 1 ||
+		bolt.CubeQuantity != 4 || bolt.OwnedQuantity != 3 {
+		t.Fatalf("bolt entry = %+v (owned printings must aggregate)", bolt)
+	}
+	if ring.Name != "Sol Ring" || ring.MissingQuantity != 1 || ring.OwnedQuantity != 0 {
+		t.Fatalf("ring entry = %+v", ring)
+	}
+
+	// Owning everything → empty list.
+	putQuantity(t, viewer, boltM10, 3)
+	putQuantity(t, viewer, ringS, 1)
+	body = decode[wantlistBody](t, viewer.do(t, "GET", "/api/cubes/"+cube.ID+"/wantlist", ""))
+	if len(body.Items) != 0 || body.TotalMissing != 0 {
+		t.Fatalf("fully-owned wantlist = %+v, want empty", body)
+	}
+}
+
+func TestCubeWantlistVisibilityAndAuth(t *testing.T) {
+	srv, _, q := newCollectionsServer(t)
+	owner := loggedInClient(t, srv, q, "want-priv@test.dev")
+	stranger := loggedInClient(t, srv, q, "want-stranger@test.dev")
+
+	priv := createCube(t, owner, "Secret Cube", "private")
+
+	// Anonymous → 401 (session required even for public cubes).
+	if code := getJSON(t, srv, "/api/cubes/"+priv.ID+"/wantlist", nil); code != http.StatusUnauthorized {
+		t.Fatalf("anonymous = %d, want 401", code)
+	}
+	// Private cube, non-owner → 404, no existence leak.
+	if resp := stranger.do(t, "GET", "/api/cubes/"+priv.ID+"/wantlist", ""); resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("stranger = %d, want 404", resp.StatusCode)
+	}
+	// Owner sees it (empty cube → empty wantlist).
+	resp := owner.do(t, "GET", "/api/cubes/"+priv.ID+"/wantlist", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("owner = %d, want 200", resp.StatusCode)
+	}
+	if body := decode[wantlistBody](t, resp); body.TotalMissing != 0 {
+		t.Fatalf("empty cube wantlist = %+v", body)
+	}
+}

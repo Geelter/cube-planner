@@ -291,6 +291,53 @@ func (s *Service) suggest(ctx context.Context, name string) ([]CardRef, error) {
 	return refs, nil
 }
 
+type WantlistItem struct {
+	OracleID        uuid.UUID
+	ScryfallID      uuid.UUID // the cube's chosen printing, for imagery
+	Name            string
+	ManaCost        string
+	ImageSmall      *string
+	ImageNormal     *string
+	MissingQuantity int32
+	CubeQuantity    int32
+	OwnedQuantity   int32
+}
+
+// Wantlist computes cube-minus-collection at oracle level, on demand,
+// never stored. Cube visibility follows the cubes rule: private cubes
+// 404 for non-owners (no existence leak). No dependency on the cubes
+// package — the same GetCube query enforces it here.
+func (s *Service) Wantlist(ctx context.Context, cubeID, userID uuid.UUID) (string, []WantlistItem, int64, error) {
+	cube, err := s.queries.GetCube(ctx, cubeID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, 0, ErrCubeNotFound
+	}
+	if err != nil {
+		return "", nil, 0, err
+	}
+	if cube.Visibility == "private" && cube.OwnerID != userID {
+		return "", nil, 0, ErrCubeNotFound
+	}
+	rows, err := s.queries.GetCubeWantlist(ctx, db.GetCubeWantlistParams{
+		CubeID: cubeID, UserID: userID,
+	})
+	if err != nil {
+		return "", nil, 0, err
+	}
+	items := make([]WantlistItem, len(rows))
+	var totalMissing int64
+	for i, r := range rows {
+		items[i] = WantlistItem{
+			OracleID: r.OracleID, ScryfallID: r.ScryfallID, Name: r.Name,
+			ManaCost: r.ManaCost, ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
+			MissingQuantity: r.MissingQuantity, CubeQuantity: r.CubeQuantity,
+			OwnedQuantity: r.OwnedQuantity,
+		}
+		totalMissing += int64(r.MissingQuantity)
+	}
+	return cube.Name, items, totalMissing, nil
+}
+
 type ImportItem struct {
 	ScryfallID uuid.UUID
 	Quantity   int32
