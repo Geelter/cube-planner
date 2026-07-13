@@ -129,7 +129,7 @@ type changePrintingInput struct {
 
 type collectionItemOutput struct {
 	Body struct {
-		Item *CollectionItemEntry `json:"item" doc:"null after a quantity-0 delete"`
+		Item *CollectionItemEntry `json:"item,omitempty" doc:"absent after a quantity-0 delete"`
 	}
 }
 

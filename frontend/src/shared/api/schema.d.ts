@@ -485,8 +485,8 @@ export interface components {
        * @example https://example.com/schemas/CollectionItemOutputBody.json
        */
       readonly $schema?: string;
-      /** @description null after a quantity-0 delete */
-      item: components["schemas"]["CollectionItemEntry"];
+      /** @description absent after a quantity-0 delete */
+      item?: components["schemas"]["CollectionItemEntry"];
     };
     CommitCubeChangeInputBody: {
       /**

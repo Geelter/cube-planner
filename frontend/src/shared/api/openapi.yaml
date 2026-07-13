@@ -260,9 +260,7 @@ components:
           type: string
         item:
           $ref: "#/components/schemas/CollectionItemEntry"
-          description: null after a quantity-0 delete
-      required:
-        - item
+          description: absent after a quantity-0 delete
       type: object
     CommitCubeChangeInputBody:
       additionalProperties: false
