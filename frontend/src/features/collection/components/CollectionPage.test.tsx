@@ -6,12 +6,15 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { CollectionPage } from "./CollectionPage";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 function renderPage() {
   const rootRoute = createRootRoute();
@@ -92,6 +95,33 @@ test("remove button PUTs quantity 0", async () => {
       init?.body ?? (typeof input === "string" ? undefined : await input.clone().text());
     expect(JSON.parse(rawBody as string)).toEqual({ quantity: 0 });
   });
+});
+
+test("clamps back to page 0 when a non-first page empties out", async () => {
+  // openapi-fetch may call fetch(Request) or fetch(url, init) — handle both.
+  const requestUrl = (input: Request | string) => (typeof input === "string" ? input : input.url);
+  const fetchMock = vi.fn(async (input: Request | string) => {
+    const url = new URL(requestUrl(input), "http://localhost");
+    const offset = url.searchParams.get("offset");
+    if (offset === "50") return jsonResponse({ items: [], total: 0, totalCopies: 0 });
+    return jsonResponse({ items: [item], total: 51, totalCopies: 51 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  renderPage();
+
+  expect(await screen.findByText("Lightning Bolt")).toBeInTheDocument();
+  await userEvent.click(await screen.findByRole("button", { name: "Next page" }));
+
+  // The empty page-2 response briefly renders the empty state...
+  await waitFor(() => {
+    expect(fetchMock.mock.calls.some(([input]) => requestUrl(input).includes("offset=50"))).toBe(
+      true,
+    );
+  });
+
+  // ...then the page clamps back to 0 and the real content reappears.
+  expect(await screen.findByText("Lightning Bolt")).toBeInTheDocument();
+  expect(screen.queryByText(/collection is empty|no cards match/i)).not.toBeInTheDocument();
 });
 
 test("shows a login prompt on 401", async () => {

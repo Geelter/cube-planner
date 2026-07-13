@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
 import { CardHoverPreview } from "@/shared/cards/CardHoverPreview";
@@ -31,6 +31,15 @@ export function CollectionPage() {
   const setQuantity = useSetQuantity();
   const importItems = useImportItems();
   const changePrinting = useChangePrinting();
+
+  // A page beyond the end of the collection (e.g. the user just removed the
+  // last item on it) comes back with an empty page and total=0 — clamp back
+  // to page 0 instead of showing a false "collection is empty" state.
+  useEffect(() => {
+    if (!collection.isPending && page > 0 && collection.data?.items.length === 0) {
+      setPage(0);
+    }
+  }, [collection.isPending, collection.data, page]);
 
   if (collection.isError && collection.error instanceof UnauthorizedError) {
     return (
