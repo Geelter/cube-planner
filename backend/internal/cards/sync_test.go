@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mjabloniec/cube-planner/backend/internal/db"
@@ -200,5 +201,47 @@ func TestSyncRefusesEmptyBulkFile(t *testing.T) {
 	}
 	if n, _ := q.CountCards(ctx); n != 1 {
 		t.Fatalf("cards = %d, want 1 (never wiped by empty file)", n)
+	}
+}
+
+func TestSyncKeepsCollectionReferencedCards(t *testing.T) {
+	f, syncer, _, pool := newSyncTest(t)
+	ctx := context.Background()
+
+	f.cards = []scryfallCard{
+		fixtureCard(idA, oracleA, "Alpha Strike"),
+		fixtureCard(idB, oracleB, "Beta Blast"),
+	}
+	if err := syncer.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// A user owns copies of B; B then vanishes from the bulk file.
+	var userID uuid.UUID
+	if err := pool.QueryRow(
+		ctx,
+		`insert into users (email, display_name) values ('owner@test', 'Owner') returning id`,
+	).Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx,
+		`insert into collection_items (user_id, scryfall_id, oracle_id, quantity)
+		 values ($1, $2, $3, 2)`, userID, idB, oracleB); err != nil {
+		t.Fatal(err)
+	}
+
+	f.updatedAt = f.updatedAt.Add(24 * time.Hour)
+	f.cards = []scryfallCard{fixtureCard(idA, oracleA, "Alpha Strike")}
+	if err := syncer.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var exists bool
+	if err := pool.QueryRow(ctx,
+		`select exists(select 1 from cards where scryfall_id = $1)`, idB).Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Fatal("card B is in a collection and must survive the sync delete")
 	}
 }

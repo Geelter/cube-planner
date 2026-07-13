@@ -77,6 +77,15 @@ type CardsStaging struct {
 	BackImageNormal *string
 }
 
+type CollectionItem struct {
+	UserID     uuid.UUID
+	ScryfallID uuid.UUID
+	OracleID   uuid.UUID
+	Quantity   int32
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 type Cube struct {
 	ID          uuid.UUID
 	OwnerID     uuid.UUID
