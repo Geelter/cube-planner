@@ -114,5 +114,6 @@
   "cubes_load_more": "Load more",
   "nav_cubes": "Cubes",
   "pagination_prev": "Previous page",
-  "pagination_next": "Next page"
+  "pagination_next": "Next page",
+  "dialog_close": "Close"
 }
