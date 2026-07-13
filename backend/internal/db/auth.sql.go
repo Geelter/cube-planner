@@ -88,7 +88,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 const createUser = `-- name: CreateUser :one
 insert into users (email, display_name, password_hash, email_verified_at)
 values (lower($1), $2, $3, $4)
-returning id, email, display_name, password_hash, email_verified_at, created_at
+returning id, email, display_name, password_hash, email_verified_at, created_at, role
 `
 
 type CreateUserParams struct {
@@ -114,6 +114,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordHash,
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
+		&i.Role,
 	)
 	return i, err
 }
@@ -169,7 +170,7 @@ func (q *Queries) GetSessionUserID(ctx context.Context, tokenHash []byte) (uuid.
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-select id, email, display_name, password_hash, email_verified_at, created_at from users where email = lower($1)
+select id, email, display_name, password_hash, email_verified_at, created_at, role from users where email = lower($1)
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -182,12 +183,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.PasswordHash,
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-select id, email, display_name, password_hash, email_verified_at, created_at from users where id = $1
+select id, email, display_name, password_hash, email_verified_at, created_at, role from users where id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -200,6 +202,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.PasswordHash,
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
+		&i.Role,
 	)
 	return i, err
 }
@@ -254,7 +257,7 @@ func (q *Queries) SetPasswordHash(ctx context.Context, arg SetPasswordHashParams
 const updateUnverifiedUser = `-- name: UpdateUnverifiedUser :one
 update users set password_hash = $1, display_name = $2
 where id = $3 and email_verified_at is null
-returning id, email, display_name, password_hash, email_verified_at, created_at
+returning id, email, display_name, password_hash, email_verified_at, created_at, role
 `
 
 type UpdateUnverifiedUserParams struct {
@@ -273,6 +276,7 @@ func (q *Queries) UpdateUnverifiedUser(ctx context.Context, arg UpdateUnverified
 		&i.PasswordHash,
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
+		&i.Role,
 	)
 	return i, err
 }
