@@ -115,5 +115,7 @@
   "nav_cubes": "Cubes",
   "pagination_prev": "Previous page",
   "pagination_next": "Next page",
-  "dialog_close": "Close"
+  "dialog_close": "Close",
+  "collection_login_required": "Log in to manage your collection.",
+  "wantlist_login_required": "Log in to compare this cube with your collection."
 }

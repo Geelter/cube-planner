@@ -115,5 +115,7 @@
   "nav_cubes": "Cuby",
   "pagination_prev": "Poprzednia strona",
   "pagination_next": "Następna strona",
-  "dialog_close": "Zamknij"
+  "dialog_close": "Zamknij",
+  "collection_login_required": "Zaloguj się, aby zarządzać kolekcją.",
+  "wantlist_login_required": "Zaloguj się, aby porównać kostkę ze swoją kolekcją."
 }
