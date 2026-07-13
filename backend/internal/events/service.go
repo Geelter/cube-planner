@@ -382,3 +382,171 @@ func pgtypeUUIDToPtr(id pgtype.UUID) *uuid.UUID {
 	u := uuid.UUID(id.Bytes)
 	return &u
 }
+
+// Register creates the caller's registration for a published event:
+// spot free + paid event → pending_payment (24h window); spot free +
+// free event → paid instantly; event full → waitlisted.
+func (s *Service) Register(ctx context.Context, eventID, userID uuid.UUID) (*db.Registration, error) {
+	var reg db.Registration
+	var emails []pendingEmail
+	err := s.withTx(ctx, func(qtx *db.Queries) error {
+		ev, err := qtx.GetEventForUpdate(ctx, eventID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrEventNotFound
+		}
+		if err != nil {
+			return err
+		}
+		switch ev.Status {
+		case "published":
+			// registrable
+		case "draft":
+			return ErrEventNotFound // no existence leak
+		default:
+			return ErrRegistrationClosed
+		}
+		if _, err := qtx.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{
+			EventID: eventID, UserID: userID,
+		}); err == nil {
+			return ErrAlreadyRegistered
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		occupied, err := qtx.CountOccupiedSpots(ctx, eventID)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		switch {
+		case occupied >= int64(ev.MaxParticipants):
+			pos, err := qtx.IncrementWaitlistCounter(ctx, eventID)
+			if err != nil {
+				return err
+			}
+			reg, err = qtx.CreateRegistration(ctx, db.CreateRegistrationParams{
+				EventID: eventID, UserID: userID, Status: "waitlisted", WaitlistPos: &pos,
+			})
+			return err
+		case ev.FeeCents > 0:
+			expires := now.Add(PaymentWindow)
+			reg, err = qtx.CreateRegistration(ctx, db.CreateRegistrationParams{
+				EventID: eventID, UserID: userID, Status: "pending_payment", ExpiresAt: &expires,
+			})
+			return err
+		default:
+			reg, err = qtx.CreateRegistration(ctx, db.CreateRegistrationParams{
+				EventID: eventID, UserID: userID, Status: "paid", PaidAt: &now,
+			})
+			if err != nil {
+				return err
+			}
+			u, err := qtx.GetUserByID(ctx, userID)
+			if err != nil {
+				return err
+			}
+			emails = append(emails, confirmationEmail(u, ev, s.baseURL))
+			return nil
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.sendEmails(ctx, emails)
+	return &reg, nil
+}
+
+// promoteLocked fills free capacity from the waitlist. MUST run inside a
+// transaction holding the event row lock. Every spot-freeing path
+// (expiry, cancel, refund, webhook) calls it.
+func (s *Service) promoteLocked(ctx context.Context, qtx *db.Queries, ev db.Event) ([]pendingEmail, error) {
+	var emails []pendingEmail
+	for {
+		occupied, err := qtx.CountOccupiedSpots(ctx, ev.ID)
+		if err != nil {
+			return nil, err
+		}
+		if occupied >= int64(ev.MaxParticipants) {
+			return emails, nil
+		}
+		next, err := qtx.NextWaitlisted(ctx, ev.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return emails, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		u, err := qtx.GetUserByID(ctx, next.UserID)
+		if err != nil {
+			return nil, err
+		}
+		now := s.now()
+		if ev.FeeCents > 0 {
+			expires := now.Add(PaymentWindow)
+			if _, err := qtx.PromoteToPendingPayment(ctx, db.PromoteToPendingPaymentParams{
+				ID: next.ID, ExpiresAt: &expires,
+			}); err != nil {
+				return nil, err
+			}
+			emails = append(emails, promotionEmail(u, ev, expires, s.baseURL))
+		} else {
+			if _, err := qtx.MarkRegistrationPaid(ctx, db.MarkRegistrationPaidParams{
+				ID: next.ID, PaidAt: &now,
+			}); err != nil {
+				return nil, err
+			}
+			emails = append(emails, confirmationEmail(u, ev, s.baseURL))
+		}
+	}
+}
+
+// expireAndPromote is the per-event sweeper body: flip overdue
+// pending_payment rows to expired, then promote.
+func (s *Service) expireAndPromote(ctx context.Context, eventID uuid.UUID) error {
+	var emails []pendingEmail
+	err := s.withTx(ctx, func(qtx *db.Queries) error {
+		ev, err := qtx.GetEventForUpdate(ctx, eventID)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		if _, err := qtx.ExpireOverduePendingForEvent(ctx, db.ExpireOverduePendingForEventParams{
+			EventID: eventID, Now: &now,
+		}); err != nil {
+			return err
+		}
+		emails, err = s.promoteLocked(ctx, qtx, ev)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	s.sendEmails(ctx, emails)
+	return nil
+}
+
+// closeRegistrationLocked (start): registration closes — remaining
+// pending_payment rows expire, the waitlist is cancelled, and nothing
+// promotes. The paid roster is the 5b tournament roster.
+func (s *Service) closeRegistrationLocked(ctx context.Context, qtx *db.Queries, ev db.Event) error {
+	rows, err := qtx.ListActiveRegistrationsForEvent(ctx, ev.ID)
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		var target string
+		switch r.Status {
+		case "pending_payment":
+			target = "expired"
+		case "waitlisted":
+			target = "cancelled"
+		default:
+			continue
+		}
+		if _, err := qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+			ID: r.ID, Status: target,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -293,3 +293,214 @@ func TestDraftHiddenFromNonAdmins(t *testing.T) {
 		t.Fatalf("admin list must include draft: %v %+v", err, list)
 	}
 }
+
+// ---- Task 4 tests ----
+
+func (e *testEnv) register(t *testing.T, eventID, userID uuid.UUID) *db.Registration {
+	t.Helper()
+	reg, err := e.svc.Register(context.Background(), eventID, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reg
+}
+
+func TestRegisterPaidEvent(t *testing.T) {
+	env := newTestEnv(t)
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+
+	reg := env.register(t, ev.ID, alice)
+	if reg.Status != "pending_payment" {
+		t.Fatalf("want pending_payment, got %s", reg.Status)
+	}
+	wantExpiry := env.clock.Now().Add(PaymentWindow)
+	if reg.ExpiresAt == nil || !reg.ExpiresAt.Equal(wantExpiry) {
+		t.Fatalf("want expires_at %v, got %v", wantExpiry, reg.ExpiresAt)
+	}
+	// Duplicate active registration is rejected.
+	if _, err := env.svc.Register(context.Background(), ev.ID, alice); !errors.Is(err, ErrAlreadyRegistered) {
+		t.Fatalf("want ErrAlreadyRegistered, got %v", err)
+	}
+}
+
+func TestRegisterFreeEventConfirmsInstantly(t *testing.T) {
+	env := newTestEnv(t)
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 0, 2)
+	env.publish(t, ev.ID)
+
+	reg := env.register(t, ev.ID, alice)
+	if reg.Status != "paid" || reg.PaidAt == nil {
+		t.Fatalf("free event must confirm instantly, got %+v", reg)
+	}
+	if len(env.mailer.sent) != 1 || env.mailer.sent[0].to != "alice@test" {
+		t.Fatalf("want one confirmation email to alice, got %+v", env.mailer.sent)
+	}
+}
+
+func TestRegisterFullEventWaitlists(t *testing.T) {
+	env := newTestEnv(t)
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	c := env.seedUser(t, "c@test")
+	env.register(t, ev.ID, a) // takes the spot (pending_payment)
+	rb := env.register(t, ev.ID, b)
+	rc := env.register(t, ev.ID, c)
+	if rb.Status != "waitlisted" || rb.WaitlistPos == nil || *rb.WaitlistPos != 1 {
+		t.Fatalf("b should be waitlist #1, got %+v", rb)
+	}
+	if rc.Status != "waitlisted" || rc.WaitlistPos == nil || *rc.WaitlistPos != 2 {
+		t.Fatalf("c should be waitlist #2, got %+v", rc)
+	}
+}
+
+func TestExpiryPromotesWaitlist(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	ra := env.register(t, ev.ID, a)
+	env.register(t, ev.ID, b)
+
+	env.clock.Advance(PaymentWindow + time.Minute)
+	if err := env.svc.expireAndPromote(ctx, ev.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	gotA, err := env.q.GetRegistration(ctx, ra.ID)
+	if err != nil || gotA.Status != "expired" {
+		t.Fatalf("a should be expired: %v %+v", err, gotA)
+	}
+	gotB, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: b})
+	if err != nil || gotB.Status != "pending_payment" || gotB.ExpiresAt == nil {
+		t.Fatalf("b should be promoted to pending_payment: %v %+v", err, gotB)
+	}
+	// Promotion email with a pay-by deadline went to b.
+	found := false
+	for _, m := range env.mailer.sent {
+		found = found || m.to == "b@test"
+	}
+	if !found {
+		t.Fatalf("want promotion email to b, got %+v", env.mailer.sent)
+	}
+
+	// a can re-register after expiry (partial unique index only covers active rows).
+	if _, err := env.svc.Register(ctx, ev.ID, a); err != nil {
+		t.Fatalf("re-register after expiry: %v", err)
+	}
+}
+
+func TestFreeEventPromotionConfirmsInstantly(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 0, 1)
+	env.publish(t, ev.ID)
+
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	env.register(t, ev.ID, a) // paid instantly (free event)
+	rb := env.register(t, ev.ID, b)
+	if rb.Status != "waitlisted" {
+		t.Fatalf("want waitlisted, got %+v", rb)
+	}
+
+	// Free the spot via start-agnostic path: directly cancel a's row in Task 6;
+	// here simulate by expiring via SQL is impossible (paid rows don't expire),
+	// so use the sweeper path after flipping a to pending manually. The
+	// overdue threshold is anchored to the fake clock (not the DB's real
+	// wall clock) so this doesn't depend on time-of-day the suite runs at.
+	pastExpiry := env.clock.Now().Add(-time.Hour)
+	if _, err := env.pool.Exec(ctx,
+		`update registrations set status = 'pending_payment', expires_at = $3, paid_at = null
+		 where event_id = $1 and user_id = $2`, ev.ID, a, pastExpiry); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.svc.expireAndPromote(ctx, ev.ID); err != nil {
+		t.Fatal(err)
+	}
+	gotB, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: b})
+	if err != nil || gotB.Status != "paid" || gotB.PaidAt == nil {
+		t.Fatalf("free-event promotion must confirm instantly: %v %+v", err, gotB)
+	}
+}
+
+func TestMultipleFreedSpotsPromoteMultiple(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+
+	users := make([]uuid.UUID, 4)
+	for i, email := range []string{"a@test", "b@test", "c@test", "d@test"} {
+		users[i] = env.seedUser(t, email)
+		env.register(t, ev.ID, users[i])
+	}
+	// a, b hold spots; c, d waitlisted. Both spots expire → both promote in order.
+	env.clock.Advance(PaymentWindow + time.Minute)
+	if err := env.svc.expireAndPromote(ctx, ev.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range users[2:] {
+		got, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: u})
+		if err != nil || got.Status != "pending_payment" {
+			t.Fatalf("waitlisted user should be promoted: %v %+v", err, got)
+		}
+	}
+}
+
+func TestRegisterRequiresPublished(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+
+	draft := env.createEvent(t, org, 0, 8)
+	if _, err := env.svc.Register(ctx, draft.ID, alice); !errors.Is(err, ErrEventNotFound) {
+		t.Fatalf("draft register must 404 (no leak), got %v", err)
+	}
+
+	started := env.createEvent(t, org, 0, 8)
+	env.publish(t, started.ID)
+	if _, err := env.svc.Transition(ctx, started.ID, "start"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.svc.Register(ctx, started.ID, alice); !errors.Is(err, ErrRegistrationClosed) {
+		t.Fatalf("started register must be closed, got %v", err)
+	}
+}
+
+func TestStartClosesRegistration(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	ra := env.register(t, ev.ID, a) // pending_payment
+	rb := env.register(t, ev.ID, b) // waitlisted
+
+	if _, err := env.svc.Transition(ctx, ev.ID, "start"); err != nil {
+		t.Fatal(err)
+	}
+	gotA, _ := env.q.GetRegistration(ctx, ra.ID)
+	gotB, _ := env.q.GetRegistration(ctx, rb.ID)
+	if gotA.Status != "expired" || gotB.Status != "cancelled" {
+		t.Fatalf("start must expire pending and cancel waitlist, got %s / %s", gotA.Status, gotB.Status)
+	}
+}
