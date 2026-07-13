@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import type { CubeCardEntry } from "../api";
 
 // Shows the card image in a floating panel while the row is hovered or
-// focused. Pointer-hover only on devices that support it; on touch the
-// row is a button toggling the preview.
+// focused (mouse hover or keyboard focus). Touch devices have no hover
+// or focus trigger here, so the preview is not reachable by tap.
 export function CardHoverPreview({ card, children }: { card: CubeCardEntry; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   if (card.imageNormal == null) return <>{children}</>;

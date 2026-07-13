@@ -413,41 +413,53 @@ func (s *Service) ApplyChange(ctx context.Context, cubeID, authorID uuid.UUID, e
 	entry := ChangeEntry{
 		ID: change.ID, Version: newVersion, Note: note, CreatedAt: change.CreatedAt,
 	}
-	// Author display name: the author is the owner (enforced above).
-	entry.AuthorName = cube.Name // placeholder overwritten below
+	// The commit already succeeded at this point: everything below is
+	// presentation enrichment (author/card display names), not part of
+	// the transactional outcome. A lookup failure here must never turn
+	// into a failed request — the client would believe the commit
+	// failed and retry into a spurious 409. Failures fall back to an
+	// explicit, honest placeholder instead of silently substituting
+	// unrelated data.
 	user, err := s.queries.GetUserByID(ctx, authorID)
-	if err == nil {
+	if err != nil {
+		// Deliberate non-fatal fallback: leave AuthorName blank rather
+		// than serving the cube's name (wrong data) or failing the
+		// request for a commit that already succeeded.
+		entry.AuthorName = ""
+	} else {
 		entry.AuthorName = user.DisplayName
 	}
 	for _, d := range addDeltas {
 		entry.Adds = append(entry.Adds, ChangeItem{OracleID: d.OracleID, Name: addNames[d.OracleID], Quantity: d.Quantity})
 	}
-	for _, d := range removeDeltas {
-		name := addNames[d.OracleID]
-		if name == "" {
-			// Look up removed-card names in one query.
-			name = d.OracleID.String()
-		}
-		entry.Removes = append(entry.Removes, ChangeItem{OracleID: d.OracleID, Name: name, Quantity: d.Quantity})
-	}
-	// Fill remove names properly (single query for all remove printings).
+	// Removed cards aren't in addNames, so their display names need a
+	// dedicated lookup (single query for all remove printings).
+	removeNames := make(map[uuid.UUID]string, len(removeDeltas))
 	if len(removeDeltas) > 0 {
 		ids := make([]uuid.UUID, len(removeDeltas))
 		for i, d := range removeDeltas {
 			ids[i] = d.ScryfallID
 		}
 		rows, err := s.queries.GetCardsByScryfallIDs(ctx, ids)
-		if err == nil {
-			byOracle := make(map[uuid.UUID]string, len(rows))
-			for _, r := range rows {
-				byOracle[r.OracleID] = r.Name
-			}
-			for i := range entry.Removes {
-				if n, ok := byOracle[entry.Removes[i].OracleID]; ok {
-					entry.Removes[i].Name = n
-				}
-			}
+		if err != nil {
+			// Deliberate non-fatal fallback: fall back to the raw
+			// oracle ID per item below rather than failing a request
+			// for a commit that already succeeded.
+			rows = nil
 		}
+		for _, r := range rows {
+			removeNames[r.OracleID] = r.Name
+		}
+	}
+	for _, d := range removeDeltas {
+		name, ok := removeNames[d.OracleID]
+		if !ok {
+			// Explicit fallback when the lookup failed or omitted this
+			// card: better than an empty string for identifying which
+			// card changed.
+			name = d.OracleID.String()
+		}
+		entry.Removes = append(entry.Removes, ChangeItem{OracleID: d.OracleID, Name: name, Quantity: d.Quantity})
 	}
 	return entry, newVersion, nil
 }
