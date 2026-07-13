@@ -68,6 +68,13 @@ export function CubeEditorPage() {
     () => previewEntries(cards.data?.cards ?? [], pending),
     [cards.data, pending],
   );
+  // The reducer contract (pendingDiff) wants the unchanged server entry on
+  // every dispatch — preview entries have pending deltas baked in, so their
+  // quantities would corrupt the remove cap.
+  const serverByOracle = useMemo(
+    () => new Map((cards.data?.cards ?? []).map((e) => [e.oracleId, e])),
+    [cards.data],
+  );
 
   if (cube.isPending || cards.isPending)
     return <p className="text-sm text-fg-muted">{m.loading()}</p>;
@@ -80,11 +87,12 @@ export function CubeEditorPage() {
     commit.mutate(
       { expectedVersion: cards.data.version, note, ...diff },
       {
-        onSuccess: (result) => {
+        onSuccess: () => {
           dispatch({ type: "reset" });
           setNote("");
-          void navigate({ to: "/cubes/$cubeId", params: { cubeId } });
-          void result;
+          // The pending reset only lands on the next render, so the blocker
+          // registered on this render still sees dirty state — bypass it.
+          void navigate({ to: "/cubes/$cubeId", params: { cubeId }, ignoreBlocker: true });
         },
         onError: async (err) => {
           if (err instanceof CommitConflictError) {
@@ -115,7 +123,12 @@ export function CubeEditorPage() {
 
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="min-w-0 flex-1">
-          <EditableCardList cards={preview} groupKind="color" dispatch={dispatch} />
+          <EditableCardList
+            cards={preview}
+            serverByOracle={serverByOracle}
+            groupKind="color"
+            dispatch={dispatch}
+          />
         </div>
         <PendingChangesPanel
           pending={pending}

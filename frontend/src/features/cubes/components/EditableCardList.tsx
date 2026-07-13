@@ -7,10 +7,14 @@ import type { PendingAction } from "../lib/pendingDiff";
 
 export function EditableCardList({
   cards,
+  serverByOracle,
   groupKind,
   dispatch,
 }: {
+  /** Preview entries (server list with pending deltas applied) — display only. */
   cards: CubeCardEntry[];
+  /** True server entries by oracleId — the reducer needs their untouched quantities. */
+  serverByOracle: Map<string, CubeCardEntry>;
   groupKind: GroupKind;
   dispatch: (action: PendingAction) => void;
 }) {
@@ -18,6 +22,9 @@ export function EditableCardList({
     return <p className="text-sm text-fg-muted">{m.cubes_empty_list()}</p>;
   }
   const groups = groupCards(cards, groupKind);
+  // Pending-only adds have no server entry; for those the preview entry is
+  // correct (the reducer cancels against the pending add, never the cap).
+  const serverEntry = (card: CubeCardEntry) => serverByOracle.get(card.oracleId) ?? card;
   return (
     <div className="columns-1 gap-6 sm:columns-2">
       {groups.map((group) => (
@@ -43,7 +50,7 @@ export function EditableCardList({
                     variant="ghost"
                     size="sm"
                     aria-label={m.cubes_qty_decrease({ name: card.name })}
-                    onClick={() => dispatch({ type: "decrement", entry: card })}
+                    onClick={() => dispatch({ type: "decrement", entry: serverEntry(card) })}
                   >
                     −
                   </Button>
@@ -52,7 +59,7 @@ export function EditableCardList({
                     variant="ghost"
                     size="sm"
                     aria-label={m.cubes_qty_increase({ name: card.name })}
-                    onClick={() => dispatch({ type: "increment", entry: card })}
+                    onClick={() => dispatch({ type: "increment", entry: serverEntry(card) })}
                   >
                     +
                   </Button>
@@ -61,7 +68,7 @@ export function EditableCardList({
                     variant="ghost"
                     size="sm"
                     aria-label={m.cubes_remove_card({ name: card.name })}
-                    onClick={() => dispatch({ type: "remove", entry: card })}
+                    onClick={() => dispatch({ type: "remove", entry: serverEntry(card) })}
                   >
                     ✕
                   </Button>
