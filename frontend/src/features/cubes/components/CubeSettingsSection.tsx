@@ -86,7 +86,11 @@ export function CubeSettingsSection({ cube }: { cube: CubeDetail }) {
         disabled={del.isPending}
         onClick={() => {
           if (window.confirm(m.cubes_delete_confirm())) {
-            del.mutate(undefined, { onSuccess: () => void navigate({ to: "/cubes" }) });
+            del.mutate(undefined, {
+              // The editor's unsaved-changes blocker may still be active, but
+              // pending edits are meaningless once the cube is deleted.
+              onSuccess: () => void navigate({ to: "/cubes", ignoreBlocker: true }),
+            });
           }
         }}
       >
