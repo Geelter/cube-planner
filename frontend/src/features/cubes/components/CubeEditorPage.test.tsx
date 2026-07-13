@@ -96,6 +96,10 @@ vi.mock("@/shared/cards/CardAutocomplete", () => ({
   ),
 }));
 
+vi.mock("./CubeSettingsSection", () => ({
+  CubeSettingsSection: () => <div>Settings section (mocked)</div>,
+}));
+
 import { CubeEditorPage } from "./CubeEditorPage";
 
 beforeEach(() => {

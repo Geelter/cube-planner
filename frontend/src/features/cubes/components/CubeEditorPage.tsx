@@ -9,6 +9,7 @@ import type { CubeCardEntry } from "../api";
 import { CommitConflictError, useCommitChange, useCube, useCubeCards } from "../api";
 import { emptyPending, pendingCount, pendingReducer, toCommitDiff } from "../lib/pendingDiff";
 import type { PendingState } from "../lib/pendingDiff";
+import { CubeSettingsSection } from "./CubeSettingsSection";
 import { EditableCardList } from "./EditableCardList";
 import { PendingChangesPanel } from "./PendingChangesPanel";
 
@@ -143,6 +144,8 @@ export function CubeEditorPage() {
           saving={commit.isPending}
         />
       </div>
+
+      <CubeSettingsSection cube={cube.data} />
     </div>
   );
 }

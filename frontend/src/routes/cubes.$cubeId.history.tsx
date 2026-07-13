@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CubeHistoryPage } from "@/features/cubes/components/CubeHistoryPage";
 
-export const Route = createFileRoute("/cubes/$cubeId/history")({
-  component: () => <div>Cube history (Task 12)</div>,
-});
+export const Route = createFileRoute("/cubes/$cubeId/history")({ component: CubeHistoryPage });
