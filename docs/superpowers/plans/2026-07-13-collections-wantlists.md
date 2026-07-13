@@ -3938,7 +3938,7 @@ git commit -m "test(collections): axe smoke tests for collection and wantlist sc
 
 ## Deviations from the spec (deliberate, documented)
 
-- **PUT response**: always 200 with `{item: CollectionItemEntry | null}` (null after a quantity-0 delete) instead of the spec's 200/204 mix — one success shape keeps the generated client simple.
+- **PUT response**: always 200 with an optional `item` field (`item?: CollectionItemEntry`, omitted after a quantity-0 delete via `omitempty`) instead of the spec's 200/204 mix — one success shape keeps the generated client simple. (Post-review fix a6a61e7: originally serialized as `item: null`, which contradicted the generated schema's required non-nullable field.)
 - **`service_test.go`**: the spec lists it "where mocking is sensible"; nothing here mocks sensibly — the pure logic lives in `parse.go` (unit-tested) and everything else is covered by endpoint integration tests against real Postgres.
 - **Pagination messages**: shared `pagination_*` keys are introduced if the cube browser doesn't already define equivalents; reuse whatever exists first.
 
