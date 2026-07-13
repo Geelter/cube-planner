@@ -160,6 +160,91 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/collection": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The session user's collection */
+    get: operations["getCollection"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/collection/cards/{scryfallId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Set the owned quantity of a printing (0 deletes) */
+    put: operations["setCollectionQuantity"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/collection/cards/{scryfallId}/change-printing": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Re-key an owned printing to another printing of the same card */
+    post: operations["changeCollectionPrinting"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/collection/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Add quantities onto the collection (bulk import commit) */
+    post: operations["importCollectionItems"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/collection/import/resolve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Resolve a pasted card list (pure read, nothing is written) */
+    post: operations["resolveCollectionImport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/cubes": {
     parameters: {
       query?: never;
@@ -226,6 +311,23 @@ export interface paths {
     put?: never;
     /** Commit a batched diff as one changelog entry */
     post: operations["commitCubeChange"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/cubes/{cubeId}/wantlist": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Cards in the cube missing from the caller's collection */
+    get: operations["getCubeWantlist"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -336,6 +438,15 @@ export interface components {
       scryfallId: string;
       typeLine: string;
     };
+    ChangePrintingInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ChangePrintingInputBody.json
+       */
+      readonly $schema?: string;
+      newScryfallId: string;
+    };
     ChangelogEntry: {
       adds: components["schemas"]["ChangelogItem"][] | null;
       authorName: string;
@@ -352,6 +463,30 @@ export interface components {
       oracleId: string;
       /** Format: int32 */
       quantity: number;
+    };
+    CollectionItemEntry: {
+      collectorNumber: string;
+      imageNormal: string | null;
+      imageSmall: string | null;
+      manaCost: string;
+      name: string;
+      oracleId: string;
+      /** Format: int32 */
+      quantity: number;
+      scryfallId: string;
+      setCode: string;
+      setName: string;
+      typeLine: string;
+    };
+    CollectionItemOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/CollectionItemOutputBody.json
+       */
+      readonly $schema?: string;
+      /** @description null after a quantity-0 delete */
+      item: components["schemas"]["CollectionItemEntry"];
     };
     CommitCubeChangeInputBody: {
       /**
@@ -513,6 +648,25 @@ export interface components {
       /** Format: email */
       email: string;
     };
+    GetCollectionOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/GetCollectionOutputBody.json
+       */
+      readonly $schema?: string;
+      items: components["schemas"]["CollectionItemEntry"][] | null;
+      /**
+       * Format: int64
+       * @description Distinct printings matching the filter
+       */
+      total: number;
+      /**
+       * Format: int64
+       * @description Sum of their quantities
+       */
+      totalCopies: number;
+    };
     GetCubeCardsOutputBody: {
       /**
        * Format: uri
@@ -524,6 +678,18 @@ export interface components {
       /** Format: int32 */
       version: number;
     };
+    GetWantlistOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/GetWantlistOutputBody.json
+       */
+      readonly $schema?: string;
+      cubeName: string;
+      items: components["schemas"]["WantlistEntry"][] | null;
+      /** Format: int64 */
+      totalMissing: number;
+    };
     HealthOutputBody: {
       /**
        * Format: uri
@@ -533,6 +699,55 @@ export interface components {
       readonly $schema?: string;
       /** @example ok */
       status: string;
+    };
+    ImportCardMatch: {
+      collectorNumber: string;
+      imageNormal: string | null;
+      imageSmall: string | null;
+      manaCost: string;
+      name: string;
+      oracleId: string;
+      scryfallId: string;
+      setCode: string;
+      setName: string;
+      typeLine: string;
+    };
+    ImportItemsInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ImportItemsInputBody.json
+       */
+      readonly $schema?: string;
+      items: components["schemas"]["Item"][] | null;
+    };
+    ImportItemsOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ImportItemsOutputBody.json
+       */
+      readonly $schema?: string;
+      /** Format: int32 */
+      addedRows: number;
+      /** Format: int32 */
+      updatedRows: number;
+    };
+    ImportResolveLine: {
+      /** Format: int32 */
+      lineNumber: number;
+      match?: components["schemas"]["ImportCardMatch"];
+      /** Format: int32 */
+      quantity: number;
+      raw: string;
+      /** @enum {string} */
+      status: "matched" | "ambiguous" | "unmatched";
+      suggestions?: components["schemas"]["ImportCardMatch"][] | null;
+    };
+    Item: {
+      /** Format: int32 */
+      quantity: number;
+      scryfallId: string;
     };
     ListCubeChangesOutputBody: {
       /**
@@ -589,6 +804,24 @@ export interface components {
       newPassword: string;
       token: string;
     };
+    ResolveImportInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ResolveImportInputBody.json
+       */
+      readonly $schema?: string;
+      text: string;
+    };
+    ResolveImportOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ResolveImportOutputBody.json
+       */
+      readonly $schema?: string;
+      lines: components["schemas"]["ImportResolveLine"][] | null;
+    };
     SearchCardsOutputBody: {
       /**
        * Format: uri
@@ -599,6 +832,19 @@ export interface components {
       cards: components["schemas"]["CardDetail"][] | null;
       /** Format: int64 */
       total: number;
+    };
+    SetCollectionQuantityInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/SetCollectionQuantityInputBody.json
+       */
+      readonly $schema?: string;
+      /**
+       * Format: int32
+       * @description 0 deletes the row
+       */
+      quantity: number;
     };
     UpdateCubeInputBody: {
       /**
@@ -632,6 +878,21 @@ export interface components {
        */
       readonly $schema?: string;
       token: string;
+    };
+    WantlistEntry: {
+      /** Format: int32 */
+      cubeQuantity: number;
+      imageNormal: string | null;
+      imageSmall: string | null;
+      manaCost: string;
+      /** Format: int32 */
+      missingQuantity: number;
+      name: string;
+      oracleId: string;
+      /** Format: int32 */
+      ownedQuantity: number;
+      /** @description The cube's chosen printing */
+      scryfallId: string;
     };
   };
   responses: never;
@@ -938,6 +1199,176 @@ export interface operations {
       };
     };
   };
+  getCollection: {
+    parameters: {
+      query?: {
+        /** @description Name filter (substring, case-insensitive) */
+        search?: string;
+        limit?: number;
+        offset?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GetCollectionOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  setCollectionQuantity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scryfallId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SetCollectionQuantityInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CollectionItemOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  changeCollectionPrinting: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        scryfallId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChangePrintingInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CollectionItemOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  importCollectionItems: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ImportItemsInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportItemsOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  resolveCollectionImport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ResolveImportInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResolveImportOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   listCubes: {
     parameters: {
       query?: {
@@ -1190,6 +1621,37 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CommitCubeChangeOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  getCubeWantlist: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        cubeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GetWantlistOutputBody"];
         };
       };
       /** @description Error */

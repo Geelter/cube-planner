@@ -139,6 +139,21 @@ components:
         - typeLine
         - imageSmall
       type: object
+    ChangePrintingInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/ChangePrintingInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        newScryfallId:
+          type: string
+      required:
+        - newScryfallId
+      type: object
     ChangelogEntry:
       additionalProperties: false
       properties:
@@ -189,6 +204,65 @@ components:
         - oracleId
         - name
         - quantity
+      type: object
+    CollectionItemEntry:
+      additionalProperties: false
+      properties:
+        collectorNumber:
+          type: string
+        imageNormal:
+          type:
+            - string
+            - "null"
+        imageSmall:
+          type:
+            - string
+            - "null"
+        manaCost:
+          type: string
+        name:
+          type: string
+        oracleId:
+          type: string
+        quantity:
+          format: int32
+          type: integer
+        scryfallId:
+          type: string
+        setCode:
+          type: string
+        setName:
+          type: string
+        typeLine:
+          type: string
+      required:
+        - scryfallId
+        - oracleId
+        - name
+        - manaCost
+        - typeLine
+        - setCode
+        - setName
+        - collectorNumber
+        - imageSmall
+        - imageNormal
+        - quantity
+      type: object
+    CollectionItemOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/CollectionItemOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        item:
+          $ref: "#/components/schemas/CollectionItemEntry"
+          description: null after a quantity-0 delete
+      required:
+        - item
       type: object
     CommitCubeChangeInputBody:
       additionalProperties: false
@@ -509,6 +583,35 @@ components:
       required:
         - email
       type: object
+    GetCollectionOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/GetCollectionOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        items:
+          items:
+            $ref: "#/components/schemas/CollectionItemEntry"
+          type:
+            - array
+            - "null"
+        total:
+          description: Distinct printings matching the filter
+          format: int64
+          type: integer
+        totalCopies:
+          description: Sum of their quantities
+          format: int64
+          type: integer
+      required:
+        - items
+        - total
+        - totalCopies
+      type: object
     GetCubeCardsOutputBody:
       additionalProperties: false
       properties:
@@ -532,6 +635,32 @@ components:
         - cards
         - version
       type: object
+    GetWantlistOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/GetWantlistOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        cubeName:
+          type: string
+        items:
+          items:
+            $ref: "#/components/schemas/WantlistEntry"
+          type:
+            - array
+            - "null"
+        totalMissing:
+          format: int64
+          type: integer
+      required:
+        - cubeName
+        - items
+        - totalMissing
+      type: object
     HealthOutputBody:
       additionalProperties: false
       properties:
@@ -548,6 +677,131 @@ components:
           type: string
       required:
         - status
+      type: object
+    ImportCardMatch:
+      additionalProperties: false
+      properties:
+        collectorNumber:
+          type: string
+        imageNormal:
+          type:
+            - string
+            - "null"
+        imageSmall:
+          type:
+            - string
+            - "null"
+        manaCost:
+          type: string
+        name:
+          type: string
+        oracleId:
+          type: string
+        scryfallId:
+          type: string
+        setCode:
+          type: string
+        setName:
+          type: string
+        typeLine:
+          type: string
+      required:
+        - scryfallId
+        - oracleId
+        - name
+        - manaCost
+        - typeLine
+        - setCode
+        - setName
+        - collectorNumber
+        - imageSmall
+        - imageNormal
+      type: object
+    ImportItemsInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/ImportItemsInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        items:
+          items:
+            $ref: "#/components/schemas/Item"
+          maxItems: 500
+          minItems: 1
+          type:
+            - array
+            - "null"
+      required:
+        - items
+      type: object
+    ImportItemsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/ImportItemsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        addedRows:
+          format: int32
+          type: integer
+        updatedRows:
+          format: int32
+          type: integer
+      required:
+        - addedRows
+        - updatedRows
+      type: object
+    ImportResolveLine:
+      additionalProperties: false
+      properties:
+        lineNumber:
+          format: int32
+          type: integer
+        match:
+          $ref: "#/components/schemas/ImportCardMatch"
+        quantity:
+          format: int32
+          type: integer
+        raw:
+          type: string
+        status:
+          enum:
+            - matched
+            - ambiguous
+            - unmatched
+          type: string
+        suggestions:
+          items:
+            $ref: "#/components/schemas/ImportCardMatch"
+          type:
+            - array
+            - "null"
+      required:
+        - lineNumber
+        - raw
+        - quantity
+        - status
+      type: object
+    Item:
+      additionalProperties: false
+      properties:
+        quantity:
+          format: int32
+          maximum: 999
+          minimum: 1
+          type: integer
+        scryfallId:
+          type: string
+      required:
+        - scryfallId
+        - quantity
       type: object
     ListCubeChangesOutputBody:
       additionalProperties: false
@@ -663,6 +917,42 @@ components:
         - token
         - newPassword
       type: object
+    ResolveImportInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/ResolveImportInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        text:
+          maxLength: 65536
+          minLength: 1
+          type: string
+      required:
+        - text
+      type: object
+    ResolveImportOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/ResolveImportOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        lines:
+          items:
+            $ref: "#/components/schemas/ImportResolveLine"
+          type:
+            - array
+            - "null"
+      required:
+        - lines
+      type: object
     SearchCardsOutputBody:
       additionalProperties: false
       properties:
@@ -685,6 +975,25 @@ components:
       required:
         - cards
         - total
+      type: object
+    SetCollectionQuantityInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/SetCollectionQuantityInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        quantity:
+          description: 0 deletes the row
+          format: int32
+          maximum: 999
+          minimum: 0
+          type: integer
+      required:
+        - quantity
       type: object
     UpdateCubeInputBody:
       additionalProperties: false
@@ -752,6 +1061,46 @@ components:
           type: string
       required:
         - token
+      type: object
+    WantlistEntry:
+      additionalProperties: false
+      properties:
+        cubeQuantity:
+          format: int32
+          type: integer
+        imageNormal:
+          type:
+            - string
+            - "null"
+        imageSmall:
+          type:
+            - string
+            - "null"
+        manaCost:
+          type: string
+        missingQuantity:
+          format: int32
+          type: integer
+        name:
+          type: string
+        oracleId:
+          type: string
+        ownedQuantity:
+          format: int32
+          type: integer
+        scryfallId:
+          description: The cube's chosen printing
+          type: string
+      required:
+        - oracleId
+        - scryfallId
+        - name
+        - manaCost
+        - imageSmall
+        - imageNormal
+        - missingQuantity
+        - cubeQuantity
+        - ownedQuantity
       type: object
 info:
   title: Cube Planner API
@@ -1062,6 +1411,163 @@ paths:
       summary: All printings of an oracle card, newest first
       tags:
         - cards
+  /api/collection:
+    get:
+      operationId: getCollection
+      parameters:
+        - description: Name filter (substring, case-insensitive)
+          explode: false
+          in: query
+          name: search
+          schema:
+            description: Name filter (substring, case-insensitive)
+            maxLength: 100
+            type: string
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            default: 50
+            format: int32
+            maximum: 100
+            minimum: 1
+            type: integer
+        - explode: false
+          in: query
+          name: offset
+          schema:
+            default: 0
+            format: int32
+            minimum: 0
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetCollectionOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: The session user's collection
+      tags:
+        - collection
+  /api/collection/cards/{scryfallId}:
+    put:
+      operationId: setCollectionQuantity
+      parameters:
+        - in: path
+          name: scryfallId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetCollectionQuantityInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionItemOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set the owned quantity of a printing (0 deletes)
+      tags:
+        - collection
+  /api/collection/cards/{scryfallId}/change-printing:
+    post:
+      operationId: changeCollectionPrinting
+      parameters:
+        - in: path
+          name: scryfallId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePrintingInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionItemOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Re-key an owned printing to another printing of the same card
+      tags:
+        - collection
+  /api/collection/import:
+    post:
+      operationId: importCollectionItems
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportItemsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportItemsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Add quantities onto the collection (bulk import commit)
+      tags:
+        - collection
+  /api/collection/import/resolve:
+    post:
+      operationId: resolveCollectionImport
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveImportInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolveImportOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Resolve a pasted card list (pure read, nothing is written)
+      tags:
+        - collection
   /api/cubes:
     get:
       operationId: listCubes
@@ -1313,6 +1819,31 @@ paths:
       summary: Commit a batched diff as one changelog entry
       tags:
         - cubes
+  /api/cubes/{cubeId}/wantlist:
+    get:
+      operationId: getCubeWantlist
+      parameters:
+        - in: path
+          name: cubeId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetWantlistOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Cards in the cube missing from the caller's collection
+      tags:
+        - collection
   /api/healthz:
     get:
       operationId: healthz
