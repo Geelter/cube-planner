@@ -50,6 +50,9 @@ function RootLayout() {
                   <Link to="/cubes/mine">{m.cubes_mine_title()}</Link>
                 </Button>
                 <Button asChild variant="ghost" size="sm">
+                  <Link to="/collection">{m.nav_collection()}</Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm">
                   <Link to="/account">{me.data.displayName}</Link>
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => logout.mutate()}>

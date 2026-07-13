@@ -117,5 +117,16 @@
   "pagination_next": "Next page",
   "dialog_close": "Close",
   "collection_login_required": "Log in to manage your collection.",
-  "wantlist_login_required": "Log in to compare this cube with your collection."
+  "wantlist_login_required": "Log in to compare this cube with your collection.",
+  "nav_collection": "Collection",
+  "collection_title": "My collection",
+  "collection_stats": "{cards} cards · {copies} copies",
+  "collection_search_label": "Search your collection",
+  "collection_search_placeholder": "Filter by card name…",
+  "collection_add_label": "Add a card",
+  "collection_empty": "Your collection is empty. Add cards above or import a list.",
+  "collection_no_results": "No cards match your search.",
+  "collection_qty_increase": "Increase quantity of {name}",
+  "collection_qty_decrease": "Decrease quantity of {name}",
+  "collection_remove_card": "Remove {name}"
 }

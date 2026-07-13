@@ -117,5 +117,16 @@
   "pagination_next": "Następna strona",
   "dialog_close": "Zamknij",
   "collection_login_required": "Zaloguj się, aby zarządzać kolekcją.",
-  "wantlist_login_required": "Zaloguj się, aby porównać kostkę ze swoją kolekcją."
+  "wantlist_login_required": "Zaloguj się, aby porównać kostkę ze swoją kolekcją.",
+  "nav_collection": "Kolekcja",
+  "collection_title": "Moja kolekcja",
+  "collection_stats": "{cards} kart · {copies} sztuk",
+  "collection_search_label": "Szukaj w kolekcji",
+  "collection_search_placeholder": "Filtruj po nazwie karty…",
+  "collection_add_label": "Dodaj kartę",
+  "collection_empty": "Twoja kolekcja jest pusta. Dodaj karty powyżej albo zaimportuj listę.",
+  "collection_no_results": "Żadna karta nie pasuje do wyszukiwania.",
+  "collection_qty_increase": "Zwiększ liczbę {name}",
+  "collection_qty_decrease": "Zmniejsz liczbę {name}",
+  "collection_remove_card": "Usuń {name}"
 }
