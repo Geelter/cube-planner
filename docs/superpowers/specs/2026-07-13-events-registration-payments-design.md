@@ -265,8 +265,10 @@ same convention as private cubes).
 
 `already-registered`,
 `registration-not-found`, `registration-not-payable`,
-`event-not-published`, `event-registration-closed`,
-`invalid-event-transition`, `event-cubes-locked`, `invalid-event-cube`,
+`event-registration-closed` (registering/cancelling on a
+started/finished/cancelled event; drafts are a plain 404 — no existence
+leak), `invalid-event-transition`, `event-locked` (PATCH touched a
+field frozen post-publish), `event-cubes-locked`, `invalid-event-cube`,
 `payments-unconfigured`, `admin-required`.
 
 ### Wire types
@@ -286,8 +288,10 @@ After the backend lands, `make api-generate` refreshes
 
 ## 6. Emails
 
-Via existing `platform/mail` templates (same pattern as auth emails,
-en + pl):
+Via the existing `platform/mail` `Mailer` (same plain-text pattern as
+auth emails). Users have no stored locale, so each email is **bilingual
+in one body: Polish first, then English** (decided during planning —
+auth emails stay English-only as-is):
 
 | Email | Trigger |
 |---|---|
