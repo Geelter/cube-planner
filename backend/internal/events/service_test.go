@@ -504,3 +504,86 @@ func TestStartClosesRegistration(t *testing.T) {
 		t.Fatalf("start must expire pending and cancel waitlist, got %s / %s", gotA.Status, gotB.Status)
 	}
 }
+
+// ---- Task 5 tests ----
+
+func TestPayCreatesCheckoutSession(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	reg := env.register(t, ev.ID, alice)
+
+	url, err := env.svc.Pay(ctx, ev.ID, alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if url == "" || len(env.stripe.sessions) != 1 {
+		t.Fatalf("want one checkout session, got url=%q sessions=%+v", url, env.stripe.sessions)
+	}
+	p := env.stripe.sessions[0]
+	if p.AmountCents != 5000 || p.Currency != "pln" || p.RegistrationID != reg.ID {
+		t.Fatalf("bad checkout params: %+v", p)
+	}
+	if !p.ExpiresAt.Equal(env.clock.Now().Add(PaymentWindow)) {
+		t.Fatalf("session expiry should match the registration window, got %v", p.ExpiresAt)
+	}
+
+	// Second Pay reuses the live session — no new Stripe call.
+	url2, err := env.svc.Pay(ctx, ev.ID, alice)
+	if err != nil || url2 != url {
+		t.Fatalf("want reused session url, got %q err=%v", url2, err)
+	}
+	if len(env.stripe.sessions) != 1 {
+		t.Fatalf("no second session should be created, got %d", len(env.stripe.sessions))
+	}
+}
+
+func TestPaySessionExpiryClampedToStripeMinimum(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	env.register(t, ev.ID, alice)
+
+	// 10 minutes left on the registration — Stripe minimum is 30.
+	env.clock.Advance(PaymentWindow - 10*time.Minute)
+	if _, err := env.svc.Pay(ctx, ev.ID, alice); err != nil {
+		t.Fatal(err)
+	}
+	want := env.clock.Now().Add(30 * time.Minute)
+	if got := env.stripe.sessions[0].ExpiresAt; !got.Equal(want) {
+		t.Fatalf("want clamped expiry %v, got %v", want, got)
+	}
+}
+
+func TestPayValidation(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 5000, 1)
+	env.publish(t, ev.ID)
+	a := env.seedUser(t, "a@test")
+	b := env.seedUser(t, "b@test")
+	env.register(t, ev.ID, a)
+	env.register(t, ev.ID, b) // waitlisted
+
+	// Waitlisted can't pay.
+	if _, err := env.svc.Pay(ctx, ev.ID, b); !errors.Is(err, ErrRegistrationNotPayable) {
+		t.Fatalf("want ErrRegistrationNotPayable, got %v", err)
+	}
+	// No registration at all.
+	nobody := env.seedUser(t, "nobody@test")
+	if _, err := env.svc.Pay(ctx, ev.ID, nobody); !errors.Is(err, ErrRegistrationNotFound) {
+		t.Fatalf("want ErrRegistrationNotFound, got %v", err)
+	}
+	// Expired window can't pay.
+	env.clock.Advance(PaymentWindow + time.Minute)
+	if _, err := env.svc.Pay(ctx, ev.ID, a); !errors.Is(err, ErrRegistrationNotPayable) {
+		t.Fatalf("want ErrRegistrationNotPayable after expiry, got %v", err)
+	}
+}

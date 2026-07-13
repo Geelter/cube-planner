@@ -524,6 +524,62 @@ func (s *Service) expireAndPromote(ctx context.Context, eventID uuid.UUID) error
 	return nil
 }
 
+// Pay returns a Stripe Checkout URL for the caller's pending_payment
+// registration, creating the session on demand and reusing a live one.
+// The session expiry is clamped to the registration's remaining window,
+// respecting Stripe's 30-minute minimum.
+func (s *Service) Pay(ctx context.Context, eventID, userID uuid.UUID) (string, error) {
+	ev, err := s.queries.GetEvent(ctx, eventID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrEventNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	reg, err := s.queries.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{
+		EventID: eventID, UserID: userID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrRegistrationNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	now := s.now()
+	if reg.Status != "pending_payment" || reg.ExpiresAt == nil || !reg.ExpiresAt.After(now) {
+		return "", ErrRegistrationNotPayable
+	}
+	if reg.StripeCheckoutSessionUrl != nil && reg.StripeSessionExpiresAt != nil &&
+		reg.StripeSessionExpiresAt.After(now) {
+		return *reg.StripeCheckoutSessionUrl, nil
+	}
+	if !s.stripe.Configured() {
+		return "", ErrPaymentsUnconfigured
+	}
+	sessionExpiry := *reg.ExpiresAt
+	if min := now.Add(stripeMinSessionTTL); sessionExpiry.Before(min) {
+		sessionExpiry = min
+	}
+	cs, err := s.stripe.CreateCheckoutSession(ctx, CheckoutParams{
+		RegistrationID: reg.ID,
+		EventName:      ev.Name,
+		Currency:       ev.Currency,
+		AmountCents:    int64(ev.FeeCents),
+		ExpiresAt:      sessionExpiry,
+		SuccessURL:     eventLink(s.baseURL, ev.ID) + "?checkout=success",
+		CancelURL:      eventLink(s.baseURL, ev.ID) + "?checkout=cancelled",
+	})
+	if err != nil {
+		return "", err
+	}
+	if err := s.queries.SetRegistrationCheckoutSession(ctx, db.SetRegistrationCheckoutSessionParams{
+		ID: reg.ID, SessionID: &cs.ID, SessionUrl: &cs.URL, SessionExpiresAt: &cs.ExpiresAt,
+	}); err != nil {
+		return "", err
+	}
+	return cs.URL, nil
+}
+
 // closeRegistrationLocked (start): registration closes — remaining
 // pending_payment rows expire, the waitlist is cancelled, and nothing
 // promotes. The paid roster is the 5b tournament roster.
