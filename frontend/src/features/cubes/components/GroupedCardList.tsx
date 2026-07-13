@@ -2,7 +2,7 @@ import { m } from "@/paraglide/messages";
 import type { CubeCardEntry } from "../api";
 import type { GroupKind } from "../lib/grouping";
 import { groupCards } from "../lib/grouping";
-import { CardHoverPreview } from "./CardHoverPreview";
+import { CardHoverPreview } from "@/shared/cards/CardHoverPreview";
 
 export function GroupedCardList({
   cards,
