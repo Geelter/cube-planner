@@ -148,3 +148,56 @@ func TestCollectionListSearchAndPagination(t *testing.T) {
 		t.Fatalf("page2 = %+v", page2)
 	}
 }
+
+func changePrinting(t *testing.T, c *cookieClient, from, to uuid.UUID) *http.Response {
+	t.Helper()
+	return c.do(t, "POST", "/api/collection/cards/"+from.String()+"/change-printing",
+		fmt.Sprintf(`{"newScryfallId":%q}`, to))
+}
+
+func TestChangePrinting(t *testing.T) {
+	srv, pool, q := newCollectionsServer(t)
+	c := loggedInClient(t, srv, q, "col3@test.dev")
+
+	boltO := uuid.New()
+	alphaS, m10S := uuid.New(), uuid.New()
+	seedCard(t, pool, testCard{scryfallID: alphaS, oracleID: boltO, name: "Lightning Bolt", released: "1993-08-05"})
+	seedCard(t, pool, testCard{scryfallID: m10S, oracleID: boltO, name: "Lightning Bolt", released: "2010-07-16"})
+	strikeS := uuid.New()
+	seedCard(t, pool, testCard{scryfallID: strikeS, oracleID: uuid.New(), name: "Lightning Strike"})
+
+	// Simple re-key: 3× alpha → 3× m10, alpha row gone.
+	putQuantity(t, c, alphaS, 3)
+	resp := changePrinting(t, c, alphaS, m10S)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("change = %d, want 200", resp.StatusCode)
+	}
+	if body := decode[collectionItemResp](t, resp); body.Item == nil ||
+		body.Item.ScryfallID != m10S.String() || body.Item.Quantity != 3 {
+		t.Fatalf("changed item = %+v", body.Item)
+	}
+	list := decode[collectionListBody](t, c.do(t, "GET", "/api/collection", ""))
+	if list.Total != 1 {
+		t.Fatalf("total = %d, want 1 (source row re-keyed)", list.Total)
+	}
+
+	// Merge onto an existing target, clamped at 999.
+	putQuantity(t, c, alphaS, 998)
+	resp = changePrinting(t, c, alphaS, m10S) // 998 + 3, clamps to 999
+	if body := decode[collectionItemResp](t, resp); body.Item == nil || body.Item.Quantity != 999 {
+		t.Fatalf("merged item = %+v, want quantity 999", body.Item)
+	}
+
+	// 422 family: same printing, oracle mismatch, missing source, unknown target.
+	putQuantity(t, c, alphaS, 1)
+	for name, resp := range map[string]*http.Response{
+		"same printing":   changePrinting(t, c, alphaS, alphaS),
+		"oracle mismatch": changePrinting(t, c, alphaS, strikeS),
+		"missing source":  changePrinting(t, c, uuid.New(), m10S),
+		"unknown target":  changePrinting(t, c, alphaS, uuid.New()),
+	} {
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("%s = %d, want 422", name, resp.StatusCode)
+		}
+	}
+}

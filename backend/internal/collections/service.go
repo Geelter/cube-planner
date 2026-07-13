@@ -3,6 +3,7 @@ package collections
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -113,4 +114,55 @@ func (s *Service) getEntry(ctx context.Context, userID, scryfallID uuid.UUID) (*
 		ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
 		Quantity: r.Quantity,
 	}, nil
+}
+
+// ChangePrinting re-keys an owned printing to another printing of the
+// same oracle card in one transaction: add the source quantity onto the
+// target row (clamped at 999), delete the source. Atomic so a torn pair
+// can never leave a duplicated quantity.
+func (s *Service) ChangePrinting(ctx context.Context, userID, fromID, toID uuid.UUID) (*ItemEntry, error) {
+	if fromID == toID {
+		// A naive add-then-delete on the same row would lose the row.
+		return nil, fmt.Errorf("%w: target is the same printing", ErrInvalidItem)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback after commit is a no-op
+	qtx := s.queries.WithTx(tx)
+
+	src, err := qtx.GetCollectionItemForUpdate(ctx, db.GetCollectionItemForUpdateParams{
+		UserID: userID, ScryfallID: fromID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: printing not in collection", ErrInvalidItem)
+	}
+	if err != nil {
+		return nil, err
+	}
+	targets, err := qtx.GetCardsByScryfallIDs(ctx, []uuid.UUID{toID})
+	if err != nil {
+		return nil, err
+	}
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("%w: unknown target printing", ErrInvalidItem)
+	}
+	if targets[0].OracleID != src.OracleID {
+		return nil, fmt.Errorf("%w: target is a different card", ErrInvalidItem)
+	}
+	if err := qtx.AddCollectionItem(ctx, db.AddCollectionItemParams{
+		UserID: userID, ScryfallID: toID, Quantity: src.Quantity,
+	}); err != nil {
+		return nil, err
+	}
+	if _, err := qtx.DeleteCollectionItem(ctx, db.DeleteCollectionItemParams{
+		UserID: userID, ScryfallID: fromID,
+	}); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return s.getEntry(ctx, userID, toID)
 }

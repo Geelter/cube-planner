@@ -87,6 +87,13 @@ type setCollectionQuantityInput struct {
 	}
 }
 
+type changePrintingInput struct {
+	ScryfallID string `path:"scryfallId"`
+	Body       struct {
+		NewScryfallID uuid.UUID `json:"newScryfallId"`
+	}
+}
+
 type collectionItemOutput struct {
 	Body struct {
 		Item *CollectionItemEntry `json:"item" doc:"null after a quantity-0 delete"`
@@ -143,6 +150,31 @@ func registerCollections(api huma.API, deps Deps) {
 			e := collectionEntryFrom(*entry)
 			out.Body.Item = &e
 		}
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "changeCollectionPrinting",
+		Method:      http.MethodPost,
+		Path:        "/api/collection/cards/{scryfallId}/change-printing",
+		Summary:     "Re-key an owned printing to another printing of the same card",
+		Tags:        []string{"collection"},
+	}, func(ctx context.Context, in *changePrintingInput) (*collectionItemOutput, error) {
+		uid, ok := CurrentUserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("authentication required")
+		}
+		id, err := parseScryfallID(in.ScryfallID)
+		if err != nil {
+			return nil, err
+		}
+		entry, err := deps.Collections.ChangePrinting(ctx, uid, id, in.Body.NewScryfallID)
+		if err != nil {
+			return nil, mapCollectionErr(err)
+		}
+		out := &collectionItemOutput{}
+		e := collectionEntryFrom(*entry)
+		out.Body.Item = &e
 		return out, nil
 	})
 }
