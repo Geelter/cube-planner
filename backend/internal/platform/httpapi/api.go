@@ -28,6 +28,8 @@ type Deps struct {
 	Collections *collections.Service
 	Events      *events.Service
 	OAuth       http.Handler
+
+	StripeWebhookSecret string
 }
 
 func Build(deps Deps) (huma.API, http.Handler) {
@@ -46,6 +48,9 @@ func Build(deps Deps) (huma.API, http.Handler) {
 	registerEvents(api, deps)
 	if deps.OAuth != nil {
 		router.Mount("/auth/oauth", deps.OAuth)
+	}
+	if deps.Events != nil && deps.StripeWebhookSecret != "" {
+		router.Post("/api/stripe/webhook", stripeWebhookHandler(deps))
 	}
 	return api, router
 }
