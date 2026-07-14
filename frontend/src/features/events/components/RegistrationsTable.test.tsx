@@ -66,6 +66,10 @@ test("groups rows and gates actions by status", () => {
   // queued row gets Deny.
   expect(screen.getAllByRole("button", { name: "Refund" })).toHaveLength(2);
   expect(screen.getAllByRole("button", { name: "Deny" })).toHaveLength(1);
+  // The expired history row renders the localized label, not the raw
+  // backend enum string.
+  expect(screen.getByText("Expired")).toBeInTheDocument();
+  expect(screen.queryByText("expired")).not.toBeInTheDocument();
 });
 
 test("refund flows through the confirm dialog", async () => {

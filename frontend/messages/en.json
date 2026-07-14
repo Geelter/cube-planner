@@ -237,5 +237,8 @@
   "regs_deny_confirm": "Deny the refund for {name}? They keep nothing; the row closes.",
   "regs_empty": "Nobody here.",
   "regs_expires": "expires {date}",
-  "regs_paid_at": "paid {date}"
+  "regs_paid_at": "paid {date}",
+  "regs_status_cancelled": "Cancelled",
+  "regs_status_expired": "Expired",
+  "regs_status_refunded": "Refunded"
 }

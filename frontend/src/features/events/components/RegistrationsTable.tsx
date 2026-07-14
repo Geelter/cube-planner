@@ -45,7 +45,12 @@ export function RegistrationsTable({ eventId }: { eventId: string }) {
       return m.regs_paid_at({ date: new Date(r.paidAt).toLocaleString(locale) });
     }
     if (r.status === "waitlisted" && r.waitlistPos != null) return `#${r.waitlistPos}`;
-    return r.status;
+    const historyLabels: Partial<Record<EventRegistrationRow["status"], string>> = {
+      cancelled: m.regs_status_cancelled(),
+      refunded: m.regs_status_refunded(),
+      expired: m.regs_status_expired(),
+    };
+    return historyLabels[r.status] ?? r.status;
   };
 
   return (

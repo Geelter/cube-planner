@@ -237,5 +237,8 @@
   "regs_deny_confirm": "Odmówić zwrotu dla {name}? Wiersz zostanie zamknięty bez zwrotu.",
   "regs_empty": "Nikogo tu nie ma.",
   "regs_expires": "wygasa {date}",
-  "regs_paid_at": "opłacono {date}"
+  "regs_paid_at": "opłacono {date}",
+  "regs_status_cancelled": "Anulowana",
+  "regs_status_expired": "Wygasła",
+  "regs_status_refunded": "Zwrócona"
 }
