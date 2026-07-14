@@ -42,6 +42,9 @@ function RootLayout() {
             <Link to="/cubes" className="text-sm text-fg-muted hover:text-fg">
               {m.nav_cubes()}
             </Link>
+            <Link to="/events" className="text-sm text-fg-muted hover:text-fg">
+              {m.nav_events()}
+            </Link>
           </nav>
           <div className="flex items-center gap-2">
             {me.data ? (
