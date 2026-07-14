@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AuthToken struct {
@@ -122,11 +123,50 @@ type CubeChangeItem struct {
 	Quantity   int32
 }
 
+type Event struct {
+	ID              uuid.UUID
+	OrganizerID     uuid.UUID
+	Name            string
+	Description     string
+	Location        string
+	StartsAt        time.Time
+	FeeCents        int32
+	Currency        string
+	MaxParticipants int32
+	RefundDeadline  *time.Time
+	Status          string
+	WaitlistCounter int64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type EventCube struct {
+	EventID      uuid.UUID
+	CubeID       uuid.UUID
+	CubeChangeID pgtype.UUID
+}
+
 type OauthIdentity struct {
 	Provider       string
 	ProviderUserID string
 	UserID         uuid.UUID
 	CreatedAt      time.Time
+}
+
+type Registration struct {
+	ID                       uuid.UUID
+	EventID                  uuid.UUID
+	UserID                   uuid.UUID
+	Status                   string
+	ExpiresAt                *time.Time
+	WaitlistPos              *int64
+	StripeCheckoutSessionID  *string
+	StripeCheckoutSessionUrl *string
+	StripeSessionExpiresAt   *time.Time
+	StripePaymentIntentID    *string
+	PaidAt                   *time.Time
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
 }
 
 type Session struct {
@@ -136,6 +176,12 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
+type StripeEvent struct {
+	StripeEventID string
+	Type          string
+	ReceivedAt    time.Time
+}
+
 type User struct {
 	ID              uuid.UUID
 	Email           string
@@ -143,4 +189,5 @@ type User struct {
 	PasswordHash    *string
 	EmailVerifiedAt *time.Time
 	CreatedAt       time.Time
+	Role            string
 }

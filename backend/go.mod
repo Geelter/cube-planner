@@ -9,6 +9,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.27.2
 	github.com/spf13/cobra v1.10.2
+	github.com/stripe/stripe-go/v86 v86.1.0
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	github.com/wneessen/go-mail v0.8.1

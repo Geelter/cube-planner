@@ -43,3 +43,7 @@ Router/Query + Tailwind v4 + Paraglide i18n). Master design:
   fork-PR pwn requests.
 - `deploy/docker-compose.prod.yml` + `.env` live at `/opt/cube-planner`
   on the VPS (placed manually).
+- Stripe dev: test-mode keys in `.env` (`STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`); run `make stripe-listen` alongside `make up`
+  and paste the printed `whsec_…` into `.env`. Without keys, paid events
+  return 503 `payments-unconfigured`; free events work fully.

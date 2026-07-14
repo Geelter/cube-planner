@@ -43,6 +43,10 @@ backend-dev: ## Run the Go backend on the host (env from .env, defaults match co
 frontend-dev: ## Run the Vite dev server with HMR
 	pnpm --filter @cube-planner/frontend dev
 
+.PHONY: stripe-listen
+stripe-listen: ## Forward Stripe test-mode webhooks to the local backend (requires stripe CLI, prints the whsec_ secret for .env)
+	stripe listen --forward-to localhost:8080/api/stripe/webhook
+
 .PHONY: db-psql
 db-psql: ## Open a psql shell in the Postgres container
 	$(COMPOSE) exec postgres psql -U cube -d cube

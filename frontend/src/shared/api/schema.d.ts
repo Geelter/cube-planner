@@ -334,6 +334,229 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** All visible events (admins also see drafts) */
+    get: operations["listEvents"];
+    put?: never;
+    /** Create a draft event (organizer) */
+    post: operations["createEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Event detail with cubes, attendees, and the caller's registration */
+    get: operations["getEvent"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Edit an event (field whitelist depends on lifecycle) */
+    patch: operations["updateEvent"];
+    trace?: never;
+  };
+  "/api/events/{eventId}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Lifecycle: cancel */
+    post: operations["cancelEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/cubes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Replace the event's linked cubes (draft only) */
+    put: operations["setEventCubes"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/finish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Lifecycle: finish */
+    post: operations["finishEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/publish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Lifecycle: publish */
+    post: operations["publishEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/register": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Register (or join the waitlist when full) */
+    post: operations["registerForEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/registration": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Cancel own registration (refund policy applies) */
+    delete: operations["cancelMyRegistration"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/registration/pay": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Get a Stripe Checkout URL for the pending registration */
+    post: operations["payRegistration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/registrations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Every registration incl. waitlist order and refund queue (organizer) */
+    get: operations["listEventRegistrations"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/registrations/{registrationId}/deny-refund": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Deny a queued refund request (organizer) */
+    post: operations["denyRefund"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/registrations/{registrationId}/refund": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Refund a queued or paid registration (organizer) */
+    post: operations["refundRegistration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/start": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Lifecycle: start */
+    post: operations["startEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/healthz": {
     parameters: {
       query?: never;
@@ -524,6 +747,26 @@ export interface components {
       /** @enum {string} */
       visibility: "public" | "private";
     };
+    CreateEventInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/CreateEventInputBody.json
+       */
+      readonly $schema?: string;
+      currency?: string;
+      description?: string;
+      /** Format: int32 */
+      feeCents: number;
+      location?: string;
+      /** Format: int32 */
+      maxParticipants: number;
+      name: string;
+      /** Format: date-time */
+      refundDeadline?: string;
+      /** Format: date-time */
+      startsAt: string;
+    };
     CubeCardEntry: {
       /** Format: double */
       cmc: number;
@@ -637,6 +880,96 @@ export interface components {
        * @example https://example.com/errors/example
        */
       type: string;
+    };
+    EventCubeEntry: {
+      cubeChangeId?: string;
+      cubeId: string;
+      cubeName: string;
+      /** Format: date-time */
+      pinnedAt?: string;
+      /** Format: int32 */
+      pinnedVersion?: number;
+    };
+    EventCubeLink: {
+      cubeChangeId?: string;
+      cubeId: string;
+    };
+    EventDetailBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/EventDetailBody.json
+       */
+      readonly $schema?: string;
+      attendees: string[] | null;
+      cubes: components["schemas"]["EventCubeEntry"][] | null;
+      currency: string;
+      description: string;
+      /** Format: int32 */
+      feeCents: number;
+      id: string;
+      location: string;
+      /** Format: int32 */
+      maxParticipants: number;
+      myRegistration?: components["schemas"]["RegistrationInfo"];
+      myRegistrationStatus?: string;
+      name: string;
+      organizerName: string;
+      /** Format: int32 */
+      paidCount: number;
+      /** Format: int32 */
+      pendingCount: number;
+      /** Format: date-time */
+      refundDeadline?: string;
+      /** Format: date-time */
+      startsAt: string;
+      /** @enum {string} */
+      status: "draft" | "published" | "started" | "finished" | "cancelled";
+      /** Format: int32 */
+      waitlistCount: number;
+    };
+    EventRegistrationRow: {
+      /** Format: date-time */
+      createdAt: string;
+      displayName: string;
+      email: string;
+      /** Format: date-time */
+      expiresAt?: string;
+      id: string;
+      /** Format: date-time */
+      paidAt?: string;
+      /** @enum {string} */
+      status:
+        | "pending_payment"
+        | "paid"
+        | "waitlisted"
+        | "cancelled"
+        | "refund_requested"
+        | "refunded"
+        | "expired";
+      /** Format: int64 */
+      waitlistPos?: number;
+    };
+    EventSummary: {
+      currency: string;
+      /** Format: int32 */
+      feeCents: number;
+      id: string;
+      location: string;
+      /** Format: int32 */
+      maxParticipants: number;
+      myRegistrationStatus?: string;
+      name: string;
+      /** Format: int32 */
+      paidCount: number;
+      /** Format: int32 */
+      pendingCount: number;
+      /** Format: date-time */
+      startsAt: string;
+      /** @enum {string} */
+      status: "draft" | "published" | "started" | "finished" | "cancelled";
+      /** Format: int32 */
+      waitlistCount: number;
     };
     ForgotPasswordInputBody: {
       /**
@@ -771,6 +1104,24 @@ export interface components {
       /** Format: int64 */
       total: number;
     };
+    ListEventsOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ListEventsOutputBody.json
+       */
+      readonly $schema?: string;
+      events: components["schemas"]["EventSummary"][] | null;
+    };
+    ListRegistrationsOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ListRegistrationsOutputBody.json
+       */
+      readonly $schema?: string;
+      registrations: components["schemas"]["EventRegistrationRow"][] | null;
+    };
     LoginInputBody: {
       /**
        * Format: uri
@@ -781,6 +1132,15 @@ export interface components {
       /** Format: email */
       email: string;
       password: string;
+    };
+    PayOutputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/PayOutputBody.json
+       */
+      readonly $schema?: string;
+      checkoutUrl: string;
     };
     RegisterInputBody: {
       /**
@@ -793,6 +1153,30 @@ export interface components {
       /** Format: email */
       email: string;
       password: string;
+    };
+    RegistrationInfo: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/RegistrationInfo.json
+       */
+      readonly $schema?: string;
+      /** Format: date-time */
+      expiresAt?: string;
+      id: string;
+      /** Format: date-time */
+      paidAt?: string;
+      /** @enum {string} */
+      status:
+        | "pending_payment"
+        | "paid"
+        | "waitlisted"
+        | "cancelled"
+        | "refund_requested"
+        | "refunded"
+        | "expired";
+      /** Format: int64 */
+      waitlistPos?: number;
     };
     ResetPasswordInputBody: {
       /**
@@ -846,6 +1230,15 @@ export interface components {
        */
       quantity: number;
     };
+    SetEventCubesInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/SetEventCubesInputBody.json
+       */
+      readonly $schema?: string;
+      cubes: components["schemas"]["EventCubeLink"][] | null;
+    };
     UpdateCubeInputBody: {
       /**
        * Format: uri
@@ -858,6 +1251,26 @@ export interface components {
       /** @enum {string} */
       visibility?: "public" | "private";
     };
+    UpdateEventInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/UpdateEventInputBody.json
+       */
+      readonly $schema?: string;
+      currency?: string;
+      description?: string;
+      /** Format: int32 */
+      feeCents?: number;
+      location?: string;
+      /** Format: int32 */
+      maxParticipants?: number;
+      name?: string;
+      /** Format: date-time */
+      refundDeadline?: string;
+      /** Format: date-time */
+      startsAt?: string;
+    };
     UserBody: {
       /**
        * Format: uri
@@ -869,6 +1282,8 @@ export interface components {
       email: string;
       id: string;
       providers: string[] | null;
+      /** @enum {string} */
+      role: "user" | "admin";
     };
     VerifyEmailInputBody: {
       /**
@@ -1652,6 +2067,481 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["GetWantlistOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  listEvents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListEventsOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  createEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateEventInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventDetailBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  getEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventDetailBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  updateEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateEventInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventDetailBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  cancelEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventDetailBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  setEventCubes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SetEventCubesInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventDetailBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  finishEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventDetailBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  publishEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventDetailBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  registerForEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegistrationInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  cancelMyRegistration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegistrationInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  payRegistration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PayOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  listEventRegistrations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListRegistrationsOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  denyRefund: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        registrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegistrationInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  refundRegistration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        registrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegistrationInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  startEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventDetailBody"];
         };
       };
       /** @description Error */

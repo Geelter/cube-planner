@@ -14,6 +14,7 @@ import (
 	"github.com/mjabloniec/cube-planner/backend/internal/collections"
 	"github.com/mjabloniec/cube-planner/backend/internal/cubes"
 	"github.com/mjabloniec/cube-planner/backend/internal/db"
+	"github.com/mjabloniec/cube-planner/backend/internal/events"
 )
 
 // Deps carries everything handlers need. Build(Deps{}) must stay safe for
@@ -25,7 +26,10 @@ type Deps struct {
 	Cards       *cards.Service
 	Cubes       *cubes.Service
 	Collections *collections.Service
+	Events      *events.Service
 	OAuth       http.Handler
+
+	StripeWebhookSecret string
 }
 
 func Build(deps Deps) (huma.API, http.Handler) {
@@ -41,8 +45,12 @@ func Build(deps Deps) (huma.API, http.Handler) {
 	registerCards(api, deps)
 	registerCubes(api, deps)
 	registerCollections(api, deps)
+	registerEvents(api, deps)
 	if deps.OAuth != nil {
 		router.Mount("/auth/oauth", deps.OAuth)
+	}
+	if deps.Events != nil && deps.StripeWebhookSecret != "" {
+		router.Post("/api/stripe/webhook", stripeWebhookHandler(deps))
 	}
 	return api, router
 }
