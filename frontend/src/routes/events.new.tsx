@@ -1,4 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { NewEventPage } from "@/features/events/components/NewEventPage";
 
-// Placeholder — replaced by Task 16 (NewEventPage + organizer event form).
-export const Route = createFileRoute("/events/new")({ component: () => null });
+export const Route = createFileRoute("/events/new")({ component: NewEventPage });
