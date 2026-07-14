@@ -40,6 +40,7 @@ type UserBody struct {
 	Email       string    `json:"email"`
 	DisplayName string    `json:"displayName"`
 	Providers   []string  `json:"providers"`
+	Role        string    `json:"role" enum:"user,admin"`
 }
 
 type loginInput struct {
@@ -74,7 +75,7 @@ func userBodyFor(ctx context.Context, deps Deps, u db.User) (UserBody, error) {
 	if providers == nil {
 		providers = []string{}
 	}
-	return UserBody{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Providers: providers}, nil
+	return UserBody{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Providers: providers, Role: u.Role}, nil
 }
 
 func registerSession(api huma.API, deps Deps) {

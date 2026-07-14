@@ -294,4 +294,282 @@ func registerEvents(api huma.API, deps Deps) {
 		}
 		return &registrationOutput{Body: registrationInfoFrom(*reg)}, nil
 	})
+
+	registerEventAdmin(api, deps)
+}
+
+func requireAdmin(ctx context.Context, deps Deps) (uuid.UUID, error) {
+	uid, ok := CurrentUserID(ctx)
+	if !ok {
+		return uuid.Nil, huma.Error401Unauthorized("authentication required")
+	}
+	u, err := deps.Queries.GetUserByID(ctx, uid)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if u.Role != "admin" {
+		return uuid.Nil, eventProblem(http.StatusForbidden, "admin-required", "organizer access required")
+	}
+	return uid, nil
+}
+
+type createEventInput struct {
+	Body struct {
+		Name            string     `json:"name" minLength:"1" maxLength:"200"`
+		Description     string     `json:"description,omitempty" maxLength:"5000"`
+		Location        string     `json:"location,omitempty" maxLength:"200"`
+		StartsAt        time.Time  `json:"startsAt"`
+		FeeCents        int32      `json:"feeCents" minimum:"0" maximum:"10000000"`
+		Currency        string     `json:"currency,omitempty" pattern:"^[a-z]{3}$"`
+		MaxParticipants int32      `json:"maxParticipants" minimum:"1" maximum:"1000"`
+		RefundDeadline  *time.Time `json:"refundDeadline,omitempty"`
+	}
+}
+
+type updateEventInput struct {
+	EventID string `path:"eventId"`
+	Body    struct {
+		Name            *string    `json:"name,omitempty" minLength:"1" maxLength:"200"`
+		Description     *string    `json:"description,omitempty" maxLength:"5000"`
+		Location        *string    `json:"location,omitempty" maxLength:"200"`
+		StartsAt        *time.Time `json:"startsAt,omitempty"`
+		FeeCents        *int32     `json:"feeCents,omitempty" minimum:"0" maximum:"10000000"`
+		Currency        *string    `json:"currency,omitempty" pattern:"^[a-z]{3}$"`
+		MaxParticipants *int32     `json:"maxParticipants,omitempty" minimum:"1" maximum:"1000"`
+		RefundDeadline  *time.Time `json:"refundDeadline,omitempty"`
+	}
+}
+
+// EventCubeLink is exported (rather than inlined) so huma's schema
+// registry gives it a distinct name: an anonymous `[]struct{...}` here
+// would be named "Item" like importItemsInput's element, which collides
+// in huma's global registry (huma names slice elements "<ParentName>Item",
+// and anonymous parents all resolve to the empty name).
+type EventCubeLink struct {
+	CubeID       uuid.UUID  `json:"cubeId"`
+	CubeChangeID *uuid.UUID `json:"cubeChangeId,omitempty"`
+}
+
+type setEventCubesInput struct {
+	EventID string `path:"eventId"`
+	Body    struct {
+		Cubes []EventCubeLink `json:"cubes" maxItems:"20"`
+	}
+}
+
+type EventRegistrationRow struct {
+	RegistrationInfo
+	DisplayName string    `json:"displayName"`
+	Email       string    `json:"email"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+type listRegistrationsOutput struct {
+	Body struct {
+		Registrations []EventRegistrationRow `json:"registrations"`
+	}
+}
+
+type registrationActionInput struct {
+	EventID        string `path:"eventId"`
+	RegistrationID string `path:"registrationId"`
+}
+
+func registerEventAdmin(api huma.API, deps Deps) {
+	huma.Register(api, huma.Operation{
+		OperationID: "createEvent",
+		Method:      http.MethodPost,
+		Path:        "/api/events",
+		Summary:     "Create a draft event (organizer)",
+		Tags:        []string{"events"},
+	}, func(ctx context.Context, in *createEventInput) (*eventDetailOutput, error) {
+		uid, err := requireAdmin(ctx, deps)
+		if err != nil {
+			return nil, err
+		}
+		ev, err := deps.Events.Create(ctx, uid, events.CreateEventParams{
+			Name: in.Body.Name, Description: in.Body.Description,
+			Location: in.Body.Location, StartsAt: in.Body.StartsAt,
+			FeeCents: in.Body.FeeCents, Currency: in.Body.Currency,
+			MaxParticipants: in.Body.MaxParticipants,
+			RefundDeadline:  in.Body.RefundDeadline,
+		})
+		if err != nil {
+			return nil, mapEventErr(err)
+		}
+		body, err := deps.eventDetailBody(ctx, ev.ID, uid, true)
+		if err != nil {
+			return nil, err
+		}
+		return &eventDetailOutput{Body: *body}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "updateEvent",
+		Method:      http.MethodPatch,
+		Path:        "/api/events/{eventId}",
+		Summary:     "Edit an event (field whitelist depends on lifecycle)",
+		Tags:        []string{"events"},
+	}, func(ctx context.Context, in *updateEventInput) (*eventDetailOutput, error) {
+		uid, err := requireAdmin(ctx, deps)
+		if err != nil {
+			return nil, err
+		}
+		id, err := parseEventID(in.EventID)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := deps.Events.Update(ctx, id, events.UpdateEventParams{
+			Name: in.Body.Name, Description: in.Body.Description,
+			Location: in.Body.Location, StartsAt: in.Body.StartsAt,
+			FeeCents: in.Body.FeeCents, Currency: in.Body.Currency,
+			MaxParticipants: in.Body.MaxParticipants,
+			RefundDeadline:  in.Body.RefundDeadline,
+		}); err != nil {
+			return nil, mapEventErr(err)
+		}
+		body, err := deps.eventDetailBody(ctx, id, uid, true)
+		if err != nil {
+			return nil, err
+		}
+		return &eventDetailOutput{Body: *body}, nil
+	})
+
+	for _, action := range []string{"publish", "start", "finish", "cancel"} {
+		huma.Register(api, huma.Operation{
+			OperationID: action + "Event",
+			Method:      http.MethodPost,
+			Path:        "/api/events/{eventId}/" + action,
+			Summary:     "Lifecycle: " + action,
+			Tags:        []string{"events"},
+		}, func(ctx context.Context, in *eventIDInput) (*eventDetailOutput, error) {
+			uid, err := requireAdmin(ctx, deps)
+			if err != nil {
+				return nil, err
+			}
+			id, err := parseEventID(in.EventID)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := deps.Events.Transition(ctx, id, action); err != nil {
+				return nil, mapEventErr(err)
+			}
+			body, err := deps.eventDetailBody(ctx, id, uid, true)
+			if err != nil {
+				return nil, err
+			}
+			return &eventDetailOutput{Body: *body}, nil
+		})
+	}
+
+	huma.Register(api, huma.Operation{
+		OperationID: "setEventCubes",
+		Method:      http.MethodPut,
+		Path:        "/api/events/{eventId}/cubes",
+		Summary:     "Replace the event's linked cubes (draft only)",
+		Tags:        []string{"events"},
+	}, func(ctx context.Context, in *setEventCubesInput) (*eventDetailOutput, error) {
+		uid, err := requireAdmin(ctx, deps)
+		if err != nil {
+			return nil, err
+		}
+		id, err := parseEventID(in.EventID)
+		if err != nil {
+			return nil, err
+		}
+		links := make([]events.CubeLinkInput, len(in.Body.Cubes))
+		for i, c := range in.Body.Cubes {
+			links[i] = events.CubeLinkInput{CubeID: c.CubeID, CubeChangeID: c.CubeChangeID}
+		}
+		if err := deps.Events.SetCubes(ctx, id, links); err != nil {
+			return nil, mapEventErr(err)
+		}
+		body, err := deps.eventDetailBody(ctx, id, uid, true)
+		if err != nil {
+			return nil, err
+		}
+		return &eventDetailOutput{Body: *body}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "listEventRegistrations",
+		Method:      http.MethodGet,
+		Path:        "/api/events/{eventId}/registrations",
+		Summary:     "Every registration incl. waitlist order and refund queue (organizer)",
+		Tags:        []string{"events"},
+	}, func(ctx context.Context, in *eventIDInput) (*listRegistrationsOutput, error) {
+		if _, err := requireAdmin(ctx, deps); err != nil {
+			return nil, err
+		}
+		id, err := parseEventID(in.EventID)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := deps.Queries.ListEventRegistrations(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out := &listRegistrationsOutput{}
+		out.Body.Registrations = make([]EventRegistrationRow, len(rows))
+		for i, r := range rows {
+			out.Body.Registrations[i] = EventRegistrationRow{
+				RegistrationInfo: RegistrationInfo{
+					ID: r.ID, Status: r.Status, ExpiresAt: r.ExpiresAt,
+					WaitlistPos: r.WaitlistPos, PaidAt: r.PaidAt,
+				},
+				DisplayName: r.DisplayName, Email: r.Email, CreatedAt: r.CreatedAt,
+			}
+		}
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "refundRegistration",
+		Method:      http.MethodPost,
+		Path:        "/api/events/{eventId}/registrations/{registrationId}/refund",
+		Summary:     "Refund a queued or paid registration (organizer)",
+		Tags:        []string{"events"},
+	}, func(ctx context.Context, in *registrationActionInput) (*registrationOutput, error) {
+		if _, err := requireAdmin(ctx, deps); err != nil {
+			return nil, err
+		}
+		eventID, err := parseEventID(in.EventID)
+		if err != nil {
+			return nil, err
+		}
+		regID, err := uuid.Parse(in.RegistrationID)
+		if err != nil {
+			return nil, eventProblem(http.StatusNotFound, "registration-not-found", "no such registration")
+		}
+		reg, err := deps.Events.OrganizerRefund(ctx, eventID, regID)
+		if err != nil {
+			return nil, mapEventErr(err)
+		}
+		return &registrationOutput{Body: registrationInfoFrom(*reg)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "denyRefund",
+		Method:      http.MethodPost,
+		Path:        "/api/events/{eventId}/registrations/{registrationId}/deny-refund",
+		Summary:     "Deny a queued refund request (organizer)",
+		Tags:        []string{"events"},
+	}, func(ctx context.Context, in *registrationActionInput) (*registrationOutput, error) {
+		if _, err := requireAdmin(ctx, deps); err != nil {
+			return nil, err
+		}
+		eventID, err := parseEventID(in.EventID)
+		if err != nil {
+			return nil, err
+		}
+		regID, err := uuid.Parse(in.RegistrationID)
+		if err != nil {
+			return nil, eventProblem(http.StatusNotFound, "registration-not-found", "no such registration")
+		}
+		reg, err := deps.Events.DenyRefund(ctx, eventID, regID)
+		if err != nil {
+			return nil, mapEventErr(err)
+		}
+		return &registrationOutput{Body: registrationInfoFrom(*reg)}, nil
+	})
 }

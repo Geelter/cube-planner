@@ -227,3 +227,69 @@ func TestConcurrentRegistrationOnLastSpot(t *testing.T) {
 		t.Fatalf("exactly one spot + one waitlist expected, got %v", got)
 	}
 }
+
+func TestAdminGating(t *testing.T) {
+	srv, _, q, _, _ := newEventsServer(t)
+	user := loggedInClient(t, srv, q, "pleb@test")
+	resp := user.do(t, "POST", "/api/events",
+		`{"name":"Nope","startsAt":"2026-08-01T18:00:00Z","feeCents":0,"maxParticipants":8}`)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-admin create: want 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestOrganizerLifecycleOverHTTP(t *testing.T) {
+	srv, pool, q, _, fake := newEventsServer(t)
+	admin := loggedInClient(t, srv, q, "boss@test")
+	makeAdmin(t, pool, "boss@test")
+
+	// Create draft.
+	resp := admin.do(t, "POST", "/api/events",
+		`{"name":"Vintage Cube Night","startsAt":"2026-08-01T18:00:00Z","feeCents":5000,"maxParticipants":1,"refundDeadline":"2026-07-30T18:00:00Z"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("create: %d", resp.StatusCode)
+	}
+	ev := decode[struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}](t, resp)
+	if ev.Status != "draft" {
+		t.Fatalf("want draft, got %s", ev.Status)
+	}
+
+	// Publish, then a locked-field PATCH must 409.
+	if resp := admin.do(t, "POST", "/api/events/"+ev.ID+"/publish", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("publish: %d", resp.StatusCode)
+	}
+	if resp := admin.do(t, "PATCH", "/api/events/"+ev.ID, `{"feeCents":9900}`); resp.StatusCode != http.StatusConflict {
+		t.Fatalf("locked-field patch: want 409, got %d", resp.StatusCode)
+	}
+	if resp := admin.do(t, "PATCH", "/api/events/"+ev.ID, `{"description":"bring snacks"}`); resp.StatusCode != http.StatusOK {
+		t.Fatalf("description patch: %d", resp.StatusCode)
+	}
+
+	// A user registers + pays (via service-level webhook simulation is
+	// Task 6-tested; over HTTP we just check the organizer panel list).
+	user := loggedInClient(t, srv, q, "player@test")
+	if resp := user.do(t, "POST", "/api/events/"+ev.ID+"/register", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("register: %d", resp.StatusCode)
+	}
+	resp = admin.do(t, "GET", "/api/events/"+ev.ID+"/registrations", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("registrations list: %d", resp.StatusCode)
+	}
+	regs := decode[struct {
+		Registrations []struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+			Email  string `json:"email"`
+		} `json:"registrations"`
+	}](t, resp)
+	if len(regs.Registrations) != 1 || regs.Registrations[0].Email != "player@test" {
+		t.Fatalf("organizer list: %+v", regs)
+	}
+	if resp := user.do(t, "GET", "/api/events/"+ev.ID+"/registrations", ""); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-admin registrations list: want 403, got %d", resp.StatusCode)
+	}
+	_ = fake
+}

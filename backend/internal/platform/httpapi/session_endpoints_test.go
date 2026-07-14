@@ -66,6 +66,12 @@ func TestLoginMeLogout(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("me: status %d, want 200", resp.StatusCode)
 	}
+	me := decode[struct {
+		Role string `json:"role"`
+	}](t, resp)
+	if me.Role != "user" {
+		t.Fatalf("me role: got %q, want %q", me.Role, "user")
+	}
 
 	// Logout clears the session.
 	resp = jar.do(t, "POST", "/api/auth/logout", "")
