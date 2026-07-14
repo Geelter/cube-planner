@@ -19,15 +19,17 @@ type OAuthCredentials struct {
 }
 
 type Config struct {
-	Port             int
-	Env              string
-	DatabaseURL      string
-	BaseURL          string
-	SMTP             SMTPConfig
-	Discord          OAuthCredentials
-	Google           OAuthCredentials
-	CardsSyncEnabled bool
-	ScryfallBaseURL  string
+	Port                int
+	Env                 string
+	DatabaseURL         string
+	BaseURL             string
+	SMTP                SMTPConfig
+	Discord             OAuthCredentials
+	Google              OAuthCredentials
+	CardsSyncEnabled    bool
+	ScryfallBaseURL     string
+	StripeSecretKey     string
+	StripeWebhookSecret string
 }
 
 func (c Config) Secure() bool { return c.Env == "prod" }
@@ -45,10 +47,12 @@ func Load() Config {
 			Pass: env("SMTP_PASS", ""),
 			From: env("SMTP_FROM", "cube-planner@localhost"),
 		},
-		Discord:          OAuthCredentials{ClientID: env("DISCORD_CLIENT_ID", ""), ClientSecret: env("DISCORD_CLIENT_SECRET", "")},
-		Google:           OAuthCredentials{ClientID: env("GOOGLE_CLIENT_ID", ""), ClientSecret: env("GOOGLE_CLIENT_SECRET", "")},
-		CardsSyncEnabled: envBool("CARDS_SYNC_ENABLED", true),
-		ScryfallBaseURL:  env("SCRYFALL_BASE_URL", "https://api.scryfall.com"),
+		Discord:             OAuthCredentials{ClientID: env("DISCORD_CLIENT_ID", ""), ClientSecret: env("DISCORD_CLIENT_SECRET", "")},
+		Google:              OAuthCredentials{ClientID: env("GOOGLE_CLIENT_ID", ""), ClientSecret: env("GOOGLE_CLIENT_SECRET", "")},
+		CardsSyncEnabled:    envBool("CARDS_SYNC_ENABLED", true),
+		ScryfallBaseURL:     env("SCRYFALL_BASE_URL", "https://api.scryfall.com"),
+		StripeSecretKey:     env("STRIPE_SECRET_KEY", ""),
+		StripeWebhookSecret: env("STRIPE_WEBHOOK_SECRET", ""),
 	}
 }
 

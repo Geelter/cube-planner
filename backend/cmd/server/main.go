@@ -15,6 +15,7 @@ import (
 	"github.com/mjabloniec/cube-planner/backend/internal/collections"
 	"github.com/mjabloniec/cube-planner/backend/internal/cubes"
 	dbgen "github.com/mjabloniec/cube-planner/backend/internal/db"
+	"github.com/mjabloniec/cube-planner/backend/internal/events"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/config"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/db"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/httpapi"
@@ -55,14 +56,21 @@ func main() {
 					slog.Default())
 				go syncer.RunScheduler(ctx, cards.DefaultSyncCheckInterval)
 			}
+			mailer := mail.FromConfig(cfg)
+			eventsSvc := events.NewService(queries, pool,
+				events.NewStripeClient(cfg.StripeSecretKey), mailer,
+				cfg.BaseURL, slog.Default())
+			go eventsSvc.RunSweeper(ctx, events.DefaultSweepInterval)
 			deps := httpapi.Deps{
-				Auth:        auth.NewService(queries, mail.FromConfig(cfg), cfg.BaseURL),
-				Sessions:    sessions,
-				Queries:     queries,
-				Cards:       cards.NewService(queries),
-				Cubes:       cubes.NewService(queries, pool),
-				Collections: collections.NewService(queries, pool),
-				OAuth:       auth.NewOAuth(queries, sessions, cfg.BaseURL, cfg.Secure(), oauthProviders).Routes(),
+				Auth:                auth.NewService(queries, mailer, cfg.BaseURL),
+				Sessions:            sessions,
+				Queries:             queries,
+				Cards:               cards.NewService(queries),
+				Cubes:               cubes.NewService(queries, pool),
+				Collections:         collections.NewService(queries, pool),
+				OAuth:               auth.NewOAuth(queries, sessions, cfg.BaseURL, cfg.Secure(), oauthProviders).Routes(),
+				Events:              eventsSvc,
+				StripeWebhookSecret: cfg.StripeWebhookSecret,
 			}
 			_, handler := httpapi.Build(deps)
 			log.Printf("listening on :%d", cfg.Port)
