@@ -36,6 +36,11 @@ func main() {
 	cli := humacli.New(func(hooks humacli.Hooks, _ *options) {
 		cfg := config.Load()
 		hooks.OnStart(func() {
+			// A half-configured payment system must not start: it would
+			// charge cards it can never confirm (or mount a dead webhook).
+			if err := cfg.ValidateStripe(); err != nil {
+				log.Fatalf("stripe config: %v", err)
+			}
 			ctx := context.Background()
 			pool, err := db.Connect(ctx, cfg.DatabaseURL)
 			if err != nil {

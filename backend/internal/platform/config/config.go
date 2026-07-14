@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strconv"
 )
@@ -33,6 +34,22 @@ type Config struct {
 }
 
 func (c Config) Secure() bool { return c.Env == "prod" }
+
+// ValidateStripe rejects a half-configured payment setup, which is worse
+// than none: with only the secret key, paid events publish and cards get
+// charged, but the webhook route never mounts so nothing ever flips to
+// paid; with only the webhook secret, no session can be created at all.
+// Both keys or neither.
+func (c Config) ValidateStripe() error {
+	switch {
+	case c.StripeSecretKey != "" && c.StripeWebhookSecret == "":
+		return errors.New("STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is missing: payments would be charged but never confirmed — set both or neither")
+	case c.StripeSecretKey == "" && c.StripeWebhookSecret != "":
+		return errors.New("STRIPE_WEBHOOK_SECRET is set but STRIPE_SECRET_KEY is missing — set both or neither")
+	default:
+		return nil
+	}
+}
 
 func Load() Config {
 	return Config{
