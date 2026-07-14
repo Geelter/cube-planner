@@ -112,6 +112,45 @@ func TestWebhookEndpointCompletesPayment(t *testing.T) {
 	}
 }
 
+// A payment through a session the row no longer stores (Pay race orphan)
+// must still complete via the client_reference_id the handler threads
+// through from the checkout session payload.
+func TestWebhookEndpointOrphanSessionCompletesViaClientReference(t *testing.T) {
+	srv, pool, q, svc, _ := newWebhookServer(t)
+	ctx := context.Background()
+	evID := seedPublishedEvent(t, pool, svc, 5000, 2)
+	alice := loggedInClient(t, srv, q, "alice@test")
+
+	resp := alice.do(t, "POST", fmt.Sprintf("/api/events/%s/register", evID), "")
+	reg := decode[registrationInfoBody](t, resp)
+	if resp := alice.do(t, "POST", fmt.Sprintf("/api/events/%s/registration/pay", evID), ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("pay: %d", resp.StatusCode)
+	}
+
+	// The stored session is cs_test_<reg>; this event carries a sibling
+	// session id plus the registration id as client_reference_id.
+	payload := []byte(fmt.Sprintf(`{
+		"id": "evt_orphan_endpoint_1",
+		"object": "event",
+		"api_version": "2026-01-01",
+		"type": "checkout.session.completed",
+		"data": {"object": {"id": "cs_orphan_endpoint_1", "object": "checkout.session",
+			"client_reference_id": %q, "payment_intent": "pi_orphan_endpoint_1"}}
+	}`, reg.ID))
+	if resp := postWebhook(t, srv, payload, signStripePayload(payload, testWebhookSecret)); resp.StatusCode != http.StatusOK {
+		t.Fatalf("webhook: want 200, got %d", resp.StatusCode)
+	}
+	var status, sessionID string
+	if err := pool.QueryRow(ctx,
+		`select status, stripe_checkout_session_id from registrations where id = $1`,
+		reg.ID).Scan(&status, &sessionID); err != nil {
+		t.Fatal(err)
+	}
+	if status != "paid" || sessionID != "cs_orphan_endpoint_1" {
+		t.Fatalf("want paid via orphan session, got status=%s session=%s", status, sessionID)
+	}
+}
+
 func TestWebhookEndpointUnknownTypeAcknowledged(t *testing.T) {
 	srv, _, _, _, _ := newWebhookServer(t)
 	payload := []byte(`{"id": "evt_other_1", "object": "event", "api_version": "2026-01-01", "type": "invoice.paid", "data": {"object": {}}}`)

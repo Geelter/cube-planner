@@ -541,6 +541,13 @@ func (s *Service) Pay(ctx context.Context, eventID, userID uuid.UUID) (string, e
 	if err != nil {
 		return "", err
 	}
+	// Drafts are invisible (same convention as Register/GetDetail/
+	// CancelRegistration): without this, probing Pay with a draft id
+	// returns registration-not-found instead of event-not-found, leaking
+	// the draft's existence.
+	if ev.Status == "draft" {
+		return "", ErrEventNotFound
+	}
 	reg, err := s.queries.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{
 		EventID: eventID, UserID: userID,
 	})
@@ -879,6 +886,10 @@ type WebhookEvent struct {
 	Type              string
 	CheckoutSessionID string
 	PaymentIntentID   string
+	// ClientReferenceID carries the registration id Pay stamped on the
+	// Checkout session. It is the fallback identity for sessions the row
+	// no longer stores (see findRegistrationForCheckout).
+	ClientReferenceID string
 }
 
 // errAlreadySeen: duplicate delivery — acknowledged, never an error.
@@ -923,6 +934,35 @@ func markSeen(ctx context.Context, qtx *db.Queries, we WebhookEvent) error {
 	return nil
 }
 
+// findRegistrationForCheckout resolves the registration a
+// checkout.session.* event refers to. Primary key: the stored session id.
+// Fallback: two concurrent Pay calls can each create a session while the
+// row stores only the last-written one — the user can still pay through
+// the "orphaned" sibling, so a stored-id miss falls back to the
+// registration id the session carries as client_reference_id. Returns nil
+// (no error) when the event matches nothing we know.
+func (s *Service) findRegistrationForCheckout(ctx context.Context, qtx *db.Queries, we WebhookEvent) (*db.Registration, error) {
+	reg, err := qtx.GetRegistrationByCheckoutSession(ctx, &we.CheckoutSessionID)
+	if err == nil {
+		return &reg, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	regID, parseErr := uuid.Parse(we.ClientReferenceID)
+	if parseErr != nil {
+		return nil, nil //nolint:nilnil // "nothing matched" is a valid outcome, not an error
+	}
+	reg, err = qtx.GetRegistration(ctx, regID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil //nolint:nilnil // see above
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &reg, nil
+}
+
 func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) error {
 	var emails []pendingEmail
 	lateRefund := ""
@@ -931,21 +971,32 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) 
 		if err := markSeen(ctx, qtx, we); err != nil {
 			return err
 		}
-		reg, err := qtx.GetRegistrationByCheckoutSession(ctx, &we.CheckoutSessionID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			s.log.Warn("stripe webhook: unknown checkout session", "session", we.CheckoutSessionID)
+		found, err := s.findRegistrationForCheckout(ctx, qtx, we)
+		if err != nil {
+			return err
+		}
+		if found == nil {
+			s.log.Warn("stripe webhook: unknown checkout session",
+				"session", we.CheckoutSessionID, "client_reference", we.ClientReferenceID)
 			return nil // acknowledge; nothing to do
 		}
+		ev, err := qtx.GetEventForUpdate(ctx, found.EventID)
 		if err != nil {
 			return err
 		}
-		ev, err := qtx.GetEventForUpdate(ctx, reg.EventID)
+		reg, err := qtx.GetRegistration(ctx, found.ID) // re-read under the lock
 		if err != nil {
 			return err
 		}
-		reg, err = qtx.GetRegistration(ctx, reg.ID) // re-read under the lock
-		if err != nil {
-			return err
+		// The paying session wins: if the row stores a sibling session
+		// from a Pay race, overwrite it so this payment stays traceable
+		// (URL/expiry cleared — the session is consumed).
+		if reg.StripeCheckoutSessionID == nil || *reg.StripeCheckoutSessionID != we.CheckoutSessionID {
+			if err := qtx.SetRegistrationCheckoutSession(ctx, db.SetRegistrationCheckoutSessionParams{
+				ID: reg.ID, SessionID: &we.CheckoutSessionID,
+			}); err != nil {
+				return err
+			}
 		}
 		// Always record the intent so dashboard refunds stay traceable.
 		if we.PaymentIntentID != "" {
@@ -1014,6 +1065,13 @@ func (s *Service) handleCheckoutExpired(ctx context.Context, we WebhookEvent) er
 		if err := markSeen(ctx, qtx, we); err != nil {
 			return err
 		}
+		// Deliberately NO client_reference_id fallback here (unlike
+		// completion): an expired session only proves THAT session died.
+		// When the stored-id lookup misses, the expired session is an
+		// orphan from a Pay race and the registration's stored session may
+		// still be live and payable — expiring the row would kill a spot
+		// the user can still pay for. Genuine registration expiry is owned
+		// by expires_at (the sweeper), not by orphan sessions.
 		reg, err := qtx.GetRegistrationByCheckoutSession(ctx, &we.CheckoutSessionID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -1030,6 +1088,12 @@ func (s *Service) handleCheckoutExpired(ctx context.Context, we WebhookEvent) er
 			return err
 		}
 		if reg.Status != "pending_payment" {
+			return nil
+		}
+		// Same guard against the lookup→lock window: if a concurrent Pay
+		// replaced the row's session after our unlocked lookup, the expired
+		// session is no longer the live one — leave the row alone.
+		if reg.StripeCheckoutSessionID == nil || *reg.StripeCheckoutSessionID != we.CheckoutSessionID {
 			return nil
 		}
 		if _, err := qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{

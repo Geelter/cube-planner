@@ -39,6 +39,9 @@ func stripeWebhookHandler(deps Deps) http.HandlerFunc {
 				return
 			}
 			we.CheckoutSessionID = s.ID
+			// Pay stamps the registration id on the session; the service
+			// uses it to resolve sessions a Pay race orphaned.
+			we.ClientReferenceID = s.ClientReferenceID
 			if s.PaymentIntent != nil {
 				we.PaymentIntentID = s.PaymentIntent.ID
 			}

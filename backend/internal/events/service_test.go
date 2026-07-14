@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/mjabloniec/cube-planner/backend/internal/cubes"
 	"github.com/mjabloniec/cube-planner/backend/internal/db"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/testdb"
 )
@@ -980,5 +981,144 @@ func TestWebhookChargeRefundedSyncsDashboardRefunds(t *testing.T) {
 	gotB, err := env.q.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{EventID: ev.ID, UserID: b})
 	if err != nil || gotB.Status != "pending_payment" {
 		t.Fatalf("b must be promoted: %v %+v", err, gotB)
+	}
+}
+
+// ---- whole-branch review fixes (task 19) ----
+
+// Finding 1a: two concurrent Pay calls each create a session but the row
+// stores only the last write. A payment through the orphaned sibling must
+// still complete via the client_reference_id fallback, and the paying
+// session id must be recorded on the row.
+func TestWebhookCompletedOrphanSessionFallsBackToClientReference(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	reg := env.register(t, ev.ID, alice)
+	if _, err := env.svc.Pay(ctx, ev.ID, alice); err != nil {
+		t.Fatal(err)
+	}
+
+	// The stored session is cs_test_<reg>; the user paid through a sibling
+	// session the row never stored.
+	orphanSession := "cs_orphan_" + reg.ID.String()
+	err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_orphan_completed", Type: "checkout.session.completed",
+		CheckoutSessionID: orphanSession,
+		ClientReferenceID: reg.ID.String(),
+		PaymentIntentID:   "pi_orphan",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := env.q.GetRegistration(ctx, reg.ID)
+	if err != nil || got.Status != "paid" {
+		t.Fatalf("orphan-session payment must complete: %v %+v", err, got)
+	}
+	if got.StripePaymentIntentID == nil || *got.StripePaymentIntentID != "pi_orphan" {
+		t.Fatalf("payment intent must be recorded, got %v", got.StripePaymentIntentID)
+	}
+	if got.StripeCheckoutSessionID == nil || *got.StripeCheckoutSessionID != orphanSession {
+		t.Fatalf("winning session id must be recorded, got %v", got.StripeCheckoutSessionID)
+	}
+	// A garbage/unknown reference still just acknowledges.
+	err = env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_orphan_unknown", Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_nobody", ClientReferenceID: "not-a-uuid",
+	})
+	if err != nil {
+		t.Fatalf("unknown session + bad reference must be acknowledged: %v", err)
+	}
+}
+
+// Finding 1b: an expired orphan session says nothing about the
+// registration — its stored session may still be live and payable, so the
+// row must not be expired.
+func TestWebhookExpiredOrphanSessionLeavesRegistrationAlone(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	reg := env.register(t, ev.ID, alice)
+	if _, err := env.svc.Pay(ctx, ev.ID, alice); err != nil {
+		t.Fatal(err)
+	}
+
+	err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_orphan_expired", Type: "checkout.session.expired",
+		CheckoutSessionID: "cs_orphan_" + reg.ID.String(),
+		ClientReferenceID: reg.ID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := env.q.GetRegistration(ctx, reg.ID)
+	if err != nil || got.Status != "pending_payment" {
+		t.Fatalf("orphan expiry must not touch the registration: %v %+v", err, got)
+	}
+	if got.StripeCheckoutSessionID == nil || *got.StripeCheckoutSessionID != "cs_test_"+reg.ID.String() {
+		t.Fatalf("stored live session must survive, got %v", got.StripeCheckoutSessionID)
+	}
+	// The stored session expiring still works (control).
+	err = env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_stored_expired", Type: "checkout.session.expired",
+		CheckoutSessionID: "cs_test_" + reg.ID.String(),
+		ClientReferenceID: reg.ID.String(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ = env.q.GetRegistration(ctx, reg.ID)
+	if got.Status != "expired" {
+		t.Fatalf("stored-session expiry must expire the row, got %s", got.Status)
+	}
+}
+
+// Finding 4: Pay on a draft must 404 like Register/GetDetail/Cancel — a
+// registration-not-found here would leak the draft's existence.
+func TestPayDraftEventHidden(t *testing.T) {
+	env := newTestEnv(t)
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2) // stays draft
+	if _, err := env.svc.Pay(context.Background(), ev.ID, alice); !errors.Is(err, ErrEventNotFound) {
+		t.Fatalf("draft pay must 404 (no leak), got %v", err)
+	}
+}
+
+// Finding 2: deleting a cube linked to an event must succeed and simply
+// drop the link (FK is on delete cascade as of migration 00007).
+func TestCubeDeletionCascadesEventLink(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 0, 8)
+	cubeID := env.seedCube(t, org, "Doomed Cube", "public")
+	if err := env.svc.SetCubes(ctx, ev.ID, []CubeLinkInput{{CubeID: cubeID}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cubes.NewService(env.q, env.pool).Delete(ctx, cubeID, org); err != nil {
+		t.Fatalf("cube delete must succeed despite the event link: %v", err)
+	}
+	var n int
+	if err := env.pool.QueryRow(ctx,
+		`select count(*) from event_cubes where cube_id = $1`, cubeID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("event_cubes row must cascade away, %d left", n)
+	}
+	detail, err := env.svc.GetDetail(ctx, ev.ID, org, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Cubes) != 0 {
+		t.Fatalf("event detail must no longer list the cube, got %+v", detail.Cubes)
 	}
 }
