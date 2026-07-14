@@ -22,12 +22,14 @@ export function EventCubesEditor({ event }: { event: EventDetail }) {
   const editable = event.status === "draft";
 
   const save = (next: Draft[]) => {
+    const previous = links;
     setLinks(next);
     setCubes.mutate(
       next.map(({ cubeId, cubeChangeId }) => ({
         cubeId,
         ...(cubeChangeId ? { cubeChangeId } : {}),
       })),
+      { onError: () => setLinks(previous) },
     );
   };
 
