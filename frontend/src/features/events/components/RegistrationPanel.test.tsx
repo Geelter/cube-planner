@@ -86,6 +86,22 @@ test("paid past refund deadline → cancel warns about losing money", async () =
   ).toBeInTheDocument();
 });
 
+test("free event past deadline → cancel shows plain confirm, no refund footnote", async () => {
+  renderPanel(
+    baseEvent({
+      feeCents: 0,
+      refundDeadline: new Date(Date.now() - 3600_000).toISOString(),
+      myRegistration: { id: "r1", status: "paid" },
+    }),
+  );
+  expect(screen.queryByText(/Free cancellation until/)).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Cancel registration" }));
+  expect(await screen.findByText(/Cancel your registration for Cube Night\?/)).toBeInTheDocument();
+  expect(
+    screen.queryByText(/only get your money back if the organizer approves/),
+  ).not.toBeInTheDocument();
+});
+
 test("refund_requested → status note, no buttons", () => {
   renderPanel(baseEvent({ myRegistration: { id: "r1", status: "refund_requested" } }));
   expect(screen.getByText(/refund pending organizer review/)).toBeInTheDocument();

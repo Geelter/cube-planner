@@ -30,6 +30,7 @@ export function RegistrationPanel({
   const registrable = event.status === "published";
   const err = register.error ?? pay.error ?? cancel.error;
 
+  const isFree = event.feeCents === 0;
   const deadline = event.refundDeadline ? new Date(event.refundDeadline) : new Date(event.startsAt);
   const pastDeadline = Date.now() > deadline.getTime();
 
@@ -110,7 +111,7 @@ export function RegistrationPanel({
             title={m.event_cancel_registration()}
           >
             <p className="text-sm text-fg">
-              {pastDeadline
+              {pastDeadline && !isFree
                 ? m.event_cancel_confirm_late()
                 : m.event_cancel_confirm({ name: event.name })}
             </p>
@@ -133,13 +134,14 @@ export function RegistrationPanel({
       {reg?.status === "refund_requested" && (
         <p className="text-sm text-fg-muted">{m.events_my_refund_requested()}</p>
       )}
-      {event.refundDeadline ? (
-        <p className="text-xs text-fg-muted">
-          {m.event_refund_until({ date: deadline.toLocaleString(getLocale()) })}
-        </p>
-      ) : (
-        <p className="text-xs text-fg-muted">{m.event_refund_until_start()}</p>
-      )}
+      {!isFree &&
+        (event.refundDeadline ? (
+          <p className="text-xs text-fg-muted">
+            {m.event_refund_until({ date: deadline.toLocaleString(getLocale()) })}
+          </p>
+        ) : (
+          <p className="text-xs text-fg-muted">{m.event_refund_until_start()}</p>
+        ))}
     </div>
   );
 }

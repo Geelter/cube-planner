@@ -208,6 +208,7 @@
   "event_form_fee_hint": "0 oznacza darmowe wydarzenie",
   "event_form_max_participants": "Limit uczestników",
   "event_form_refund_deadline": "Termin bezpłatnej rezygnacji (opcjonalny)",
+  "event_form_refund_free_hint": "Nie dotyczy — z darmowych wydarzeń można zawsze zrezygnować bez kosztów.",
   "event_form_locked_hint": "Zablokowane po publikacji",
   "event_form_create": "Utwórz szkic",
   "event_form_save": "Zapisz",

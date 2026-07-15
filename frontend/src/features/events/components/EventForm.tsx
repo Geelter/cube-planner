@@ -44,6 +44,9 @@ export function EventForm({
     toLocalInput(initial?.refundDeadline ?? undefined),
   );
 
+  const isFree = Math.round(Number(feePln) * 100) === 0;
+  const nowLocal = toLocalInput(new Date().toISOString());
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const refund = fromLocalInput(refundDeadline);
@@ -54,13 +57,21 @@ export function EventForm({
       startsAt: fromLocalInput(startsAt) ?? new Date().toISOString(),
       feeCents: Math.round(Number(feePln) * 100),
       maxParticipants: Number(maxParticipants),
-      ...(refund ? { refundDeadline: refund } : {}),
+      ...(refund && !isFree ? { refundDeadline: refund } : {}),
     });
   };
 
   const lockedHint = locked ? (
     <span className="text-xs text-fg-muted"> ({m.event_form_locked_hint()})</span>
   ) : null;
+
+  // The required attribute carries the semantics; the star is visual only.
+  const requiredMark = (
+    <span aria-hidden="true" className="text-danger">
+      {" "}
+      *
+    </span>
+  );
 
   return (
     <form onSubmit={submit} className="flex max-w-lg flex-col gap-4">
@@ -72,6 +83,7 @@ export function EventForm({
       <div className="flex flex-col gap-1">
         <Label htmlFor="ev-name">
           {m.event_form_name()}
+          {requiredMark}
           {lockedHint}
         </Label>
         <Input
@@ -106,12 +118,14 @@ export function EventForm({
       <div className="flex flex-col gap-1">
         <Label htmlFor="ev-starts">
           {m.event_form_starts_at()}
+          {requiredMark}
           {lockedHint}
         </Label>
         <Input
           id="ev-starts"
           type="datetime-local"
           required
+          min={nowLocal}
           disabled={locked}
           value={startsAt}
           onChange={(e) => setStartsAt(e.target.value)}
@@ -120,6 +134,7 @@ export function EventForm({
       <div className="flex flex-col gap-1">
         <Label htmlFor="ev-fee">
           {m.event_form_fee()}
+          {requiredMark}
           {lockedHint}
         </Label>
         <Input
@@ -140,6 +155,7 @@ export function EventForm({
       <div className="flex flex-col gap-1">
         <Label htmlFor="ev-max">
           {m.event_form_max_participants()}
+          {requiredMark}
           {lockedHint}
         </Label>
         <Input
@@ -158,9 +174,17 @@ export function EventForm({
         <Input
           id="ev-refund"
           type="datetime-local"
+          min={nowLocal}
+          disabled={isFree}
           value={refundDeadline}
           onChange={(e) => setRefundDeadline(e.target.value)}
+          aria-describedby={isFree ? "ev-refund-hint" : undefined}
         />
+        {isFree && (
+          <p id="ev-refund-hint" className="text-xs text-fg-muted">
+            {m.event_form_refund_free_hint()}
+          </p>
+        )}
       </div>
       <Button type="submit" disabled={pending}>
         {submitLabel}

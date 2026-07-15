@@ -208,6 +208,7 @@
   "event_form_fee_hint": "0 makes the event free",
   "event_form_max_participants": "Max participants",
   "event_form_refund_deadline": "Free-cancellation deadline (optional)",
+  "event_form_refund_free_hint": "Not applicable — free events can always be cancelled at no cost.",
   "event_form_locked_hint": "Locked after publish",
   "event_form_create": "Create draft",
   "event_form_save": "Save",
