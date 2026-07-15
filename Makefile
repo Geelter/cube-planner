@@ -45,7 +45,7 @@ frontend-dev: ## Run the Vite dev server with HMR
 
 .PHONY: stripe-listen
 stripe-listen: ## Forward Stripe test-mode webhooks to the local backend (requires stripe CLI, prints the whsec_ secret for .env)
-	stripe listen --forward-to localhost:8080/api/stripe/webhook
+	stripe listen --api-key "$(STRIPE_SECRET_KEY)" --forward-to localhost:8080/api/stripe/webhook
 
 .PHONY: db-psql
 db-psql: ## Open a psql shell in the Postgres container
