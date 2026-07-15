@@ -6,7 +6,8 @@
     "dev": "vite",
     "gen": "tsr generate && paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy localStorage preferredLanguage baseLocale --emit-ts-declarations",
     "build": "pnpm gen && tsc --noEmit && vite build",
-    "typecheck": "pnpm gen && tsc --noEmit",
+    "typecheck": "pnpm gen && pnpm typecheck:raw",
+    "typecheck:raw": "tsc --noEmit",
     "test": "vitest run",
     "lint": "oxlint .",
     "fmt": "oxfmt .",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@inlang/paraglide-js": "^2.21.0",
+    "@inlang/plugin-message-format": "^4.4.0",
     "@tailwindcss/vite": "^4.3.2",
     "@tanstack/react-devtools": "^0.10.8",
     "@tanstack/react-query-devtools": "^5.101.2",
