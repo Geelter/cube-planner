@@ -3,7 +3,7 @@
 name: cube-planner
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: cube
       POSTGRES_PASSWORD: cube
@@ -11,7 +11,9 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # postgres:18+ mounts all of /var/lib/postgresql (PGDATA sits in a
+      # versioned subdir so future pg_upgrade --link migrations work)
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cube -d cube"]
       interval: 5s

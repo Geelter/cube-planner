@@ -15,7 +15,7 @@ pre-commit:
       root: backend/
       glob: "*.go"
       fail_text: "gofumpt failed."
-      run: go run mvdan.cc/gofumpt@latest -l -w {staged_files} && git add {staged_files}
+      run: go tool gofumpt -l -w {staged_files} && git add {staged_files}
 
 # Mirrors CI so pushes don't bounce. Heavy checks live here, not on commit.
 pre-push:

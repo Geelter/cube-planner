@@ -1,6 +1,6 @@
 module github.com/mjabloniec/cube-planner/backend
 
-go 1.25.7
+go 1.26.5
 
 require (
 	github.com/danielgtaylor/huma/v2 v2.38.0
@@ -73,7 +73,12 @@ require (
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/tools v0.47.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	mvdan.cc/gofumpt v0.10.0 // indirect
 )
+
+tool mvdan.cc/gofumpt

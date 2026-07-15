@@ -19,7 +19,7 @@ func New(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
 
-	pgc, err := postgres.Run(ctx, "postgres:17-alpine",
+	pgc, err := postgres.Run(ctx, "postgres:18-alpine",
 		postgres.WithDatabase("test"),
 		postgres.WithUsername("test"),
 		postgres.WithPassword("test"),

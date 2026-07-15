@@ -33,14 +33,16 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: cube
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: cube
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # postgres:18+ mounts all of /var/lib/postgresql (PGDATA sits in a
+      # versioned subdir so future pg_upgrade --link migrations work)
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cube"]
       interval: 5s

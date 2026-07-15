@@ -1,3 +1,14 @@
 packages:
   - frontend
   - packages/*
+
+# Supply-chain policy (pnpm 11 defaults, pinned explicitly): new releases
+# must be 24h old before install; unreviewed dependency build scripts fail
+# the install instead of being silently skipped.
+minimumReleaseAge: 1440
+strictDepBuilds: true
+
+# lefthook's postinstall only re-runs `lefthook install`, which the root
+# `prepare` script already does — its binary ships as an optional dep.
+allowBuilds:
+  lefthook: false
