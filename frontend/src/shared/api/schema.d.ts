@@ -557,6 +557,160 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/events/{eventId}/tournament": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Tournament aggregate: players, rounds, matches, standings */
+    get: operations["getTournament"];
+    /** Create the tournament (snapshot paid roster) or set planned rounds (organizer) */
+    put: operations["upsertTournament"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/tournament/matches/{matchId}/result": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Report or override a Bo3 result (player in the match, or organizer) */
+    put: operations["reportMatchResult"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/tournament/players/{playerId}/drop": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Player drop (self or organizer) */
+    post: operations["dropTournamentPlayer"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/tournament/players/{playerId}/undrop": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Player undrop (self or organizer) */
+    post: operations["undropTournamentPlayer"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/tournament/rounds": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Pair the next round as a draft (organizer; creates the tournament if absent) */
+    post: operations["pairNextRound"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/tournament/rounds/{number}/complete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Complete the round (all results in) (organizer) */
+    post: operations["completeRound"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/tournament/rounds/{number}/publish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Publish the draft round (organizer) */
+    post: operations["publishRound"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/tournament/rounds/{number}/reroll": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Regenerate the draft round's pairings (organizer) */
+    post: operations["rerollRound"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/events/{eventId}/tournament/rounds/{number}/swap": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Swap two player slots in the draft round (organizer) */
+    post: operations["swapRoundSlots"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/healthz": {
     parameters: {
       query?: never;
@@ -1178,6 +1332,20 @@ export interface components {
       /** Format: int64 */
       waitlistPos?: number;
     };
+    ReportResultInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ReportResultInputBody.json
+       */
+      readonly $schema?: string;
+      /** Format: int32 */
+      draws: number;
+      /** Format: int32 */
+      p1Games: number;
+      /** Format: int32 */
+      p2Games: number;
+    };
     ResetPasswordInputBody: {
       /**
        * Format: uri
@@ -1239,6 +1407,80 @@ export interface components {
       readonly $schema?: string;
       cubes: components["schemas"]["EventCubeLink"][] | null;
     };
+    SwapInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/SwapInputBody.json
+       */
+      readonly $schema?: string;
+      a: components["schemas"]["SwapSlot"];
+      b: components["schemas"]["SwapSlot"];
+    };
+    SwapSlot: {
+      matchId: string;
+      /** Format: int32 */
+      slot: number;
+    };
+    TournamentInfo: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/TournamentInfo.json
+       */
+      readonly $schema?: string;
+      /** Format: int32 */
+      currentRound?: number;
+      eventId: string;
+      /** Format: int32 */
+      plannedRounds: number;
+      players: components["schemas"]["TournamentPlayerInfo"][] | null;
+      rounds: components["schemas"]["TournamentRoundInfo"][] | null;
+      standings: components["schemas"]["TournamentStandingInfo"][] | null;
+    };
+    TournamentMatchInfo: {
+      /** Format: int32 */
+      draws?: number;
+      id: string;
+      /** Format: int32 */
+      p1Games?: number;
+      /** Format: int32 */
+      p2Games?: number;
+      player1Id: string;
+      player2Id?: string;
+      /** Format: date-time */
+      reportedAt?: string;
+      /** Format: int32 */
+      tableNumber: number;
+    };
+    TournamentPlayerInfo: {
+      displayName: string;
+      dropped: boolean;
+      id: string;
+      userId: string;
+    };
+    TournamentRoundInfo: {
+      matches: components["schemas"]["TournamentMatchInfo"][] | null;
+      /** Format: int32 */
+      number: number;
+      /** @enum {string} */
+      status: "draft" | "published" | "completed";
+    };
+    TournamentStandingInfo: {
+      displayName: string;
+      dropped: boolean;
+      /** Format: double */
+      gwPercent: number;
+      /** Format: int64 */
+      matchPoints: number;
+      /** Format: double */
+      ogwPercent: number;
+      /** Format: double */
+      omwPercent: number;
+      playerId: string;
+      /** Format: int64 */
+      rank: number;
+    };
     UpdateCubeInputBody: {
       /**
        * Format: uri
@@ -1270,6 +1512,16 @@ export interface components {
       refundDeadline?: string;
       /** Format: date-time */
       startsAt?: string;
+    };
+    UpsertTournamentInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/UpsertTournamentInputBody.json
+       */
+      readonly $schema?: string;
+      /** Format: int32 */
+      plannedRounds?: number;
     };
     UserBody: {
       /**
@@ -2542,6 +2794,335 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["EventDetailBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  getTournament: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  upsertTournament: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpsertTournamentInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  reportMatchResult: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        matchId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReportResultInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  dropTournamentPlayer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        playerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  undropTournamentPlayer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        playerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  pairNextRound: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  completeRound: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        number: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  publishRound: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        number: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  rerollRound: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        number: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  swapRoundSlots: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        number: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SwapInputBody"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TournamentInfo"];
         };
       };
       /** @description Error */

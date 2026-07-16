@@ -20,6 +20,7 @@ import (
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/db"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/httpapi"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/mail"
+	"github.com/mjabloniec/cube-planner/backend/internal/tournaments"
 )
 
 // Injected at build time via -ldflags (see backend/Dockerfile and Makefile).
@@ -75,6 +76,7 @@ func main() {
 				Collections:         collections.NewService(queries, pool),
 				OAuth:               auth.NewOAuth(queries, sessions, cfg.BaseURL, cfg.Secure(), oauthProviders).Routes(),
 				Events:              eventsSvc,
+				Tournaments:         tournaments.NewService(queries, pool, slog.Default()),
 				StripeWebhookSecret: cfg.StripeWebhookSecret,
 			}
 			_, handler := httpapi.Build(deps)
