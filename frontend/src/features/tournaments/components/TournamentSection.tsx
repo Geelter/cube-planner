@@ -10,7 +10,7 @@ import {
   useEventStatus,
   useTournament,
 } from "../api";
-import type { TournamentMatch, TournamentRound } from "../api";
+import type { TournamentMatch } from "../api";
 import { ResultForm } from "./ResultForm";
 import { StandingsTable } from "./StandingsTable";
 
@@ -47,7 +47,9 @@ export function TournamentSection({ eventId }: { eventId: string }) {
   const rounds = (t.rounds ?? []).filter((r) => r.status !== "draft");
   if (rounds.length === 0) return null;
   const activeNumber = tab ?? rounds[rounds.length - 1]!.number;
-  const round = rounds.find((r) => r.number === activeNumber) as TournamentRound;
+  // tab is component state and survives eventId changes (the route component
+  // is not remounted), so it can point at a round this tournament lacks.
+  const round = rounds.find((r) => r.number === activeNumber) ?? rounds[rounds.length - 1]!;
   const players = t.players ?? [];
   const playerNames = new Map(players.map((p) => [p.id, p.displayName]));
   const myPlayer = players.find((p) => p.userId === me.data?.id);
