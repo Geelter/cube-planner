@@ -649,7 +649,7 @@ func (r Result) valid() bool {
 		r.P2Games >= 0 && r.P2Games <= 2 &&
 		r.Draws >= 0 && r.Draws <= 3 &&
 		r.P1Games+r.P2Games+r.Draws <= 3 &&
-		!(r.P1Games == 2 && r.P2Games == 2)
+		(r.P1Games != 2 || r.P2Games != 2)
 }
 
 // ReportResult writes a Bo3 score. Players in the match may report
