@@ -213,6 +213,46 @@ func TestTransitions(t *testing.T) {
 	}
 }
 
+// TestFinishGuardBlocksOpenRound is the events-side unit test for the
+// finish guard (5b spec §3.2): a started event with a tournament round
+// that is not completed must refuse finish. The tournament package owns
+// the end-to-end lifecycle test; this seeds the minimal round row via
+// raw SQL since the events package does not depend on tournaments.
+func TestFinishGuardBlocksOpenRound(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	ev := env.createEvent(t, org, 0, 8)
+	env.publish(t, ev.ID)
+	if _, err := env.svc.Transition(ctx, ev.ID, "start"); err != nil {
+		t.Fatal(err)
+	}
+
+	var tournamentID uuid.UUID
+	if err := env.pool.QueryRow(ctx,
+		`insert into tournaments (event_id, planned_rounds) values ($1, 1) returning id`,
+		ev.ID).Scan(&tournamentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.pool.Exec(ctx,
+		`insert into rounds (tournament_id, number, status, seed) values ($1, 1, 'draft', 1)`,
+		tournamentID); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := env.svc.Transition(ctx, ev.ID, "finish"); !errors.Is(err, ErrRoundOpen) {
+		t.Fatalf("finish with open round = %v, want ErrRoundOpen", err)
+	}
+
+	if _, err := env.pool.Exec(ctx,
+		`update rounds set status = 'completed' where tournament_id = $1`, tournamentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.svc.Transition(ctx, ev.ID, "finish"); err != nil {
+		t.Fatalf("finish after round completed: %v", err)
+	}
+}
+
 func TestPublishPaidEventRequiresStripe(t *testing.T) {
 	env := newTestEnv(t)
 	org := env.seedUser(t, "org@test")

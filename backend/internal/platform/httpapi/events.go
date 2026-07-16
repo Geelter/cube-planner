@@ -99,6 +99,8 @@ func mapEventErr(err error) error {
 		return eventProblem(http.StatusConflict, "event-locked", err.Error())
 	case errors.Is(err, events.ErrCubesLocked):
 		return eventProblem(http.StatusConflict, "event-cubes-locked", err.Error())
+	case errors.Is(err, events.ErrRoundOpen):
+		return eventProblem(http.StatusConflict, "round-open", err.Error())
 	case errors.Is(err, events.ErrInvalidEventCube):
 		return eventProblem(http.StatusUnprocessableEntity, "invalid-event-cube", err.Error())
 	case errors.Is(err, events.ErrPaymentsUnconfigured):

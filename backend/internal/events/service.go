@@ -40,6 +40,9 @@ var (
 	ErrRegistrationNotFound   = errors.New("registration not found")
 	ErrRegistrationNotPayable = errors.New("registration not payable")
 	ErrRegistrationClosed     = errors.New("registration closed")
+	// ErrRoundOpen: finish refused while a tournament round is not
+	// completed (5b spec §3.2).
+	ErrRoundOpen = errors.New("a tournament round is still open")
 )
 
 type Service struct {
@@ -192,6 +195,15 @@ func (s *Service) Transition(ctx context.Context, eventID uuid.UUID, action stri
 		if action == "start" {
 			if err := s.closeRegistrationLocked(ctx, qtx, ev); err != nil {
 				return err
+			}
+		}
+		if action == "finish" {
+			open, err := qtx.CountOpenRoundsForEvent(ctx, eventID)
+			if err != nil {
+				return err
+			}
+			if open > 0 {
+				return ErrRoundOpen
 			}
 		}
 		if action == "cancel" {

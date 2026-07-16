@@ -441,3 +441,32 @@ func TestDraftRoundHiddenFromNonAdmin(t *testing.T) {
 		t.Errorf("non-admin sees %d draft rounds, want 0", len(d.Rounds))
 	}
 }
+
+func TestFinishGuardBlocksOpenRound(t *testing.T) {
+	f := newFixture(t, 4)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	open, err := f.q.CountOpenRoundsForEvent(ctx, f.eventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open != 1 {
+		t.Fatalf("open rounds = %d, want 1", open)
+	}
+	if err := f.svc.Publish(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	f.reportAll(t, 1)
+	if err := f.svc.Complete(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	open, err = f.q.CountOpenRoundsForEvent(ctx, f.eventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open != 0 {
+		t.Fatalf("open rounds after complete = %d, want 0", open)
+	}
+}
