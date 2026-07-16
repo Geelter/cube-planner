@@ -368,6 +368,46 @@ func TestSwapAndReroll(t *testing.T) {
 	}
 }
 
+func TestSwapWithinSameMatch(t *testing.T) {
+	f := newFixture(t, 4)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	d := f.detail(t)
+	m := d.Rounds[0].Matches[0]
+	if m.Player2ID == nil {
+		t.Fatal("match 0 has no player2 to swap with")
+	}
+	p1Before, p2Before := m.Player1ID, *m.Player2ID
+	if err := f.svc.Swap(ctx, f.eventID, 1,
+		SlotRef{MatchID: m.ID, Slot: 1}, SlotRef{MatchID: m.ID, Slot: 2}); err != nil {
+		t.Fatal(err)
+	}
+	after := f.detail(t)
+	var got MatchDetail
+	for _, mm := range after.Rounds[0].Matches {
+		if mm.ID == m.ID {
+			got = mm
+		}
+	}
+	if got.Player1ID != p2Before || got.Player2ID == nil || *got.Player2ID != p1Before {
+		t.Fatalf("same-match swap did not exchange players: got p1=%v p2=%v, want p1=%v p2=%v",
+			got.Player1ID, got.Player2ID, p2Before, p1Before)
+	}
+}
+
+func TestCompleteBeforePublishIsNotPublished(t *testing.T) {
+	f := newFixture(t, 4)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Complete(ctx, f.eventID, 1); err != ErrRoundNotPublished {
+		t.Fatalf("complete draft round = %v, want ErrRoundNotPublished", err)
+	}
+}
+
 func TestMutationsRejectedOnNonStartedEvent(t *testing.T) {
 	f := newFixture(t, 4)
 	ctx := context.Background()

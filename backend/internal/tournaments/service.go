@@ -34,6 +34,7 @@ var (
 	ErrRoundNotFound       = errors.New("round not found")
 	ErrRoundExists         = errors.New("a round is already in progress")
 	ErrRoundNotDraft       = errors.New("round is not a draft")
+	ErrRoundNotPublished   = errors.New("round is not published")
 	ErrRoundIncomplete     = errors.New("round has unreported matches")
 	ErrMatchNotFound       = errors.New("match not found")
 	ErrNotInMatch          = errors.New("caller is not in this match")
@@ -458,18 +459,44 @@ func slotPlayer(m db.GetMatchRow, slot int32) (uuid.UUID, error) {
 	}
 }
 
-func setSlot(ctx context.Context, qtx *db.Queries, m db.GetMatchRow, slot int32, player uuid.UUID) error {
-	p1, p2 := m.Player1ID, uuidPtr(m.Player2ID)
+// slotAssigned computes the match's player1/player2 with the given slot
+// set to player, rejecting a resulting self-pair. Pure — callers write
+// the result themselves.
+func slotAssigned(m db.GetMatchRow, slot int32, player uuid.UUID) (p1 uuid.UUID, p2 *uuid.UUID, err error) {
+	p1, p2 = m.Player1ID, uuidPtr(m.Player2ID)
 	if slot == 1 {
 		p1 = player
 	} else {
 		p2 = &player
 	}
 	if p2 != nil && p1 == *p2 {
-		return ErrSwapInvalid
+		return uuid.Nil, nil, ErrSwapInvalid
 	}
+	return p1, p2, nil
+}
+
+// placeBothSlots computes a match's player1/player2 with two slots set
+// at once (used for a same-match swap, where the two writes can't be
+// sequenced without a transient self-pair). Slots must differ.
+func placeBothSlots(slotX int32, playerX uuid.UUID, slotY int32, playerY uuid.UUID) (p1 uuid.UUID, p2 *uuid.UUID, err error) {
+	assign := func(slot int32, player uuid.UUID) {
+		if slot == 1 {
+			p1 = player
+		} else {
+			p2 = &player
+		}
+	}
+	assign(slotX, playerX)
+	assign(slotY, playerY)
+	if p2 != nil && p1 == *p2 {
+		return uuid.Nil, nil, ErrSwapInvalid
+	}
+	return p1, p2, nil
+}
+
+func writeMatchPlayers(ctx context.Context, qtx *db.Queries, matchID uuid.UUID, p1 uuid.UUID, p2 *uuid.UUID) error {
 	_, err := qtx.SetMatchPlayers(ctx, db.SetMatchPlayersParams{
-		ID: m.ID, Player1ID: p1, Player2ID: pgUUID(p2),
+		ID: matchID, Player1ID: p1, Player2ID: pgUUID(p2),
 	})
 	return err
 }
@@ -509,18 +536,29 @@ func (s *Service) Swap(ctx context.Context, eventID uuid.UUID, number int32, a, 
 		if err != nil {
 			return err
 		}
-		if err := setSlot(ctx, qtx, ma, a.Slot, pb); err != nil {
-			return err
-		}
 		if a.MatchID == b.MatchID {
-			// Same-match swap: re-read so the second write sees the first.
-			ma2, err := qtx.GetMatch(ctx, b.MatchID)
+			// Same-match swap (different slots): both new occupants must
+			// be written in a single call, or the intermediate state
+			// holds the same player in both slots and trips the
+			// self-pair guard on the first write.
+			p1, p2, err := placeBothSlots(a.Slot, pb, b.Slot, pa)
 			if err != nil {
 				return err
 			}
-			return setSlot(ctx, qtx, ma2, b.Slot, pa)
+			return writeMatchPlayers(ctx, qtx, a.MatchID, p1, p2)
 		}
-		return setSlot(ctx, qtx, mb, b.Slot, pa)
+		p1a, p2a, err := slotAssigned(ma, a.Slot, pb)
+		if err != nil {
+			return err
+		}
+		if err := writeMatchPlayers(ctx, qtx, ma.ID, p1a, p2a); err != nil {
+			return err
+		}
+		p1b, p2b, err := slotAssigned(mb, b.Slot, pa)
+		if err != nil {
+			return err
+		}
+		return writeMatchPlayers(ctx, qtx, mb.ID, p1b, p2b)
 	})
 }
 
@@ -581,7 +619,7 @@ func (s *Service) Complete(ctx context.Context, eventID uuid.UUID, number int32)
 			return err
 		}
 		if round.Status != "published" {
-			return ErrRoundNotDraft
+			return ErrRoundNotPublished
 		}
 		matches, err := qtx.ListMatchesForRound(ctx, round.ID)
 		if err != nil {
