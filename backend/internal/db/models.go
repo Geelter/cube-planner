@@ -146,6 +146,21 @@ type EventCube struct {
 	CubeChangeID pgtype.UUID
 }
 
+type Match struct {
+	ID          uuid.UUID
+	RoundID     uuid.UUID
+	TableNumber int32
+	Player1ID   uuid.UUID
+	Player2ID   pgtype.UUID
+	P1Games     *int32
+	P2Games     *int32
+	Draws       *int32
+	ReportedBy  pgtype.UUID
+	ReportedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type OauthIdentity struct {
 	Provider       string
 	ProviderUserID string
@@ -169,6 +184,18 @@ type Registration struct {
 	UpdatedAt                time.Time
 }
 
+type Round struct {
+	ID           uuid.UUID
+	TournamentID uuid.UUID
+	Number       int32
+	Status       string
+	Seed         int64
+	PublishedAt  *time.Time
+	CompletedAt  *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type Session struct {
 	TokenHash []byte
 	UserID    uuid.UUID
@@ -180,6 +207,22 @@ type StripeEvent struct {
 	StripeEventID string
 	Type          string
 	ReceivedAt    time.Time
+}
+
+type Tournament struct {
+	ID            uuid.UUID
+	EventID       uuid.UUID
+	PlannedRounds int32
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type TournamentPlayer struct {
+	ID           uuid.UUID
+	TournamentID uuid.UUID
+	UserID       uuid.UUID
+	DroppedAt    *time.Time
+	CreatedAt    time.Time
 }
 
 type User struct {
