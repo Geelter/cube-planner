@@ -88,6 +88,10 @@ func TestStandingsUnreportedIgnored(t *testing.T) {
 //	→ gamePoints 9, games 6 → 50.0
 //
 // C GW%: r1 2 wins of 2, r2 1 win of 3 → points 9, games 5 → 60.0 → C above B
+// GW% raw: A=12/18=.6667, B=9/18=.5, C=9/15=.6, D=3/15=.2 (floors to 1/3 as opponent).
+// A OGW% = avg(B .5, C .6) = 55.0
+// B OGW% = avg(A .6667, D floored 1/3) = 50.0
+// D OGW% = avg(C .6, B .5) = 55.0
 func TestStandingsTiebreakerChain(t *testing.T) {
 	players, ids := testPlayers(4)
 	a, b, c, d := ids[0], ids[1], ids[2], ids[3]
@@ -100,6 +104,9 @@ func TestStandingsTiebreakerChain(t *testing.T) {
 	within(t, byID(s, c).OMWPercent, 66.7, "C OMW%")
 	within(t, byID(s, b).GWPercent, 50.0, "B GW%")
 	within(t, byID(s, c).GWPercent, 60.0, "C GW%")
+	within(t, byID(s, a).OGWPercent, 55.0, "A OGW%")
+	within(t, byID(s, b).OGWPercent, 50.0, "B OGW%")
+	within(t, byID(s, d).OGWPercent, 55.0, "D OGW%")
 	if s[0].PlayerID != a || s[1].PlayerID != c || s[2].PlayerID != b || s[3].PlayerID != d {
 		t.Errorf("order = %v, want A C B D", []uuid.UUID{s[0].PlayerID, s[1].PlayerID, s[2].PlayerID, s[3].PlayerID})
 	}
