@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1252,5 +1253,34 @@ func TestWebhookLatePaymentAfterReRegisterRefundsInsteadOf500(t *testing.T) {
 	gotNew, _ := env.q.GetRegistration(ctx, newReg.ID)
 	if gotNew.Status != "pending_payment" {
 		t.Fatalf("new registration must be untouched, got %s", gotNew.Status)
+	}
+}
+
+func TestEventCancelEmailsPaidUserEvenWhenRefundFails(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	env.paidRegistration(t, ev.ID, alice)
+
+	// Stripe is down: the refund fails, but the event IS cancelled — the
+	// paid player must still be told not to show up.
+	env.stripe.refundErr = errors.New("stripe is down")
+	if _, err := env.svc.Transition(ctx, ev.ID, "cancel"); err != nil {
+		t.Fatal(err)
+	}
+	var cancelled []sentMail
+	for _, m := range env.mailer.sent {
+		if m.to == "alice@test" && strings.Contains(m.subject, "cancelled") {
+			cancelled = append(cancelled, m)
+		}
+	}
+	if len(cancelled) != 1 {
+		t.Fatalf("paid user must get exactly one cancellation email despite the failed refund, got %d (%v)", len(cancelled), env.mailer.sent)
+	}
+	if strings.Contains(cancelled[0].body, "refunded") {
+		t.Fatalf("email must not claim a refund that didn't happen: %q", cancelled[0].body)
 	}
 }

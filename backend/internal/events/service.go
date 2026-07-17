@@ -874,6 +874,11 @@ func (s *Service) refundCancelledEventRows(ctx context.Context, ev db.Event, row
 		if err := s.stripe.RefundPaymentIntent(ctx, *r.StripePaymentIntentID); err != nil {
 			s.log.Error("events: cancel refund failed, re-run cancel to retry",
 				"registration", r.ID, "error", err)
+			// The event is cancelled regardless — tell the player not to
+			// show up. No refund note: the money hasn't moved yet; the
+			// refunded variant follows once a retry succeeds.
+			u := db.User{Email: r.Email, DisplayName: r.DisplayName}
+			s.sendEmails(ctx, []pendingEmail{eventCancelledEmail(u, ev, false, s.baseURL)})
 			continue
 		}
 		err := s.withTx(ctx, func(qtx *db.Queries) error {
