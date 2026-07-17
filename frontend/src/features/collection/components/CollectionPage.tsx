@@ -53,6 +53,8 @@ export function CollectionPage() {
   }
 
   const pages = Math.max(1, Math.ceil((collection.data?.total ?? 0) / COLLECTION_PAGE_SIZE));
+  const mutationError = setQuantity.error ?? changePrinting.error;
+  const mutating = setQuantity.isPending || changePrinting.isPending;
 
   return (
     <div className="flex flex-col gap-6">
@@ -102,6 +104,7 @@ export function CollectionPage() {
       {collection.isError && !(collection.error instanceof UnauthorizedError) && (
         <Alert variant="danger">{collection.error.message}</Alert>
       )}
+      {mutationError && <Alert variant="danger">{mutationError.message}</Alert>}
       {collection.data && collection.data.items.length === 0 && (
         <p className="text-sm text-fg-muted">
           {debouncedSearch === "" ? m.collection_empty() : m.collection_no_results()}
@@ -135,6 +138,7 @@ export function CollectionPage() {
                   variant="ghost"
                   size="sm"
                   aria-label={m.collection_change_printing({ name: item.name })}
+                  disabled={mutating}
                   onClick={() => setPickerItem(item)}
                 >
                   ⇄
@@ -144,6 +148,7 @@ export function CollectionPage() {
                   variant="ghost"
                   size="sm"
                   aria-label={m.collection_remove_card({ name: item.name })}
+                  disabled={mutating}
                   onClick={() => setQuantity.mutate({ scryfallId: item.scryfallId, quantity: 0 })}
                 >
                   ✕

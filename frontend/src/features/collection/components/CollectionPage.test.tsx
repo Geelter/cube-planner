@@ -134,3 +134,50 @@ test("shows a login prompt on 401", async () => {
   // the more specific link role rather than a fuzzy text match.
   expect(await screen.findByRole("link", { name: /log in/i })).toBeInTheDocument();
 });
+
+test("failed quantity update surfaces an error alert", async () => {
+  const callMethod = (input: Request | string, init?: RequestInit) =>
+    init?.method ?? (typeof input === "string" ? "GET" : input.method);
+  const fetchMock = vi.fn(async (input: Request | string, init?: RequestInit) => {
+    if (callMethod(input, init) === "PUT") {
+      return jsonResponse(
+        { title: "Internal", status: 500, detail: "quantity update failed" },
+        500,
+      );
+    }
+    return jsonResponse({ items: [item], total: 1, totalCopies: 4 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  renderPage();
+  await userEvent.click(await screen.findByRole("button", { name: "Remove Lightning Bolt" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("quantity update failed");
+  // The list must resync after a failure, or the UI keeps showing state
+  // the server rejected.
+  await waitFor(() => {
+    const gets = fetchMock.mock.calls.filter(
+      ([input, init]) =>
+        callMethod(input as Request | string, init as RequestInit | undefined) === "GET",
+    );
+    expect(gets.length).toBeGreaterThan(1);
+  });
+});
+
+test("row actions disable while a quantity mutation is in flight", async () => {
+  const callMethod = (input: Request | string, init?: RequestInit) =>
+    init?.method ?? (typeof input === "string" ? "GET" : input.method);
+  let resolvePut!: (r: Response) => void;
+  const putGate = new Promise<Response>((r) => {
+    resolvePut = r;
+  });
+  const fetchMock = vi.fn(async (input: Request | string, init?: RequestInit) => {
+    if (callMethod(input, init) === "PUT") return putGate;
+    return jsonResponse({ items: [item], total: 1, totalCopies: 4 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  renderPage();
+  const remove = await screen.findByRole("button", { name: "Remove Lightning Bolt" });
+  await userEvent.click(remove);
+  await waitFor(() => expect(remove).toBeDisabled());
+  resolvePut(jsonResponse({ item: null }));
+  await waitFor(() => expect(remove).not.toBeDisabled());
+});

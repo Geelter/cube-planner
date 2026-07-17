@@ -48,7 +48,9 @@ export function useSetQuantity() {
       if (error) throw new Error(error.detail ?? m.error_generic());
       return data?.item ?? null;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["collection"] }),
+    // Settled, not success: after a failure the list must resync, or the
+    // debounced stepper keeps showing a value the server rejected.
+    onSettled: () => qc.invalidateQueries({ queryKey: ["collection"] }),
   });
 }
 
@@ -66,7 +68,7 @@ export function useChangePrinting() {
       if (error) throw new Error(error.detail ?? m.error_generic());
       return data?.item ?? null;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["collection"] }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["collection"] }),
   });
 }
 
