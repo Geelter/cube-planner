@@ -192,7 +192,12 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
               size="sm"
               variant="outline"
               disabled={roundAction.isPending}
-              onClick={() => roundAction.mutate({ action: "reroll", number: draft.number })}
+              onClick={() => {
+                // New pairings invalidate any stored match/slot ref — a kept
+                // selection would swap against a match that no longer exists.
+                setSelectedSlot(null);
+                roundAction.mutate({ action: "reroll", number: draft.number });
+              }}
             >
               {m.tournament_reroll()}
             </Button>

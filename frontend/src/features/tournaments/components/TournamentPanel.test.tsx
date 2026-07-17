@@ -110,6 +110,19 @@ test("published round: complete disabled while results missing", () => {
   expect(screen.getByText("1 results missing")).toBeInTheDocument();
 });
 
+test("reroll clears a pending slot selection", async () => {
+  tournamentData = draftTournament();
+  renderPanel();
+  const ann = screen.getByRole("button", { name: "Ann" });
+  await userEvent.click(ann);
+  expect(ann).toHaveAttribute("aria-pressed", "true");
+  await userEvent.click(screen.getByRole("button", { name: "Re-roll" }));
+  // New pairings invalidate the stored match/slot ref; keeping it selected
+  // makes the next click swap against a match that no longer exists (422).
+  expect(ann).toHaveAttribute("aria-pressed", "false");
+  expect(roundMut).toHaveBeenCalledWith({ action: "reroll", number: 1 });
+});
+
 test("publish button fires for a draft round", async () => {
   tournamentData = draftTournament();
   renderPanel();
