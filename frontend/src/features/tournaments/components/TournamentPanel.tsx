@@ -18,6 +18,8 @@ import type { SwapSlotRef, TournamentInfo, TournamentRound } from "../api";
 import { ResultForm } from "./ResultForm";
 import { StandingsTable } from "./StandingsTable";
 
+const LIVE_POLL_MS = 10_000;
+
 function latestRound(t: TournamentInfo): TournamentRound | undefined {
   const rounds = t.rounds ?? [];
   return rounds[rounds.length - 1];
@@ -26,7 +28,10 @@ function latestRound(t: TournamentInfo): TournamentRound | undefined {
 export function TournamentPanel({ eventId }: { eventId: string }) {
   const me = useMe();
   const event = useEventStatus(eventId);
-  const tournament = useTournament(eventId);
+  const live = event.data?.status === "started";
+  const tournament = useTournament(eventId, {
+    refetchInterval: live ? LIVE_POLL_MS : false,
+  });
   const upsert = useUpsertTournament(eventId);
   const pair = usePairNextRound(eventId);
   const roundAction = useRoundAction(eventId);
@@ -63,6 +68,12 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
     !draft &&
     !published &&
     (!t || (t.rounds ?? []).length < t.plannedRounds);
+  const roundsExhausted =
+    status === "started" &&
+    !draft &&
+    !published &&
+    t != null &&
+    (t.rounds ?? []).length >= t.plannedRounds;
   const draftMatches = draft?.matches ?? [];
   const publishedMatches = published?.matches ?? [];
   const missing = published ? publishedMatches.filter((mt) => mt.reportedAt == null).length : 0;
@@ -126,6 +137,9 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
             >
               {m.tournament_pair_round({ number: nextRoundNumber })}
             </Button>
+          )}
+          {roundsExhausted && (
+            <p className="text-sm text-fg-muted">{m.tournament_add_round_hint()}</p>
           )}
         </form>
       )}

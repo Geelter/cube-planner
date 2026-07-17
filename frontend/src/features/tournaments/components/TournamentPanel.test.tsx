@@ -9,6 +9,7 @@ const pairMut = vi.fn();
 const swapMut = vi.fn();
 const roundMut = vi.fn();
 let tournamentData: TournamentInfo | null = null;
+let tournamentOpts: unknown;
 
 vi.mock("@/features/auth/api", () => ({
   useMe: () => ({ data: { id: "org", role: "admin" } }),
@@ -16,10 +17,12 @@ vi.mock("@/features/auth/api", () => ({
 vi.mock("../api", async (orig) => ({
   ...(await orig()),
   useEventStatus: () => ({ data: { status: "started" } }),
-  useTournament: () =>
-    tournamentData
+  useTournament: (_eventId: string, opts?: unknown) => {
+    tournamentOpts = opts;
+    return tournamentData
       ? { data: tournamentData, isPending: false, error: null }
-      : { data: undefined, isPending: false, error: new NotFoundError("none") },
+      : { data: undefined, isPending: false, error: new NotFoundError("none") };
+  },
   useUpsertTournament: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   usePairNextRound: () => ({ mutate: pairMut, isPending: false, error: null }),
   useRoundAction: () => ({ mutate: roundMut, isPending: false, error: null }),
@@ -34,6 +37,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   tournamentData = null;
+  tournamentOpts = undefined;
 });
 
 function renderPanel() {
@@ -111,4 +115,19 @@ test("publish button fires for a draft round", async () => {
   renderPanel();
   await userEvent.click(screen.getByRole("button", { name: "Publish pairings" }));
   expect(roundMut).toHaveBeenCalledWith({ action: "publish", number: 1 });
+});
+
+test("polls the tournament while the event is live", () => {
+  tournamentData = draftTournament();
+  renderPanel();
+  expect(tournamentOpts).toEqual({ refetchInterval: 10_000 });
+});
+
+test("all planned rounds completed: pair button hidden, add-round hint shown", () => {
+  tournamentData = draftTournament();
+  tournamentData.plannedRounds = 1;
+  tournamentData.rounds![0]!.status = "completed";
+  renderPanel();
+  expect(screen.queryByRole("button", { name: /pair round/i })).not.toBeInTheDocument();
+  expect(screen.getByText(/increase planned rounds/i)).toBeInTheDocument();
 });

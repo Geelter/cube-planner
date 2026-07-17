@@ -242,6 +242,7 @@
   "regs_status_cancelled": "Cancelled",
   "regs_status_expired": "Expired",
   "regs_status_refunded": "Refunded",
+  "tournament_add_round_hint": "All planned rounds are done — increase planned rounds to pair another one.",
   "tournament_bye": "Bye",
   "tournament_complete_round": "Complete round",
   "tournament_draft_heading": "Draft pairings — round {number}",
