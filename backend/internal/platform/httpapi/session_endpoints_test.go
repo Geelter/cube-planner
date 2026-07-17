@@ -112,6 +112,6 @@ func (c *cookieClient) do(t *testing.T, method, path, body string) *http.Respons
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { resp.Body.Close() })
+	t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp
 }

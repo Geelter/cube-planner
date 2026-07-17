@@ -13,7 +13,7 @@ func TestNormalizeName(t *testing.T) {
 		{"Fire // Ice", "fire // ice"},
 		// Æ is a distinct letter, not a diacritic — it stays. Scryfall
 		// renamed these cards to "Aether…" anyway.
-		{"Æther Vial", "æther vial"},
+		{"Æther Vial", "æther vial"}, //nolint:misspell // real card name, not "there"
 		{"", ""},
 	}
 	for _, tt := range tests {

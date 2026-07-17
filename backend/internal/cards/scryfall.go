@@ -44,7 +44,7 @@ func (c *ScryfallClient) get(ctx context.Context, url string) (*http.Response, e
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("GET %s: unexpected status %d", url, resp.StatusCode)
 	}
 	return resp, nil
@@ -57,7 +57,7 @@ func (c *ScryfallClient) DefaultCardsMetadata(ctx context.Context) (BulkMetadata
 	if err != nil {
 		return BulkMetadata{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var body struct {
 		UpdatedAt   time.Time `json:"updated_at"`
 		DownloadURI string    `json:"download_uri"`
@@ -76,7 +76,7 @@ func (c *ScryfallClient) StreamCards(ctx context.Context, downloadURI string, fn
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	dec := json.NewDecoder(resp.Body)
 	if _, err := dec.Token(); err != nil { // opening '['
 		return fmt.Errorf("read bulk array start: %w", err)

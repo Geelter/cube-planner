@@ -48,7 +48,7 @@ func newWebhookServer(t *testing.T) (*httptest.Server, *pgxpool.Pool, *db.Querie
 func signStripePayload(payload []byte, secret string) string {
 	ts := time.Now().Unix()
 	mac := hmac.New(sha256.New, []byte(secret))
-	fmt.Fprintf(mac, "%d.%s", ts, payload)
+	_, _ = fmt.Fprintf(mac, "%d.%s", ts, payload) // hash.Hash writes never fail
 	return fmt.Sprintf("t=%d,v1=%s", ts, hex.EncodeToString(mac.Sum(nil)))
 }
 
@@ -63,7 +63,7 @@ func postWebhook(t *testing.T, srv *httptest.Server, payload []byte, sig string)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { resp.Body.Close() })
+	t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp
 }
 

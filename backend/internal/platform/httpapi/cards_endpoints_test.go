@@ -77,7 +77,7 @@ func getJSON(t *testing.T, srv *httptest.Server, path string, out any) int {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if out != nil && resp.StatusCode == http.StatusOK {
 		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 			t.Fatal(err)

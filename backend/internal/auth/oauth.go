@@ -293,7 +293,7 @@ func (o *OAuth) fetchUser(ctx context.Context, p *ProviderConfig, token *oauth2.
 	if err != nil {
 		return ProviderUser{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return ProviderUser{}, fmt.Errorf("userinfo status %d", resp.StatusCode)
 	}
