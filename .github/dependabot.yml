@@ -4,6 +4,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 3
     groups:
       actions:
         patterns: ["*"]
@@ -12,6 +14,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 3  # stays above pnpm's minimumReleaseAge (24h):
+      # proposing younger versions makes pnpm's strict age check abort
+      # Dependabot's whole npm run
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
@@ -24,6 +30,8 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 3
     groups:
       go-minor-patch:
         update-types: [minor, patch]
@@ -32,6 +40,8 @@ updates:
     directories: [/backend, /frontend]
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 3
     ignore:
       # Node majors move with .nvmrc, not Dependabot; node:25+ images
       # also dropped corepack, which the frontend Dockerfile needs.
