@@ -32,3 +32,8 @@ updates:
     directories: [/backend, /frontend]
     schedule:
       interval: weekly
+    ignore:
+      # Node majors move with .nvmrc, not Dependabot; node:25+ images
+      # also dropped corepack, which the frontend Dockerfile needs.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
