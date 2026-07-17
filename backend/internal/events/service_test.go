@@ -1212,3 +1212,45 @@ func TestWebhookDuplicateChargeRefundedWithoutTouchingRegistration(t *testing.T)
 		t.Fatalf("duplicate intent must be auto-refunded, got %v", env.stripe.refunds)
 	}
 }
+
+func TestWebhookLatePaymentAfterReRegisterRefundsInsteadOf500(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	oldReg := env.register(t, ev.ID, alice)
+	if _, err := env.svc.Pay(ctx, ev.ID, alice); err != nil {
+		t.Fatal(err)
+	}
+	// Alice cancels, then registers again: a new active row exists.
+	if _, err := env.svc.CancelRegistration(ctx, ev.ID, alice); err != nil {
+		t.Fatal(err)
+	}
+	newReg := env.register(t, ev.ID, alice)
+
+	// The old session was still live at Stripe and gets paid. Reclaiming
+	// the cancelled row would collide with registrations_one_active_idx —
+	// the webhook must refund-with-apology instead of erroring (a
+	// returned error would make Stripe retry the delivery forever).
+	err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_rereg_late", Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_test_" + oldReg.ID.String(), ClientReferenceID: oldReg.ID.String(),
+		PaymentIntentID: "pi_old_session",
+	})
+	if err != nil {
+		t.Fatalf("webhook must not error on re-register collision: %v", err)
+	}
+	if len(env.stripe.refunds) != 1 || env.stripe.refunds[0] != "pi_old_session" {
+		t.Fatalf("old session's charge must be refunded, got %v", env.stripe.refunds)
+	}
+	gotOld, _ := env.q.GetRegistration(ctx, oldReg.ID)
+	if gotOld.Status != "refunded" {
+		t.Fatalf("old registration must end refunded, got %s", gotOld.Status)
+	}
+	gotNew, _ := env.q.GetRegistration(ctx, newReg.ID)
+	if gotNew.Status != "pending_payment" {
+		t.Fatalf("new registration must be untouched, got %s", gotNew.Status)
+	}
+}

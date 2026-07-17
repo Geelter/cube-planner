@@ -1053,7 +1053,19 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) 
 			if err != nil {
 				return err
 			}
-			if ev.Status == "published" && occupied < int64(ev.MaxParticipants) {
+			// Reclaiming is also blocked when the user re-registered after
+			// cancelling: flipping the old row back to paid would violate
+			// registrations_one_active_idx mid-tx, and that error would
+			// 500 the webhook into a permanent Stripe retry loop. Checked
+			// under the event lock, so Register can't race it.
+			_, activeErr := qtx.GetActiveRegistration(ctx, db.GetActiveRegistrationParams{
+				EventID: ev.ID, UserID: reg.UserID,
+			})
+			if activeErr != nil && !errors.Is(activeErr, pgx.ErrNoRows) {
+				return activeErr
+			}
+			hasOtherActive := activeErr == nil
+			if ev.Status == "published" && occupied < int64(ev.MaxParticipants) && !hasOtherActive {
 				pi := we.PaymentIntentID
 				paidAt := s.now()
 				if _, err := qtx.MarkRegistrationPaid(ctx, db.MarkRegistrationPaidParams{
