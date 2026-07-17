@@ -83,8 +83,22 @@ export function pendingReducer(state: PendingState, action: PendingAction): Pend
       return bumpAdd(state, summaryFromEntry(action.entry), 1);
     case "decrement":
       return bumpRemove(state, action.entry, 1);
-    case "remove":
-      return bumpRemove(state, action.entry, action.entry.quantity);
+    case "remove": {
+      // ✕ means "no copies of this card at all": drop any pending adds and
+      // remove every server copy. bumpRemove's cancel-first math would burn
+      // the server quantity against the pending adds and leave leftovers.
+      const next = clone(state);
+      next.adds.delete(action.entry.oracleId);
+      if (action.entry.quantity > 0) {
+        next.removes.set(action.entry.oracleId, {
+          entry: action.entry,
+          quantity: action.entry.quantity,
+        });
+      } else {
+        next.removes.delete(action.entry.oracleId);
+      }
+      return next;
+    }
     case "undoAdd": {
       const next = clone(state);
       next.adds.delete(action.oracleId);
