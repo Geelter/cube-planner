@@ -12,3 +12,9 @@ Requires Docker, Go, Node 22 + pnpm.
 
 Mail sent by the app (verification, password reset) is captured by
 Mailpit: http://localhost:8025.
+
+## Deployment
+
+CI on `master` feeds a build-and-deploy pipeline targeting a single
+VPS. What's set up, what's still missing, and the go-live checklist
+live in [deploy/README.md](deploy/README.md).
