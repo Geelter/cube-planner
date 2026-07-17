@@ -1162,3 +1162,53 @@ func TestCubeDeletionCascadesEventLink(t *testing.T) {
 		t.Fatalf("event detail must no longer list the cube, got %+v", detail.Cubes)
 	}
 }
+
+func TestWebhookDuplicateChargeRefundedWithoutTouchingRegistration(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	reg := env.register(t, ev.ID, alice)
+	if _, err := env.svc.Pay(ctx, ev.ID, alice); err != nil {
+		t.Fatal(err)
+	}
+
+	// The stored session completes: registration becomes paid on pi_first.
+	if err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_dup_a", Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_test_" + reg.ID.String(), PaymentIntentID: "pi_first",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// An orphaned sibling session from a Pay race also completes: the user
+	// was charged twice. The duplicate charge must be refunded and the
+	// paid row must keep pointing at the winning session/intent, or a
+	// dashboard refund of pi_first would no longer match the row.
+	if err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_dup_b", Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_orphan_sibling", ClientReferenceID: reg.ID.String(),
+		PaymentIntentID: "pi_second",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := env.q.GetRegistration(ctx, reg.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "paid" {
+		t.Fatalf("duplicate charge must not change status, got %s", got.Status)
+	}
+	if got.StripePaymentIntentID == nil || *got.StripePaymentIntentID != "pi_first" {
+		t.Fatalf("intent pointer must keep the winning charge, got %v", got.StripePaymentIntentID)
+	}
+	if got.StripeCheckoutSessionID == nil || *got.StripeCheckoutSessionID != "cs_test_"+reg.ID.String() {
+		t.Fatalf("session pointer must keep the winning session, got %v", got.StripeCheckoutSessionID)
+	}
+	if len(env.stripe.refunds) != 1 || env.stripe.refunds[0] != "pi_second" {
+		t.Fatalf("duplicate intent must be auto-refunded, got %v", env.stripe.refunds)
+	}
+}

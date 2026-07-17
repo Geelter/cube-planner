@@ -978,6 +978,7 @@ func (s *Service) findRegistrationForCheckout(ctx context.Context, qtx *db.Queri
 func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) error {
 	var emails []pendingEmail
 	lateRefund := ""
+	dupRefund := ""
 	var lateRegID uuid.UUID
 	err := s.withTx(ctx, func(qtx *db.Queries) error {
 		if err := markSeen(ctx, qtx, we); err != nil {
@@ -1000,22 +1001,30 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) 
 		if err != nil {
 			return err
 		}
-		// The paying session wins: if the row stores a sibling session
-		// from a Pay race, overwrite it so this payment stays traceable
-		// (URL/expiry cleared — the session is consumed).
-		if reg.StripeCheckoutSessionID == nil || *reg.StripeCheckoutSessionID != we.CheckoutSessionID {
-			if err := qtx.SetRegistrationCheckoutSession(ctx, db.SetRegistrationCheckoutSessionParams{
-				ID: reg.ID, SessionID: &we.CheckoutSessionID,
-			}); err != nil {
-				return err
+		// A second charge landing on an already-paid row is a duplicate
+		// from a Pay race, not the winning payment: its pointers must NOT
+		// clobber the winning ones (a dashboard refund of the first charge
+		// would stop matching the row). It gets refunded below instead.
+		duplicateCharge := reg.Status == "paid" && we.PaymentIntentID != "" &&
+			reg.StripePaymentIntentID != nil && *reg.StripePaymentIntentID != we.PaymentIntentID
+		if !duplicateCharge {
+			// The paying session wins: if the row stores a sibling session
+			// from a Pay race, overwrite it so this payment stays traceable
+			// (URL/expiry cleared — the session is consumed).
+			if reg.StripeCheckoutSessionID == nil || *reg.StripeCheckoutSessionID != we.CheckoutSessionID {
+				if err := qtx.SetRegistrationCheckoutSession(ctx, db.SetRegistrationCheckoutSessionParams{
+					ID: reg.ID, SessionID: &we.CheckoutSessionID,
+				}); err != nil {
+					return err
+				}
 			}
-		}
-		// Always record the intent so dashboard refunds stay traceable.
-		if we.PaymentIntentID != "" {
-			if err := qtx.SetRegistrationPaymentIntent(ctx, db.SetRegistrationPaymentIntentParams{
-				ID: reg.ID, PaymentIntentID: &we.PaymentIntentID,
-			}); err != nil {
-				return err
+			// Always record the intent so dashboard refunds stay traceable.
+			if we.PaymentIntentID != "" {
+				if err := qtx.SetRegistrationPaymentIntent(ctx, db.SetRegistrationPaymentIntentParams{
+					ID: reg.ID, PaymentIntentID: &we.PaymentIntentID,
+				}); err != nil {
+					return err
+				}
 			}
 		}
 		u, err := qtx.GetUserByID(ctx, reg.UserID)
@@ -1034,6 +1043,9 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) 
 			emails = append(emails, confirmationEmail(u, ev, s.baseURL))
 			return nil
 		case "paid":
+			if duplicateCharge {
+				dupRefund = we.PaymentIntentID
+			}
 			return nil // redundant delivery of a different event id
 		default:
 			// Late payment: the registration already expired/cancelled.
@@ -1066,6 +1078,14 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) 
 			// The charge stays; a dashboard refund + charge.refunded webhook
 			// will sync state. Log loudly.
 			s.log.Error("events: late-payment auto-refund failed", "registration", lateRegID, "error", err)
+		}
+	}
+	if dupRefund != "" {
+		// Refund only the duplicate charge — the registration stays paid on
+		// the winning intent, so refundRegistration (which flips the row to
+		// refunded) must not run. Stripe notifies the cardholder itself.
+		if err := s.stripe.RefundPaymentIntent(ctx, dupRefund); err != nil {
+			s.log.Error("events: duplicate-charge auto-refund failed", "payment_intent", dupRefund, "error", err)
 		}
 	}
 	return nil
