@@ -409,3 +409,21 @@ func TestCubeWantlistVisibilityAndAuth(t *testing.T) {
 		t.Fatalf("empty cube wantlist = %+v", body)
 	}
 }
+
+func TestCollectionSearchTreatsWildcardsLiterally(t *testing.T) {
+	srv, pool, q := newCollectionsServer(t)
+	c := loggedInClient(t, srv, q, "col-wild@test.dev")
+
+	boltS := uuid.New()
+	seedCard(t, pool, testCard{scryfallID: boltS, oracleID: uuid.New(), name: "Lightning Bolt"})
+	putQuantity(t, c, boltS, 1)
+
+	// ILIKE metacharacters in the query must match literally, not act as
+	// wildcards: "_" would otherwise match every non-empty name.
+	for _, query := range []string{"%25", "_"} { // %25 = url-encoded %
+		got := decode[collectionListBody](t, c.do(t, "GET", "/api/collection?search="+query, ""))
+		if got.Total != 0 {
+			t.Fatalf("search %q must match nothing, got total=%d", query, got.Total)
+		}
+	}
+}

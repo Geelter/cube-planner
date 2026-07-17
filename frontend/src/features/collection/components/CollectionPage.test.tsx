@@ -181,3 +181,15 @@ test("row actions disable while a quantity mutation is in flight", async () => {
   resolvePut(jsonResponse({ item: null }));
   await waitFor(() => expect(remove).not.toBeDisabled());
 });
+
+test("search input enforces the API's 100-char limit", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(jsonResponse({ items: [item], total: 1, totalCopies: 4 })),
+  );
+  renderPage();
+  const input = await screen.findByLabelText(/search/i);
+  // The backend rejects search params over 100 chars with a 422; the
+  // input must not let the user type past it.
+  expect(input).toHaveAttribute("maxlength", "100");
+});

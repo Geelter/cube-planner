@@ -90,6 +90,7 @@ export function CollectionPage() {
           <Input
             id="collection-search"
             type="search"
+            maxLength={100}
             placeholder={m.collection_search_placeholder()}
             value={search}
             onChange={(e) => {

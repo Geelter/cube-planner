@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -52,10 +53,15 @@ type ItemEntry struct {
 	Quantity        int32
 }
 
+// likeEscaper makes user input literal inside an ILIKE pattern — without
+// it "_" matches every name and "%" matches everything.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
 func (s *Service) List(ctx context.Context, userID uuid.UUID, search string, limit, offset int32) ([]ItemEntry, int64, int64, error) {
 	var q *string
 	if search != "" {
-		q = &search
+		escaped := likeEscaper.Replace(search)
+		q = &escaped
 	}
 	rows, err := s.queries.ListCollectionItems(ctx, db.ListCollectionItemsParams{
 		UserID: userID, Search: q, PageLimit: limit, PageOffset: offset,
