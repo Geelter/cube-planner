@@ -68,3 +68,15 @@ Register an account (verification email arrives → SMTP works), log in,
 search a card on `/cards` (mirror imported), create a free event and
 register for it. If Stripe is configured, run one paid registration and
 confirm the registration flips to paid (webhook works).
+
+## Recovering a failed auto-refund
+
+The events webhook handler auto-refunds two cases itself (duplicate
+charges from a Pay race, and late payments that can't reclaim a spot).
+If the Stripe API call fails, that failure is **not retryable**: the
+webhook event was already marked seen and the handler still returns
+success, so Stripe will not redeliver it. Recovery is manual — issue
+the refund from the Stripe dashboard. Find the affected payment intent
+in the API logs: grep for `"duplicate-charge auto-refund failed"` or
+`"late-payment auto-refund failed"`, which log the `payment_intent` or
+`registration` id.

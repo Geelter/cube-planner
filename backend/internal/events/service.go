@@ -980,6 +980,17 @@ func (s *Service) findRegistrationForCheckout(ctx context.Context, qtx *db.Queri
 	return &reg, nil
 }
 
+// handleCheckoutCompleted's outcome depends on the registration's status at
+// delivery time (branches below, checked under the event row lock):
+//   - pending_payment              → mark paid.
+//   - paid / refund_requested,
+//     with a DIFFERENT payment intent → duplicate charge from a Pay race;
+//     auto-refund the extra intent, row left untouched.
+//   - expired / cancelled, event still "published", a spot is free, and
+//     the user holds no other active row → reclaim: mark this row paid.
+//   - anything else (expired/cancelled but no free spot, another active
+//     row exists, or the event moved past "published") → refund with
+//     apology (paymentAfterExpiryEmail).
 func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) error {
 	var emails []pendingEmail
 	lateRefund := ""
@@ -1163,6 +1174,11 @@ func (s *Service) handleCheckoutExpired(ctx context.Context, we WebhookEvent) er
 	return nil
 }
 
+// handleChargeRefunded treats ANY refund on the intent as a full refund of
+// the registration: this app never issues partial refunds itself, so the
+// only source of a partial refund is an organizer acting directly in the
+// Stripe dashboard — an edge case we accept, not one we detect. Such a
+// partial dashboard refund would still flip the row to 'refunded' here.
 func (s *Service) handleChargeRefunded(ctx context.Context, we WebhookEvent) error {
 	var emails []pendingEmail
 	err := s.withTx(ctx, func(qtx *db.Queries) error {
