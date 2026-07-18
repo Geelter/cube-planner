@@ -40,10 +40,15 @@ export function Combobox<T>({
   className,
 }: ComboboxProps<T>) {
   const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
+  const [rawActiveIndex, setActiveIndex] = useState(-1);
   const listboxId = useId();
 
   const showList = open && value.trim().length >= minChars;
+  // Async option lists can shrink out from under a stored index (a fetch
+  // resolves with fewer results than the request that was in flight when
+  // the user last pressed arrow-down) — clamp on read instead of relying on
+  // an effect, so a stale index never points past the end.
+  const activeIndex = options.length === 0 ? -1 : Math.min(rawActiveIndex, options.length - 1);
   const activeOption = activeIndex >= 0 ? options[activeIndex] : undefined;
 
   function close() {
@@ -61,11 +66,11 @@ export function Combobox<T>({
       case "ArrowDown":
         e.preventDefault();
         setOpen(true);
-        setActiveIndex((i) => Math.min(i + 1, options.length - 1));
+        setActiveIndex(Math.min(activeIndex + 1, options.length - 1));
         break;
       case "ArrowUp":
         e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 1, 0));
+        setActiveIndex(Math.max(activeIndex - 1, 0));
         break;
       case "Enter":
         if (showList && activeOption !== undefined) {
