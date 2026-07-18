@@ -86,11 +86,6 @@ export function Combobox<T>({
     }
   }
 
-  // WAI-ARIA combobox pattern (APG): `Input` renders a focusable <input>, the
-  // popup is a ul/li listbox, and keyboard interaction lives on the input —
-  // these jsx-a11y rules cannot see through the custom component or the
-  // pattern, so they are scoped off for this component's JSX only.
-  /* eslint-disable jsx-a11y/interactive-supports-focus, jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role, jsx-a11y/click-events-have-key-events */
   return (
     <div className={cn("relative", className)}>
       <Input
@@ -119,6 +114,10 @@ export function Combobox<T>({
       {showList && (
         <ul
           id={listboxId}
+          // ARIA APG combobox pattern: role="listbox" on a plain <ul> is the
+          // spec-sanctioned shape (no native listbox element exists); the
+          // `Input` mapping in .oxlintrc.json can't cover a native tag.
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role, jsx-a11y/prefer-tag-over-role
           role="listbox"
           className="absolute z-10 mt-1 max-h-80 w-full overflow-auto rounded-md border border-border bg-surface-raised py-1 shadow-lg"
         >
@@ -128,9 +127,15 @@ export function Combobox<T>({
             </li>
           )}
           {options.map((option, i) => (
+            // Same APG pattern: click-to-select with no per-option key
+            // handler because keyboard nav lives on the input
+            // (handleKeyDown above), not on individual options.
+            // eslint-disable-next-line jsx-a11y/click-events-have-key-events
             <li
               key={getOptionId(option)}
               id={`${listboxId}-${getOptionId(option)}`}
+              // role="option" on <li> is the APG pattern; no native tag fits.
+              // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role, jsx-a11y/prefer-tag-over-role
               role="option"
               aria-selected={i === activeIndex}
               className={cn(
@@ -149,5 +154,4 @@ export function Combobox<T>({
       )}
     </div>
   );
-  /* eslint-enable jsx-a11y/interactive-supports-focus, jsx-a11y/prefer-tag-over-role, jsx-a11y/no-noninteractive-element-to-interactive-role, jsx-a11y/click-events-have-key-events */
 }
