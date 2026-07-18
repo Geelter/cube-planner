@@ -279,3 +279,41 @@ Run `make up` (or use the already-running dev stack), open http://localhost:5173
 git add frontend/src/shared/cards/CardAutocomplete.tsx frontend/src/features/cards/components/CardSearchPage.tsx frontend/src/features/cubes/components/GroupedCardList.tsx
 git commit -m "feat(cards): render mana costs as symbol SVGs at all call sites"
 ```
+
+---
+
+### Task 3: Split the remaining issue #14 items into their own issues
+
+Issue #14 bundles three niceties; this plan delivers only the mana symbols. The other two have no standalone issues yet — file them so #14 can close with the mana-symbol work.
+
+**Files:** none (GitHub only, via `gh`).
+
+**Interfaces:** none.
+
+- [ ] **Step 1: Create the printing-picker issue**
+
+```bash
+gh issue create \
+  --title "Per-entry printing picker in the cube editor" \
+  --body "Split out of #14. The shared \`PrintingPickerDialog\` (\`frontend/src/shared/cards/\`) is already wired into collection rows; the cube editor has no per-entry picker yet, and the /cards details view always shows printing \`[0]\`. Reuse the shared dialog for both. API side is ready."
+```
+
+Expected: prints the new issue URL.
+
+- [ ] **Step 2: Create the pricing-links issue**
+
+```bash
+gh issue create \
+  --title "Pricing data + Cardmarket links on card views" \
+  --body "Split out of #14. Needs schema extension: Scryfall bulk data carries \`prices\` and \`purchase_uris\`; with the extracted-columns design this means adding columns that backfill on the next daily sync (spec'd path, no migration pain). Least important of the #14 items."
+```
+
+Expected: prints the new issue URL.
+
+- [ ] **Step 3: Comment on #14**
+
+```bash
+gh issue comment 14 --body "Mana-symbol rendering implemented (docs/superpowers/plans/2026-07-18-mana-symbols.md). The other two items are split into their own issues: printing picker → #<N1>, pricing links → #<N2>."
+```
+
+Replace `#<N1>`/`#<N2>` with the numbers from steps 1–2. Do not close #14 — the user decides when to close it.
