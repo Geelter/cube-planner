@@ -39,7 +39,8 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
   const report = useReportResult(eventId);
   const playerAction = usePlayerAction(eventId);
 
-  const [plannedRounds, setPlannedRounds] = useState<string>("");
+  // null = untouched (show the server value); "" = deliberately cleared.
+  const [plannedRounds, setPlannedRounds] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SwapSlotRef | null>(null);
   const [editingMatch, setEditingMatch] = useState<string | null>(null);
 
@@ -109,7 +110,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
           className="flex items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            const v = Number(plannedRounds);
+            const v = plannedRounds == null ? NaN : Number(plannedRounds);
             if (Number.isInteger(v) && v >= 1) upsert.mutate(v);
           }}
         >
@@ -120,7 +121,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
               type="number"
               min={1}
               max={30}
-              value={plannedRounds || (t?.plannedRounds ?? "")}
+              value={plannedRounds ?? t?.plannedRounds ?? ""}
               onChange={(e) => setPlannedRounds(e.target.value)}
               className="w-24 rounded-md border border-border bg-surface px-2 py-1 text-fg"
             />

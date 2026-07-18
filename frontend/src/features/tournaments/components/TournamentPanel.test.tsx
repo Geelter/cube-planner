@@ -8,6 +8,7 @@ import { NotFoundError } from "../api";
 const pairMut = vi.fn();
 const swapMut = vi.fn();
 const roundMut = vi.fn();
+const upsertMut = vi.fn();
 let tournamentData: TournamentInfo | null = null;
 let tournamentOpts: unknown;
 
@@ -23,7 +24,7 @@ vi.mock("../api", async (orig) => ({
       ? { data: tournamentData, isPending: false, error: null }
       : { data: undefined, isPending: false, error: new NotFoundError("none") };
   },
-  useUpsertTournament: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useUpsertTournament: () => ({ mutate: upsertMut, isPending: false, error: null }),
   usePairNextRound: () => ({ mutate: pairMut, isPending: false, error: null }),
   useRoundAction: () => ({ mutate: roundMut, isPending: false, error: null }),
   useSwapSlots: () => ({ mutate: swapMut, isPending: false, error: null }),
@@ -134,6 +135,21 @@ test("polls the tournament while the event is live", () => {
   tournamentData = draftTournament();
   renderPanel();
   expect(tournamentOpts).toEqual({ refetchInterval: 10_000 });
+});
+
+test("planned-rounds input can be cleared; empty value is not submitted", async () => {
+  tournamentData = draftTournament();
+  renderPanel();
+  const input = screen.getByLabelText("Planned rounds");
+  expect(input).toHaveValue(2);
+  await userEvent.clear(input);
+  // Clearing must stick — the field may not snap back to the server value.
+  expect(input).toHaveValue(null);
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(upsertMut).not.toHaveBeenCalled();
+  await userEvent.type(input, "5");
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(upsertMut).toHaveBeenCalledWith(5);
 });
 
 test("all planned rounds completed: pair button hidden, add-round hint shown", () => {
