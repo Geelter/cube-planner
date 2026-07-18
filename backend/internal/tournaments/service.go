@@ -8,7 +8,6 @@ package tournaments
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"math/bits"
 	"math/rand"
 	"time"
@@ -52,14 +51,13 @@ var (
 type Service struct {
 	queries *db.Queries
 	pool    *pgxpool.Pool
-	log     *slog.Logger
 	now     func() time.Time
 	newSeed func() int64
 }
 
-func NewService(queries *db.Queries, pool *pgxpool.Pool, log *slog.Logger) *Service {
+func NewService(queries *db.Queries, pool *pgxpool.Pool) *Service {
 	return &Service{
-		queries: queries, pool: pool, log: log, now: time.Now,
+		queries: queries, pool: pool, now: time.Now,
 		newSeed: rand.Int63, //nolint:gosec // pairing seed, not crypto
 	}
 }

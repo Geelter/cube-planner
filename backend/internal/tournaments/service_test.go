@@ -3,7 +3,6 @@ package tournaments
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"testing"
 	"time"
 
@@ -60,7 +59,7 @@ func newFixture(t *testing.T, n int) *fixture {
 			t.Fatal(err)
 		}
 	}
-	svc := NewService(q, pool, slog.Default())
+	svc := NewService(q, pool)
 	svc.newSeed = func() int64 { return 42 }
 	return &fixture{svc: svc, q: q, pool: pool, eventID: eventID, users: users}
 }

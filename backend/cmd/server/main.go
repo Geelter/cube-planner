@@ -84,7 +84,7 @@ func main() {
 				Collections:         collections.NewService(queries, pool),
 				OAuth:               auth.NewOAuth(queries, sessions, cfg.BaseURL, cfg.Secure(), oauthProviders).Routes(),
 				Events:              eventsSvc,
-				Tournaments:         tournaments.NewService(queries, pool, slog.Default()),
+				Tournaments:         tournaments.NewService(queries, pool),
 				StripeWebhookSecret: cfg.StripeWebhookSecret,
 			}
 			_, handler := httpapi.Build(deps)

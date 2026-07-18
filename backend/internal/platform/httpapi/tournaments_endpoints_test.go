@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,7 +26,7 @@ func newTournamentServer(t *testing.T) (*httptest.Server, *pgxpool.Pool, *db.Que
 		Auth:        auth.NewService(q, noopMailer{}, "http://test"),
 		Sessions:    auth.NewSessions(q, false),
 		Queries:     q,
-		Tournaments: tournaments.NewService(q, pool, slog.Default()),
+		Tournaments: tournaments.NewService(q, pool),
 	}
 	_, handler := httpapi.Build(deps)
 	srv := httptest.NewServer(handler)
