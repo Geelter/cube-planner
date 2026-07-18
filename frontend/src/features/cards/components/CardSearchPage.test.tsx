@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
+import { m } from "@/paraglide/messages";
 import { CardSearchPage } from "./CardSearchPage";
 
 const bolt = {
@@ -37,6 +38,7 @@ function jsonResponse(body: unknown) {
 }
 
 afterEach(() => {
+  cleanup();
   vi.unstubAllGlobals();
 });
 
@@ -74,4 +76,77 @@ test("search, select, see details", async () => {
   ).toBeInTheDocument();
   expect(screen.getByText(/deals 3 damage/)).toBeInTheDocument();
   expect(screen.getByText(/Magic 2011/)).toBeInTheDocument();
+});
+
+test("shows a loading state while printings are in flight", async () => {
+  let resolvePrintings!: (r: Response) => void;
+  const printingsGate = new Promise<Response>((r) => {
+    resolvePrintings = r;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: Request) => {
+      const url = new URL(input.url);
+      if (url.pathname === "/api/cards/autocomplete") {
+        return jsonResponse({ cards: [bolt] });
+      }
+      if (url.pathname === `/api/cards/${bolt.oracleId}/printings`) {
+        return printingsGate;
+      }
+      return new Response("{}", { status: 404 });
+    }),
+  );
+
+  const user = userEvent.setup();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <CardSearchPage />
+    </QueryClientProvider>,
+  );
+
+  await user.type(screen.getByRole("combobox"), "bolt");
+  const option = await screen.findByRole("option", { name: /Lightning Bolt/ });
+  await user.click(option);
+
+  expect(await screen.findByText(m.loading())).toBeInTheDocument();
+
+  resolvePrintings(jsonResponse({ printings: [boltPrinting] }));
+  await waitFor(() => expect(screen.queryByText(m.loading())).not.toBeInTheDocument());
+  expect(
+    await screen.findByRole("heading", { level: 2, name: "Lightning Bolt" }),
+  ).toBeInTheDocument();
+});
+
+test("shows a generic error alert when printings fail to load", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: Request) => {
+      const url = new URL(input.url);
+      if (url.pathname === "/api/cards/autocomplete") {
+        return jsonResponse({ cards: [bolt] });
+      }
+      if (url.pathname === `/api/cards/${bolt.oracleId}/printings`) {
+        return new Response(JSON.stringify({ title: "Internal Server Error", status: 500 }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("{}", { status: 404 });
+    }),
+  );
+
+  const user = userEvent.setup();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <CardSearchPage />
+    </QueryClientProvider>,
+  );
+
+  await user.type(screen.getByRole("combobox"), "bolt");
+  const option = await screen.findByRole("option", { name: /Lightning Bolt/ });
+  await user.click(option);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(m.error_generic());
 });
