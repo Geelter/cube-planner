@@ -51,7 +51,8 @@ function bumpAdd(state: PendingState, card: CardSummary, by: number): PendingSta
     by = rest;
   }
   const existing = next.adds.get(card.oracleId);
-  next.adds.set(card.oracleId, { card, quantity: (existing?.quantity ?? 0) + by });
+  const quantity = Math.min((existing?.quantity ?? 0) + by, 99);
+  next.adds.set(card.oracleId, { card, quantity });
   return next;
 }
 

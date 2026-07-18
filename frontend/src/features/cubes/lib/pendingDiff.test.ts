@@ -77,6 +77,18 @@ describe("pendingReducer", () => {
     expect(toCommitDiff(s).removes).toEqual([]);
   });
 
+  test("add caps pending quantity at 99", () => {
+    let s = emptyPending;
+    for (let i = 0; i < 105; i++) {
+      s = pendingReducer(s, { type: "add", card: bolt });
+    }
+    expect(s.adds.get("o-bolt")?.quantity).toBe(99);
+    expect(toCommitDiff(s)).toEqual({
+      adds: [{ scryfallId: "s-bolt", quantity: 99 }],
+      removes: [],
+    });
+  });
+
   test("reducer never mutates prior state", () => {
     const s1 = pendingReducer(emptyPending, { type: "add", card: bolt });
     pendingReducer(s1, { type: "add", card: bolt });
