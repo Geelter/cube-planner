@@ -45,3 +45,31 @@ test("lists printings, marks the current one, picks another", async () => {
   await userEvent.click(screen.getByRole("button", { name: /Limited Edition Alpha/ }));
   expect(onPick).toHaveBeenCalledWith("old");
 });
+
+test("current printing is keyboard-reachable and announced via aria-current", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ printings }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ),
+  );
+  render(
+    <PrintingPickerDialog
+      open
+      onClose={() => {}}
+      oracleId="o1"
+      name="Lightning Bolt"
+      currentScryfallId="new"
+      onPick={() => {}}
+    />,
+    { wrapper },
+  );
+  // The current printing must be a real, focusable element (not a
+  // visual-only span) with aria-current so keyboard/AT users can tell
+  // which printing they already own.
+  const current = await screen.findByRole("button", { name: /Magic 2010/ });
+  expect(current).toHaveAttribute("aria-current", "true");
+});

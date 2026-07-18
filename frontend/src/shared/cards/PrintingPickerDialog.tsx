@@ -35,7 +35,16 @@ export function PrintingPickerDialog({
             return (
               <li key={p.scryfallId}>
                 {current ? (
-                  <span className="flex w-full items-center gap-3 rounded-md bg-accent/10 px-2 py-1.5 text-sm text-fg">
+                  // A real, focusable <button> (not a visual-only <span>) so
+                  // keyboard/AT users land on the current printing like they
+                  // do every other row; aria-current announces it as such.
+                  // No onClick: picking your own current printing is a
+                  // no-op the service rejects anyway (same-printing error).
+                  <button
+                    type="button"
+                    aria-current="true"
+                    className="flex w-full items-center gap-3 rounded-md bg-accent/10 px-2 py-1.5 text-left text-sm text-fg"
+                  >
                     {p.imageSmall != null && (
                       <img src={p.imageSmall} alt="" className="h-12 rounded" />
                     )}
@@ -43,7 +52,7 @@ export function PrintingPickerDialog({
                     <span className="ml-auto text-xs font-semibold text-accent">
                       {m.printing_picker_current()}
                     </span>
-                  </span>
+                  </button>
                 ) : (
                   <button
                     type="button"
