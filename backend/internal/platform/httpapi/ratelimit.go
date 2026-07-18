@@ -85,13 +85,27 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// authRateLimitMiddleware throttles POSTs under /api/auth/ (register,
-// verify-email, login, logout, forgot/reset-password). GET /api/me and
-// everything else pass through untouched.
+// authRatePaths are the exact POST routes registered under /api/auth/ (see
+// auth.go, session.go, password_reset.go). Matching exactly — rather than
+// by prefix — keeps attacker-chosen garbage under /api/auth/ (which 404s in
+// the router anyway) from each minting its own bucket in the limiter map.
+var authRatePaths = map[string]bool{
+	"/api/auth/register":        true,
+	"/api/auth/verify-email":    true,
+	"/api/auth/login":           true,
+	"/api/auth/logout":          true,
+	"/api/auth/forgot-password": true,
+	"/api/auth/reset-password":  true,
+}
+
+// authRateLimitMiddleware throttles POSTs to the known auth routes
+// (register, verify-email, login, logout, forgot/reset-password). GET
+// /api/me, unknown paths under /api/auth/, and everything else pass
+// through untouched.
 func authRateLimitMiddleware(l *rateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/auth/") {
+			if r.Method == http.MethodPost && authRatePaths[r.URL.Path] {
 				if !l.allow(clientIP(r) + "|" + r.URL.Path) {
 					w.Header().Set("Content-Type", "application/problem+json")
 					w.WriteHeader(http.StatusTooManyRequests)
