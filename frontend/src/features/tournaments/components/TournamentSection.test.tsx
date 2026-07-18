@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import type { TournamentInfo } from "../api";
 
@@ -92,6 +94,44 @@ test("no result form on a completed round; undrop for dropped player", () => {
   renderSection();
   expect(screen.queryByRole("button", { name: "Report result" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Rejoin" })).toBeInTheDocument();
+});
+
+test("arrow keys move focus and selection across round tabs (roving tabindex)", async () => {
+  tournamentData = baseTournament();
+  tournamentData.rounds = [
+    {
+      number: 1,
+      status: "completed",
+      matches: [{ id: "m1", tableNumber: 1, player1Id: "pl1", player2Id: "pl2" }],
+    },
+    {
+      number: 2,
+      status: "published",
+      matches: [{ id: "m2", tableNumber: 1, player1Id: "pl2", player2Id: "pl1" }],
+    },
+  ];
+  renderSection();
+  const tab1 = screen.getByRole("tab", { name: "Round 1" });
+  const tab2 = screen.getByRole("tab", { name: "Round 2" });
+  // Latest round is selected by default; only the selected tab is tabbable.
+  expect(tab2).toHaveAttribute("aria-selected", "true");
+  expect(tab2).toHaveAttribute("tabindex", "0");
+  expect(tab1).toHaveAttribute("tabindex", "-1");
+
+  tab2.focus();
+  await userEvent.keyboard("{ArrowLeft}");
+  expect(tab1).toHaveFocus();
+  expect(tab1).toHaveAttribute("aria-selected", "true");
+  expect(tab2).toHaveAttribute("aria-selected", "false");
+
+  await userEvent.keyboard("{ArrowRight}");
+  expect(tab2).toHaveFocus();
+  expect(tab2).toHaveAttribute("aria-selected", "true");
+
+  // Wraps at the ends.
+  await userEvent.keyboard("{ArrowRight}");
+  expect(tab1).toHaveFocus();
+  expect(tab1).toHaveAttribute("aria-selected", "true");
 });
 
 test("renders nothing before the event starts", () => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { m } from "@/paraglide/messages";
 import { useMe } from "@/features/auth/api";
 import { Button } from "@/shared/ui/button";
@@ -63,20 +63,36 @@ export function TournamentSection({ eventId }: { eventId: string }) {
     myMatch.player2Id != null &&
     round.number === rounds[rounds.length - 1]!.number;
 
+  // ARIA tabs keyboard pattern: arrows move focus AND selection, wrapping
+  // at the ends; roving tabindex keeps only the selected tab tabbable.
+  const onTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>, from: number) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowRight" ? 1 : -1;
+    const next = (from + delta + rounds.length) % rounds.length;
+    setTab(rounds[next]!.number);
+    const tabs = e.currentTarget
+      .closest('[role="tablist"]')
+      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    tabs?.[next]?.focus();
+  };
+
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-medium text-fg">{m.tournament_title()}</h2>
 
       <div role="tablist" className="flex gap-2">
-        {rounds.map((r) => (
+        {rounds.map((r, i) => (
           <button
             key={r.number}
             role="tab"
-            aria-selected={r.number === activeNumber}
+            aria-selected={r.number === round.number}
+            tabIndex={r.number === round.number ? 0 : -1}
             className={`rounded-md border border-border px-3 py-1 text-sm ${
-              r.number === activeNumber ? "bg-accent text-accent-fg" : "text-fg"
+              r.number === round.number ? "bg-accent text-accent-fg" : "text-fg"
             }`}
             onClick={() => setTab(r.number)}
+            onKeyDown={(e) => onTabKeyDown(e, i)}
           >
             {m.tournament_round_tab({ number: r.number })}
           </button>
