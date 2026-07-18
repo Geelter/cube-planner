@@ -148,9 +148,9 @@ export function EventDetailPage() {
           <p className="text-sm text-fg-muted">{m.event_attendees_empty()}</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
-            {attendees.map((name, i) => (
+            {attendees.map((name) => (
               <li
-                key={`${name}-${i}`}
+                key={name}
                 className="rounded-full border border-border px-3 py-1 text-sm text-fg"
               >
                 {name}

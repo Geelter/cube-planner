@@ -12,11 +12,11 @@ export function EventCubesEditor({ event }: { event: EventDetail }) {
   const linkable = useLinkableCubes();
   const setCubes = useSetEventCubes(event.id);
   const [links, setLinks] = useState<Draft[]>(
-    (event.cubes ?? []).map((c) => ({
-      cubeId: c.cubeId,
-      cubeName: c.cubeName,
-      ...(c.cubeChangeId ? { cubeChangeId: c.cubeChangeId } : {}),
-    })),
+    (event.cubes ?? []).map((c) => {
+      const draft: Draft = { cubeId: c.cubeId, cubeName: c.cubeName };
+      if (c.cubeChangeId) draft.cubeChangeId = c.cubeChangeId;
+      return draft;
+    }),
   );
   const [adding, setAdding] = useState("");
   const editable = event.status === "draft";
