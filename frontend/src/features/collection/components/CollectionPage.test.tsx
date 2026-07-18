@@ -55,6 +55,20 @@ const item = {
   quantity: 4,
 };
 
+const item2 = {
+  scryfallId: "s2",
+  oracleId: "o2",
+  name: "Counterspell",
+  manaCost: "{U}{U}",
+  typeLine: "Instant",
+  setCode: "leb",
+  setName: "Limited Edition Beta",
+  collectorNumber: "54",
+  imageSmall: null,
+  imageNormal: null,
+  quantity: 2,
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -180,6 +194,32 @@ test("row actions disable while a quantity mutation is in flight", async () => {
   await waitFor(() => expect(remove).toBeDisabled());
   resolvePut(jsonResponse({ item: null }));
   await waitFor(() => expect(remove).not.toBeDisabled());
+});
+
+test("a mutation on one row leaves another row's buttons enabled", async () => {
+  const callMethod = (input: Request | string, init?: RequestInit) =>
+    init?.method ?? (typeof input === "string" ? "GET" : input.method);
+  let resolvePut!: (r: Response) => void;
+  const putGate = new Promise<Response>((r) => {
+    resolvePut = r;
+  });
+  const fetchMock = vi.fn(async (input: Request | string, init?: RequestInit) => {
+    if (callMethod(input, init) === "PUT") return putGate;
+    return jsonResponse({ items: [item, item2], total: 2, totalCopies: 6 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  renderPage();
+  const removeA = await screen.findByRole("button", { name: "Remove Lightning Bolt" });
+  const removeB = await screen.findByRole("button", { name: "Remove Counterspell" });
+  const changeB = await screen.findByRole("button", { name: "Change printing of Counterspell" });
+  await userEvent.click(removeA);
+  await waitFor(() => expect(removeA).toBeDisabled());
+  // Row B never asked for a mutation — its buttons must stay usable while
+  // row A's request is still in flight.
+  expect(removeB).not.toBeDisabled();
+  expect(changeB).not.toBeDisabled();
+  resolvePut(jsonResponse({ item: null }));
+  await waitFor(() => expect(removeA).not.toBeDisabled());
 });
 
 test("search input enforces the API's 100-char limit", async () => {

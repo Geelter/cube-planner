@@ -53,8 +53,20 @@ export function CollectionPage() {
   }
 
   const pages = Math.max(1, Math.ceil((collection.data?.total ?? 0) / COLLECTION_PAGE_SIZE));
-  const mutationError = setQuantity.error ?? changePrinting.error;
-  const mutating = setQuantity.isPending || changePrinting.isPending;
+  // Whichever mutation was submitted most recently wins the error slot —
+  // otherwise a stale error from one hook could outlive a later, unrelated
+  // success on the other (mutations don't clear each other's state).
+  const mutationError =
+    setQuantity.submittedAt >= changePrinting.submittedAt
+      ? setQuantity.error
+      : changePrinting.error;
+  // Disable only the row a mutation is actually in flight for — .variables
+  // holds that mutate() call's args for as long as isPending is true.
+  const mutatingRowId = setQuantity.isPending
+    ? setQuantity.variables?.scryfallId
+    : changePrinting.isPending
+      ? changePrinting.variables?.scryfallId
+      : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -139,7 +151,7 @@ export function CollectionPage() {
                   variant="ghost"
                   size="sm"
                   aria-label={m.collection_change_printing({ name: item.name })}
-                  disabled={mutating}
+                  disabled={mutatingRowId === item.scryfallId}
                   onClick={() => setPickerItem(item)}
                 >
                   ⇄
@@ -149,7 +161,7 @@ export function CollectionPage() {
                   variant="ghost"
                   size="sm"
                   aria-label={m.collection_remove_card({ name: item.name })}
-                  disabled={mutating}
+                  disabled={mutatingRowId === item.scryfallId}
                   onClick={() => setQuantity.mutate({ scryfallId: item.scryfallId, quantity: 0 })}
                 >
                   ✕
