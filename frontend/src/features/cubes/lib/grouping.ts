@@ -20,10 +20,25 @@ function colorLabels(): Record<string, string> {
   };
 }
 
+// Pending adds are built from CardSummary (see CubeEditorPage.previewEntries),
+// which the API doesn't return colors/colorIdentity for — the card hasn't
+// been saved to the cube yet, so there's no CubeCardEntry row to read them
+// from. manaCost IS available on CardSummary, so we derive color from its
+// WUBRG pips as a fallback. This is a real derivation, not a guess: Scryfall
+// mana costs use the same letters as the colors array, and cards with no
+// colored pips (true colorless artifacts, lands) correctly parse to no
+// colors either way. The one gap is color-indicator cards with an empty
+// mana cost (e.g. Dryad Arbor) — vanishingly rare in cube contexts, and
+// lands already bucket on type before color regardless.
+function colorsFromManaCost(manaCost: string): string[] {
+  return [...new Set(manaCost.match(/[WUBRG]/g) ?? [])];
+}
+
 function colorBucket(card: CubeCardEntry): string {
   // Type wins over color: dual lands with a color identity are lands.
   if (card.typeLine.includes("Land")) return "land";
-  const colors = card.colors ?? [];
+  const colors =
+    card.colors && card.colors.length > 0 ? card.colors : colorsFromManaCost(card.manaCost);
   if (colors.length === 0) return "colorless";
   if (colors.length > 1) return "multicolor";
   return colors[0] ?? "colorless";

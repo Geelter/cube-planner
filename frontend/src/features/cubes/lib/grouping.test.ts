@@ -42,6 +42,29 @@ describe("groupCards by color", () => {
     expect(groups.map((g) => g.key)).toEqual(["R", "multicolor", "colorless", "land"]);
   });
 
+  test("falls back to mana cost when colors is empty (pending-add preview)", () => {
+    // Pending adds are built from CardSummary, which the API doesn't return
+    // colors for — grouping.ts derives color from manaCost instead so a
+    // colored card doesn't land in "colorless" just because it's unsaved.
+    const cards = [
+      entry({ oracleId: "a", name: "Bolt", colors: [], manaCost: "{R}", cmc: 1 }),
+      entry({ oracleId: "b", name: "Izzet Charm", colors: [], manaCost: "{U}{R}", cmc: 2 }),
+      entry({
+        oracleId: "c",
+        name: "Sol Ring",
+        colors: [],
+        manaCost: "{1}",
+        typeLine: "Artifact",
+        cmc: 1,
+      }),
+    ];
+    const groups = groupCards(cards, "color");
+    const byKey = new Map(groups.map((g) => [g.key, g]));
+    expect(byKey.get("R")?.cards.map((c) => c.name)).toEqual(["Bolt"]);
+    expect(byKey.get("multicolor")?.cards.map((c) => c.name)).toEqual(["Izzet Charm"]);
+    expect(byKey.get("colorless")?.cards.map((c) => c.name)).toEqual(["Sol Ring"]);
+  });
+
   test("cards of equal cmc sort by name", () => {
     const cards = [
       entry({ oracleId: "a", name: "Shock", colors: ["R"], cmc: 1 }),
