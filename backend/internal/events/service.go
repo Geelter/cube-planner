@@ -1006,11 +1006,14 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) 
 		if err != nil {
 			return err
 		}
-		// A second charge landing on an already-paid row is a duplicate
-		// from a Pay race, not the winning payment: its pointers must NOT
-		// clobber the winning ones (a dashboard refund of the first charge
-		// would stop matching the row). It gets refunded below instead.
-		duplicateCharge := reg.Status == "paid" && we.PaymentIntentID != "" &&
+		// A second charge landing on a row that already captured a different
+		// intent (paid, or refund_requested = paid then cancelled past the
+		// deadline) is a duplicate from a Pay race, not the winning payment:
+		// its pointers must NOT clobber the stored ones (a dashboard refund
+		// of the first charge would stop matching the row, and a queued
+		// refund decision would strand it). It gets refunded below instead.
+		duplicateCharge := (reg.Status == "paid" || reg.Status == "refund_requested") &&
+			we.PaymentIntentID != "" &&
 			reg.StripePaymentIntentID != nil && *reg.StripePaymentIntentID != we.PaymentIntentID
 		if !duplicateCharge {
 			// The paying session wins: if the row stores a sibling session
@@ -1047,7 +1050,7 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) 
 			}
 			emails = append(emails, confirmationEmail(u, ev, s.baseURL))
 			return nil
-		case "paid":
+		case "paid", "refund_requested":
 			if duplicateCharge {
 				dupRefund = we.PaymentIntentID
 			}

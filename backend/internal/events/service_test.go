@@ -1214,6 +1214,63 @@ func TestWebhookDuplicateChargeRefundedWithoutTouchingRegistration(t *testing.T)
 	}
 }
 
+func TestWebhookDuplicateChargeOnRefundRequestedRowLeavesQueueEntryIntact(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	deadline := env.clock.Now().Add(time.Hour)
+	if _, err := env.svc.Update(ctx, ev.ID, UpdateEventParams{RefundDeadline: &deadline}); err != nil {
+		t.Fatal(err)
+	}
+	env.publish(t, ev.ID)
+	reg := env.register(t, ev.ID, alice)
+	if _, err := env.svc.Pay(ctx, ev.ID, alice); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_rr_a", Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_test_" + reg.ID.String(), PaymentIntentID: "pi_first",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Past the deadline, cancel queues the refund for the organizer.
+	env.clock.Advance(2 * time.Hour)
+	if got, err := env.svc.CancelRegistration(ctx, ev.ID, alice); err != nil || got.Status != "refund_requested" {
+		t.Fatalf("post-deadline cancel must queue: %v %+v", err, got)
+	}
+
+	// A sibling session from the original Pay race completes late. Like the
+	// paid case, this is a duplicate charge: it must be auto-refunded while
+	// the organizer's pending refund decision for pi_first stays untouched —
+	// clobbering the pointers or flipping the row would strand pi_first.
+	if err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_rr_b", Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_orphan_sibling", ClientReferenceID: reg.ID.String(),
+		PaymentIntentID: "pi_second",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := env.q.GetRegistration(ctx, reg.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "refund_requested" {
+		t.Fatalf("refund queue entry must survive a duplicate charge, got %s", got.Status)
+	}
+	if got.StripePaymentIntentID == nil || *got.StripePaymentIntentID != "pi_first" {
+		t.Fatalf("intent pointer must keep the original charge, got %v", got.StripePaymentIntentID)
+	}
+	if got.StripeCheckoutSessionID == nil || *got.StripeCheckoutSessionID != "cs_test_"+reg.ID.String() {
+		t.Fatalf("session pointer must keep the original session, got %v", got.StripeCheckoutSessionID)
+	}
+	if len(env.stripe.refunds) != 1 || env.stripe.refunds[0] != "pi_second" {
+		t.Fatalf("duplicate intent must be auto-refunded, got %v", env.stripe.refunds)
+	}
+}
+
 func TestWebhookLatePaymentAfterReRegisterRefundsInsteadOf500(t *testing.T) {
 	env := newTestEnv(t)
 	ctx := context.Background()

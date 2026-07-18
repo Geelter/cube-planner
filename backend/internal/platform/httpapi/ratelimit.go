@@ -68,9 +68,10 @@ func (l *rateLimiter) allow(key string) bool {
 }
 
 // clientIP takes the RIGHTMOST X-Forwarded-For hop. Caddy (the only prod
-// route to this API) appends the real peer address to whatever the client
-// sent, so the left entries are attacker-typed and only the last one is
-// trustworthy. Direct dev traffic has no header and falls back to the
+// route to this API) strips untrusted client-sent XFF and sets the real
+// peer address; older/other proxies append instead. Under both behaviors
+// only the last entry is trustworthy — anything left of it can be
+// attacker-typed. Direct dev traffic has no header and falls back to the
 // socket address.
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
