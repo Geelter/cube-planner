@@ -164,8 +164,9 @@ deterministic for a given seed.
    standings) in each pairing; the bye match takes the last table
    number.
 
-Byes count as a 2-0 match win (3 match points, 2-0 game score) but are
-excluded from the recipient's tiebreak denominators (§3.4).
+Byes count as a 2-0 match win: 3 match points, and a won round in the
+recipient's own MW%. For tiebreaks, the bye is not an opponent and its
+games are excluded from the recipient's own GW% (§3.4).
 
 ### 3.4 Standings (pure function)
 
