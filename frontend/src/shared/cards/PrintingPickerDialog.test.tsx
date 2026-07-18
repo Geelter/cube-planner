@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
@@ -10,7 +10,10 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const printings = [
   { scryfallId: "new", setName: "Magic 2010", collectorNumber: "146", imageSmall: null },
@@ -56,14 +59,16 @@ test("current printing is keyboard-reachable and announced via aria-current", as
       }),
     ),
   );
+  const onClose = vi.fn();
+  const onPick = vi.fn();
   render(
     <PrintingPickerDialog
       open
-      onClose={() => {}}
+      onClose={onClose}
       oracleId="o1"
       name="Lightning Bolt"
       currentScryfallId="new"
-      onPick={() => {}}
+      onPick={onPick}
     />,
     { wrapper },
   );
@@ -72,4 +77,9 @@ test("current printing is keyboard-reachable and announced via aria-current", as
   // which printing they already own.
   const current = await screen.findByRole("button", { name: /Magic 2010/ });
   expect(current).toHaveAttribute("aria-current", "true");
+  // A focusable button must DO something (no no-op buttons announced as
+  // actionable): activating "keep what I have" closes without picking.
+  await userEvent.click(current);
+  expect(onPick).not.toHaveBeenCalled();
+  expect(onClose).toHaveBeenCalled();
 });

@@ -38,11 +38,12 @@ export function PrintingPickerDialog({
                   // A real, focusable <button> (not a visual-only <span>) so
                   // keyboard/AT users land on the current printing like they
                   // do every other row; aria-current announces it as such.
-                  // No onClick: picking your own current printing is a
-                  // no-op the service rejects anyway (same-printing error).
+                  // Activating it means "keep what I have": close without
+                  // picking (a same-printing pick is a service error anyway).
                   <button
                     type="button"
                     aria-current="true"
+                    onClick={onClose}
                     className="flex w-full items-center gap-3 rounded-md bg-accent/10 px-2 py-1.5 text-left text-sm text-fg"
                   >
                     {p.imageSmall != null && (
