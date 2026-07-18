@@ -188,3 +188,85 @@ func TestPairNoRepeatByeWidensUpward(t *testing.T) {
 		}
 	}
 }
+
+// The lowest score bracket (3 MP) is entirely prior-bye recipients; a
+// higher bracket (6 MP) has fresh players. pickBye must widen past the
+// exhausted lowest group rather than hand out a repeat bye.
+func TestPairByeWidensPastExhaustedLowestBracket(t *testing.T) {
+	players, ids := testPlayers(5)
+	phantom1, phantom2 := uuid.New(), uuid.New()
+	history := []Match{
+		bye(ids[1]), // 1: 3 MP, hadBye
+		bye(ids[3]), // 3: 3 MP, hadBye
+		// 0, 2, 4 each pick up two wins against players outside the
+		// active field, landing on 6 MP with no bye — the group the
+		// bye must widen into.
+		vs(ids[0], phantom1, res(2, 0, 0)), vs(ids[0], phantom2, res(2, 0, 0)),
+		vs(ids[2], phantom1, res(2, 0, 0)), vs(ids[2], phantom2, res(2, 0, 0)),
+		vs(ids[4], phantom1, res(2, 0, 0)), vs(ids[4], phantom2, res(2, 0, 0)),
+	}
+	for seed := int64(0); seed < 20; seed++ {
+		got := Pair(players, history, seed)
+		assertValidPairings(t, players, got)
+		byeP := got[len(got)-1]
+		if byeP.Player2 != nil {
+			t.Fatalf("seed %d: no bye", seed)
+		}
+		if byeP.Player1 == ids[1] || byeP.Player1 == ids[3] {
+			t.Errorf("seed %d: repeat bye to exhausted-lowest-bracket player %v", seed, byeP.Player1)
+		}
+		if byeP.Player1 != ids[0] && byeP.Player1 != ids[2] && byeP.Player1 != ids[4] {
+			t.Errorf("seed %d: bye to %v, want a widened-bracket (6 MP) player", seed, byeP.Player1)
+		}
+	}
+}
+
+// Every active player has already had a bye: the no-repeat-bye
+// constraint is unsatisfiable, so pickBye waives it and still returns a
+// single valid (necessarily repeat) bye from the lowest bracket.
+func TestPairByeRepeatsWhenEveryoneHasHadOne(t *testing.T) {
+	players, ids := testPlayers(3)
+	history := []Match{bye(ids[0]), bye(ids[1]), bye(ids[2])}
+	got := Pair(players, history, 11)
+	assertValidPairings(t, players, got)
+	byeP := got[len(got)-1]
+	if byeP.Player2 != nil {
+		t.Fatalf("no bye assigned")
+	}
+}
+
+// Explicit pair-down assertion: an odd-sized score bracket (3 players at
+// 3 MP) forces exactly one player to pair down into the next bracket (3
+// players at 0 MP), and that cross-bracket pairing is always the
+// mismatched one (3 MP vs 0 MP, never within-bracket).
+func TestPairDownCrossesIntoNextBracket(t *testing.T) {
+	players, ids := testPlayers(6)
+	history := []Match{
+		vs(ids[0], ids[3], res(2, 0, 0)),
+		vs(ids[1], ids[4], res(2, 0, 0)),
+		vs(ids[2], ids[5], res(2, 0, 0)),
+	}
+	pts := matchPointsOf(history)
+	for seed := int64(0); seed < 20; seed++ {
+		got := Pair(players, history, seed)
+		assertValidPairings(t, players, got)
+		crossBracket := 0
+		for _, p := range got {
+			p1pts, p2pts := pts[p.Player1], pts[*p.Player2]
+			if p1pts == p2pts {
+				continue
+			}
+			crossBracket++
+			hi, lo := p1pts, p2pts
+			if lo > hi {
+				hi, lo = lo, hi
+			}
+			if hi != 3 || lo != 0 {
+				t.Errorf("seed %d: unexpected cross-bracket pairing %d vs %d", seed, p1pts, p2pts)
+			}
+		}
+		if crossBracket != 1 {
+			t.Errorf("seed %d: want exactly 1 pair-down pairing, got %d", seed, crossBracket)
+		}
+	}
+}
