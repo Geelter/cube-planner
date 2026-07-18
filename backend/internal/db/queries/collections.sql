@@ -28,7 +28,7 @@ returning *;
 
 -- Add-quantity upsert (import + change-printing merge). 999 is the hard
 -- per-printing maximum everywhere, so results clamp instead of erroring.
--- name: AddCollectionItem :exec
+-- name: AddCollectionItem :execrows
 insert into collection_items (user_id, scryfall_id, oracle_id, quantity)
 select sqlc.arg(user_id), c.scryfall_id, c.oracle_id, least(sqlc.arg(quantity)::int, 999)
 from cards c

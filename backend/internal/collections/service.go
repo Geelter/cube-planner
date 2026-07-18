@@ -158,10 +158,18 @@ func (s *Service) ChangePrinting(ctx context.Context, userID, fromID, toID uuid.
 	if targets[0].OracleID != src.OracleID {
 		return nil, fmt.Errorf("%w: target is a different card", ErrInvalidItem)
 	}
-	if err := qtx.AddCollectionItem(ctx, db.AddCollectionItemParams{
+	rows, err := qtx.AddCollectionItem(ctx, db.AddCollectionItemParams{
 		UserID: userID, ScryfallID: toID, Quantity: src.Quantity,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
+	}
+	if rows == 0 {
+		// toID was already resolved via GetCardsByScryfallIDs above, so this
+		// only fires if the printing vanished between the check and the
+		// write — surface it like the analogous UpsertCollectionItem path
+		// instead of silently pretending the move happened.
+		return nil, fmt.Errorf("%w: unknown target printing", ErrInvalidItem)
 	}
 	if _, err := qtx.DeleteCollectionItem(ctx, db.DeleteCollectionItemParams{
 		UserID: userID, ScryfallID: fromID,
@@ -392,10 +400,17 @@ func (s *Service) ApplyImport(ctx context.Context, userID uuid.UUID, items []Imp
 		ownedSet[id] = struct{}{}
 	}
 	for _, id := range order {
-		if err := qtx.AddCollectionItem(ctx, db.AddCollectionItemParams{
+		rows, err := qtx.AddCollectionItem(ctx, db.AddCollectionItemParams{
 			UserID: userID, ScryfallID: id, Quantity: merged[id],
-		}); err != nil {
+		})
+		if err != nil {
 			return 0, 0, err
+		}
+		if rows == 0 {
+			// id was already resolved via GetCardsByScryfallIDs above, so
+			// this only fires if the printing vanished mid-transaction —
+			// treat it as the same invalid-batch failure as an unknown id.
+			return 0, 0, fmt.Errorf("%w: unknown printing in batch", ErrInvalidImport)
 		}
 		if _, ok := ownedSet[id]; ok {
 			updated++

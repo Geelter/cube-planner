@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const addCollectionItem = `-- name: AddCollectionItem :exec
+const addCollectionItem = `-- name: AddCollectionItem :execrows
 insert into collection_items (user_id, scryfall_id, oracle_id, quantity)
 select $1, c.scryfall_id, c.oracle_id, least($2::int, 999)
 from cards c
@@ -30,9 +30,12 @@ type AddCollectionItemParams struct {
 
 // Add-quantity upsert (import + change-printing merge). 999 is the hard
 // per-printing maximum everywhere, so results clamp instead of erroring.
-func (q *Queries) AddCollectionItem(ctx context.Context, arg AddCollectionItemParams) error {
-	_, err := q.db.Exec(ctx, addCollectionItem, arg.UserID, arg.Quantity, arg.ScryfallID)
-	return err
+func (q *Queries) AddCollectionItem(ctx context.Context, arg AddCollectionItemParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addCollectionItem, arg.UserID, arg.Quantity, arg.ScryfallID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteCollectionItem = `-- name: DeleteCollectionItem :execrows
