@@ -30,6 +30,7 @@ export function CubeBrowserPage() {
         <Input
           id="cube-search"
           type="search"
+          maxLength={100}
           value={search}
           placeholder={m.cubes_search_placeholder()}
           onChange={(e) => {
