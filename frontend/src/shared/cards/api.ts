@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { m } from "@/paraglide/messages";
 import { client } from "@/shared/api/client";
+import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
 
 export type CardSummary = components["schemas"]["CardSummary"];
@@ -18,9 +19,7 @@ export function useCardAutocomplete(q: string) {
       const { data, error } = await client.GET("/api/cards/autocomplete", {
         params: { query: { q: query } },
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return data.cards ?? [];
+      return unwrap(data, error).cards ?? [];
     },
   });
 }
@@ -34,9 +33,7 @@ export function useCardPrintings(oracleId: string | undefined) {
       const { data, error } = await client.GET("/api/cards/{oracleId}/printings", {
         params: { path: { oracleId } },
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return data.printings ?? [];
+      return unwrap(data, error).printings ?? [];
     },
   });
 }

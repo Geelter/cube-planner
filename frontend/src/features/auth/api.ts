@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { m } from "@/paraglide/messages";
 import { client } from "@/shared/api/client";
+import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
 
 export type User = components["schemas"]["UserBody"];
@@ -23,8 +23,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: async (body: { email: string; password: string }) => {
       const { data, error } = await client.POST("/api/auth/login", { body });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      return data;
+      return unwrap(data, error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
   });

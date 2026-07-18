@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { m } from "@/paraglide/messages";
 import { client } from "@/shared/api/client";
+import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
 
 export type CubeSummary = components["schemas"]["CubeSummary"];
@@ -24,9 +25,8 @@ export function useCubeList(q: string, page: number) {
           query: { q: query, limit: CUBES_PAGE_SIZE, offset: page * CUBES_PAGE_SIZE },
         },
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return { cubes: data.cubes ?? [], total: data.total };
+      const body = unwrap(data, error);
+      return { cubes: body.cubes ?? [], total: body.total };
     },
   });
 }
@@ -36,9 +36,7 @@ export function useMyCubes() {
     queryKey: ["cubes", "mine"],
     queryFn: async () => {
       const { data, error } = await client.GET("/api/me/cubes");
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return data.cubes ?? [];
+      return unwrap(data, error).cubes ?? [];
     },
   });
 }
@@ -50,9 +48,7 @@ export function useCube(cubeId: string) {
       const { data, error } = await client.GET("/api/cubes/{cubeId}", {
         params: { path: { cubeId } },
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return data;
+      return unwrap(data, error);
     },
   });
 }
@@ -65,9 +61,8 @@ export function useCubeCards(cubeId: string, atVersion?: number) {
       const { data, error } = await client.GET("/api/cubes/{cubeId}/cards", {
         params: { path: { cubeId }, query: { atVersion: atVersion ?? -1 } },
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return { cards: data.cards ?? [], version: data.version };
+      const body = unwrap(data, error);
+      return { cards: body.cards ?? [], version: body.version };
     },
   });
 }
@@ -83,9 +78,8 @@ export function useCubeChanges(cubeId: string, page: number) {
           query: { limit: CUBES_PAGE_SIZE, offset: page * CUBES_PAGE_SIZE },
         },
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return { changes: data.changes ?? [], total: data.total };
+      const body = unwrap(data, error);
+      return { changes: body.changes ?? [], total: body.total };
     },
   });
 }
@@ -99,9 +93,7 @@ export function useCreateCube() {
       visibility: "public" | "private";
     }): Promise<CubeDetail> => {
       const { data, error } = await client.POST("/api/cubes", { body });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return data;
+      return unwrap(data, error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cubes"] }),
   });
@@ -119,9 +111,7 @@ export function useUpdateCube(cubeId: string) {
         params: { path: { cubeId } },
         body,
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return data;
+      return unwrap(data, error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cubes"] }),
   });
@@ -131,6 +121,9 @@ export function useDeleteCube(cubeId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
+      // 204 No Content on success: no body to unwrap, so the error check
+      // stays inline rather than going through unwrap (which would treat
+      // the always-absent data as a failure).
       const { error } = await client.DELETE("/api/cubes/{cubeId}", {
         params: { path: { cubeId } },
       });
@@ -156,9 +149,7 @@ export function useCommitChange(cubeId: string) {
         body,
       });
       if (response.status === 409) throw new CommitConflictError(m.cubes_conflict_toast());
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return data;
+      return unwrap(data, error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cubes"] }),
   });

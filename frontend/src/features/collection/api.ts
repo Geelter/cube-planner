@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { m } from "@/paraglide/messages";
 import { client } from "@/shared/api/client";
+import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
 
 export type CollectionItemEntry = components["schemas"]["CollectionItemEntry"];
@@ -30,9 +31,8 @@ export function useCollection(search: string, page: number) {
         },
       });
       if (response.status === 401) throw new UnauthorizedError(m.collection_login_required());
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return { items: data.items ?? [], total: data.total, totalCopies: data.totalCopies };
+      const body = unwrap(data, error);
+      return { items: body.items ?? [], total: body.total, totalCopies: body.totalCopies };
     },
   });
 }
@@ -45,8 +45,10 @@ export function useSetQuantity() {
         params: { path: { scryfallId: vars.scryfallId } },
         body: { quantity: vars.quantity },
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      return data?.item ?? null;
+      // The response body (data) is always present on 200; only its
+      // `item` field is absent-by-design after a quantity-0 delete, so
+      // unwrap's own !data check never misfires here.
+      return unwrap(data, error).item ?? null;
     },
     // Settled, not success: after a failure the list must resync, or the
     // debounced stepper keeps showing a value the server rejected.
@@ -65,8 +67,10 @@ export function useChangePrinting() {
           body: { newScryfallId: vars.newScryfallId },
         },
       );
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      return data?.item ?? null;
+      // The response body (data) is always present on 200; only its
+      // `item` field is absent-by-design after a quantity-0 delete, so
+      // unwrap's own !data check never misfires here.
+      return unwrap(data, error).item ?? null;
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["collection"] }),
   });
@@ -78,9 +82,7 @@ export function useResolveImport() {
       const { data, error } = await client.POST("/api/collection/import/resolve", {
         body: { text: vars.text },
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return data.lines ?? [];
+      return unwrap(data, error).lines ?? [];
     },
   });
 }
@@ -92,9 +94,8 @@ export function useImportItems() {
       const { data, error } = await client.POST("/api/collection/import", {
         body: { items: vars.items },
       });
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return { addedRows: data.addedRows, updatedRows: data.updatedRows };
+      const body = unwrap(data, error);
+      return { addedRows: body.addedRows, updatedRows: body.updatedRows };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["collection"] }),
   });
@@ -109,9 +110,8 @@ export function useWantlist(cubeId: string) {
         params: { path: { cubeId } },
       });
       if (response.status === 401) throw new UnauthorizedError(m.wantlist_login_required());
-      if (error) throw new Error(error.detail ?? m.error_generic());
-      if (!data) throw new Error(m.error_generic());
-      return { cubeName: data.cubeName, items: data.items ?? [], totalMissing: data.totalMissing };
+      const body = unwrap(data, error);
+      return { cubeName: body.cubeName, items: body.items ?? [], totalMissing: body.totalMissing };
     },
   });
 }

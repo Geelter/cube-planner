@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { m } from "@/paraglide/messages";
 import { client } from "@/shared/api/client";
+import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
 
 export type EventSummary = components["schemas"]["EventSummary"];
@@ -11,12 +12,6 @@ export type EventRegistrationRow = components["schemas"]["EventRegistrationRow"]
 
 /** Thrown on 401 so pages can render a login prompt instead of a generic error. */
 export class UnauthorizedError extends Error {}
-
-function unwrap<T>(data: T | undefined, error: { detail?: string | null } | undefined): T {
-  if (error) throw new Error(error.detail ?? m.error_generic());
-  if (!data) throw new Error(m.error_generic());
-  return data;
-}
 
 export function useEvents() {
   return useQuery({

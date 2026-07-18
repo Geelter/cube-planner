@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { m } from "@/paraglide/messages";
 import { client } from "@/shared/api/client";
+import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
 
 export type TournamentInfo = components["schemas"]["TournamentInfo"];
@@ -11,12 +12,6 @@ export type TournamentStanding = components["schemas"]["TournamentStandingInfo"]
 
 /** 404 = no tournament yet — a normal state, not an error banner. */
 export class NotFoundError extends Error {}
-
-function unwrap<T>(data: T | undefined, error: { detail?: string | null } | undefined): T {
-  if (error) throw new Error(error.detail ?? m.error_generic());
-  if (!data) throw new Error(m.error_generic());
-  return data;
-}
 
 // The event detail under the events feature's queryKey: same endpoint +
 // key, so TanStack dedupes with features/events and their invalidations
