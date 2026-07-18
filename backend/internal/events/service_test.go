@@ -1311,6 +1311,71 @@ func TestWebhookLatePaymentAfterReRegisterRefundsInsteadOf500(t *testing.T) {
 	if gotNew.Status != "pending_payment" {
 		t.Fatalf("new registration must be untouched, got %s", gotNew.Status)
 	}
+	var apology []sentMail
+	for _, m := range env.mailer.sent {
+		if m.to == "alice@test" && strings.Contains(m.subject, "Late payment refunded") {
+			apology = append(apology, m)
+		}
+	}
+	if len(apology) != 1 {
+		t.Fatalf("want one apology email to alice, got %d (%v)", len(apology), env.mailer.sent)
+	}
+}
+
+// The published-only guard in handleCheckoutCompleted's default branch must
+// refuse to reclaim a spot once the event has moved past "published" — even
+// when the spot is objectively free (nobody else registered). Starting an
+// event closes registration for good; a late Stripe payment for a
+// registration that expired before the start must always be refunded with
+// an apology, never silently re-seat the payer into a started event.
+func TestWebhookLatePaymentAfterEventStartedRefundsInsteadOfReclaiming(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	org := env.seedUser(t, "org@test")
+	alice := env.seedUser(t, "alice@test")
+	ev := env.createEvent(t, org, 5000, 2)
+	env.publish(t, ev.ID)
+	ra := env.register(t, ev.ID, alice)
+	if _, err := env.svc.Pay(ctx, ev.ID, alice); err != nil {
+		t.Fatal(err)
+	}
+	env.clock.Advance(PaymentWindow + 25*time.Hour)
+	if err := env.svc.expireAndPromote(ctx, ev.ID); err != nil {
+		t.Fatal(err)
+	}
+	gotA, _ := env.q.GetRegistration(ctx, ra.ID)
+	if gotA.Status != "expired" {
+		t.Fatalf("setup: registration must be expired before the event starts, got %s", gotA.Status)
+	}
+	// The event starts (registration closes for good) after the expiry.
+	if _, err := env.svc.Transition(ctx, ev.ID, "start"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The late Stripe payment for the now-expired session lands anyway.
+	err := env.svc.HandleWebhookEvent(ctx, WebhookEvent{
+		ID: "evt_late_started", Type: "checkout.session.completed",
+		CheckoutSessionID: "cs_test_" + ra.ID.String(), PaymentIntentID: "pi_late_started",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotA, _ = env.q.GetRegistration(ctx, ra.ID)
+	if gotA.Status != "refunded" {
+		t.Fatalf("late payment after event started must refund, not reclaim, got %s", gotA.Status)
+	}
+	if len(env.stripe.refunds) != 1 || env.stripe.refunds[0] != "pi_late_started" {
+		t.Fatalf("want pi_late_started refunded, got %v", env.stripe.refunds)
+	}
+	var apology []sentMail
+	for _, m := range env.mailer.sent {
+		if m.to == "alice@test" && strings.Contains(m.subject, "Late payment refunded") {
+			apology = append(apology, m)
+		}
+	}
+	if len(apology) != 1 {
+		t.Fatalf("want one apology email to alice, got %d (%v)", len(apology), env.mailer.sent)
+	}
 }
 
 func TestEventCancelEmailsPaidUserEvenWhenRefundFails(t *testing.T) {
