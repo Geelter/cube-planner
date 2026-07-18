@@ -37,6 +37,8 @@ export function ManaCost({ cost }: { cost: string })
   so symbols track the surrounding font size at every call site.
 - **Unknown token →** the raw `{token}` rendered as text — future or
   unexpected symbols degrade to exactly the pre-feature behavior.
+- **Text outside braces →** preserved as literal text, so split-card
+  costs like `{1}{W} // {2}{U}` keep their ` // ` separator.
 - **Empty string →** renders nothing (`null`).
 
 ## Accessibility
