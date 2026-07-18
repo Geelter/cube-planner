@@ -56,7 +56,18 @@
   "cubes_search_label": "Szukaj cubów",
   "cubes_search_placeholder": "Nazwa cuba…",
   "cubes_no_results": "Nie znaleziono cubów.",
-  "cubes_card_count": "{count} kart",
+  "cubes_card_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} karta",
+        "countPlural=few": "{count} karty",
+        "countPlural=many": "{count} kart",
+        "countPlural=other": "{count} karty"
+      }
+    }
+  ],
   "cubes_updated": "Zaktualizowano {date}",
   "cubes_by_owner": "autor: {owner}",
   "cubes_new_button": "Nowy cube",

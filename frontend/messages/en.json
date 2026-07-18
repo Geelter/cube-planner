@@ -56,7 +56,16 @@
   "cubes_search_label": "Search cubes",
   "cubes_search_placeholder": "Cube name…",
   "cubes_no_results": "No cubes found.",
-  "cubes_card_count": "{count} cards",
+  "cubes_card_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} card",
+        "countPlural=other": "{count} cards"
+      }
+    }
+  ],
   "cubes_updated": "Updated {date}",
   "cubes_by_owner": "by {owner}",
   "cubes_new_button": "New cube",
