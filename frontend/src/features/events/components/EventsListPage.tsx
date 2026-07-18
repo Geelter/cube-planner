@@ -25,6 +25,10 @@ export function MyStatusBadge({
   status,
   pos,
 }: {
+  // The explicit `| undefined` is load-bearing, not redundant: with
+  // exactOptionalPropertyTypes, an optional prop's declared type must
+  // include `undefined` for callers to pass an already-optional API field
+  // (typed `string | undefined`) straight through as `status={...}`.
   status?: string | null | undefined;
   pos?: number | null;
 }) {
