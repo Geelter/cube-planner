@@ -115,3 +115,28 @@ func (c *cookieClient) do(t *testing.T, method, path, body string) *http.Respons
 	t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp
 }
+
+func TestAuthEndpointsRateLimited(t *testing.T) {
+	srv, _ := newTestServer(t)
+	jar := newCookieClient(t, srv)
+
+	got429 := false
+	for i := range 30 {
+		resp := jar.do(t, "POST", "/api/auth/login", `{"email":"nobody@x.y","password":"wrongwrong"}`)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if i < 20 {
+				t.Fatalf("throttled too early, at request %d", i+1)
+			}
+			got429 = true
+			break
+		}
+	}
+	if !got429 {
+		t.Fatal("sustained login hammering must eventually get 429")
+	}
+
+	// Non-auth traffic must be unaffected by the auth throttle.
+	if resp := jar.do(t, "GET", "/api/me", ""); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("me after throttle = %d, want 401", resp.StatusCode)
+	}
+}

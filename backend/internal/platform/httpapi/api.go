@@ -36,6 +36,7 @@ type Deps struct {
 
 func Build(deps Deps) (huma.API, http.Handler) {
 	router := chi.NewMux()
+	router.Use(authRateLimitMiddleware(newRateLimiter(authRateLimit, authRateWindow)))
 	api := humachi.New(router, huma.DefaultConfig("Cube Planner API", "0.1.0"))
 	if deps.Sessions != nil {
 		api.UseMiddleware(sessionMiddleware(deps.Sessions))
