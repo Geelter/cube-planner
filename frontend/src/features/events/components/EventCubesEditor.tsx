@@ -82,7 +82,7 @@ export function EventCubesEditor({ event }: { event: EventDetail }) {
               value={adding}
               onChange={(e) => setAdding(e.target.value)}
             >
-              <option value="">{m.event_cubes_add()}</option>
+              <option value="">{m.event_cubes_add_placeholder()}</option>
               {(linkable.data ?? [])
                 .filter((c) => !links.some((l) => l.cubeId === c.id))
                 .map((c) => (

@@ -223,6 +223,7 @@
   "event_cancel_event_confirm": "Odwołać {name}? Wszystkie opłacone zapisy zostaną automatycznie zwrócone.",
   "event_cubes_editor_title": "Powiązane cuby",
   "event_cubes_add": "Dodaj cube",
+  "event_cubes_add_placeholder": "Wybierz cube…",
   "event_cubes_remove": "Usuń",
   "event_cubes_pin_label": "Przypięta wersja",
   "event_cubes_pin_live": "Bieżąca (najnowsza)",

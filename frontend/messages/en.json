@@ -223,6 +223,7 @@
   "event_cancel_event_confirm": "Cancel {name}? Every paid registration will be refunded automatically.",
   "event_cubes_editor_title": "Linked cubes",
   "event_cubes_add": "Add cube",
+  "event_cubes_add_placeholder": "Select a cube…",
   "event_cubes_remove": "Remove",
   "event_cubes_pin_label": "Pinned version",
   "event_cubes_pin_live": "Live (latest)",
