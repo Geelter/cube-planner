@@ -64,7 +64,10 @@ func (s *Syncer) Sync(ctx context.Context) error {
 		return err
 	}
 	c := int32(count) //nolint:gosec // bulk file is ~100k cards, far below int32 max
-	if err := s.queries.FinishSyncRunSuccess(ctx, db.FinishSyncRunSuccessParams{
+	// WithoutCancel, same as the failure path: if shutdown lands between
+	// the committed import and this write, the run would stay 'running'
+	// until the next boot's stale-run sweep.
+	if err := s.queries.FinishSyncRunSuccess(context.WithoutCancel(ctx), db.FinishSyncRunSuccessParams{
 		ID: runID, BulkUpdatedAt: &meta.UpdatedAt, CardsCount: &c,
 	}); err != nil {
 		return fmt.Errorf("record success: %w", err)
