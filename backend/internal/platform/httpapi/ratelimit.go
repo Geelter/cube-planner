@@ -67,13 +67,15 @@ func (l *rateLimiter) allow(key string) bool {
 	return true
 }
 
-// clientIP prefers the first X-Forwarded-For hop: in prod the API is only
-// reachable through Caddy (compose-internal network), so the header is
-// trustworthy; direct dev traffic falls back to the socket address.
+// clientIP takes the RIGHTMOST X-Forwarded-For hop. Caddy (the only prod
+// route to this API) appends the real peer address to whatever the client
+// sent, so the left entries are attacker-typed and only the last one is
+// trustworthy. Direct dev traffic has no header and falls back to the
+// socket address.
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		first, _, _ := strings.Cut(xff, ",")
-		return strings.TrimSpace(first)
+		hops := strings.Split(xff, ",")
+		return strings.TrimSpace(hops[len(hops)-1])
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
