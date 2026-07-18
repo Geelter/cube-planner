@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/humacli"
@@ -41,8 +42,11 @@ func main() {
 		cfg := config.Load()
 		// Shared shutdown state: OnStop (SIGINT/SIGTERM via humacli) drains
 		// the server, stops the background loops, and closes the pool.
-		var srv *http.Server
-		var pool *pgxpool.Pool
+		// humacli runs OnStart in a goroutine, so a signal landing before it
+		// finishes races OnStop's reads under the Go memory model; atomic.
+		// Pointer makes the handoff race-clean without a mutex.
+		var srvPtr atomic.Pointer[http.Server]
+		var poolPtr atomic.Pointer[pgxpool.Pool]
 		ctx, stopBackground := context.WithCancel(context.Background())
 		hooks.OnStart(func() {
 			// A half-configured payment system must not start: it would
@@ -50,11 +54,11 @@ func main() {
 			if err := cfg.ValidateStripe(); err != nil {
 				log.Fatalf("stripe config: %v", err)
 			}
-			var err error
-			pool, err = db.Connect(ctx, cfg.DatabaseURL)
+			pool, err := db.Connect(ctx, cfg.DatabaseURL)
 			if err != nil {
 				log.Fatalf("database: %v", err)
 			}
+			poolPtr.Store(pool)
 			queries := dbgen.New(pool)
 			oauthProviders := map[string]*auth.ProviderConfig{}
 			if cfg.Discord.ClientID != "" {
@@ -89,11 +93,12 @@ func main() {
 			}
 			_, handler := httpapi.Build(deps)
 			log.Printf("listening on :%d", cfg.Port)
-			srv = &http.Server{
+			srv := &http.Server{
 				Addr:              fmt.Sprintf(":%d", cfg.Port),
 				Handler:           handler,
 				ReadHeaderTimeout: 10 * time.Second,
 			}
+			srvPtr.Store(srv)
 			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				log.Fatal(err)
 			}
@@ -101,7 +106,7 @@ func main() {
 		hooks.OnStop(func() {
 			// Drain in-flight requests (webhooks especially) before pulling
 			// the plug on the scheduler, sweeper, and DB pool.
-			if srv != nil {
+			if srv := srvPtr.Load(); srv != nil {
 				shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 				defer cancel()
 				if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -109,7 +114,7 @@ func main() {
 				}
 			}
 			stopBackground()
-			if pool != nil {
+			if pool := poolPtr.Load(); pool != nil {
 				pool.Close()
 			}
 			slog.Info("cube-planner api stopped")
