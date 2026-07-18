@@ -32,4 +32,7 @@ export default defineConfig({
     environment: "happy-dom",
     setupFiles: ["./src/vitest-setup.ts"],
   },
+  build: {
+    assetsInlineLimit: 0,
+  },
 });
