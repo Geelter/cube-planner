@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -96,7 +95,9 @@ test("no result form on a completed round; undrop for dropped player", () => {
   expect(screen.getByRole("button", { name: "Rejoin" })).toBeInTheDocument();
 });
 
-test("arrow keys move focus and selection across round tabs (roving tabindex)", async () => {
+// Keyboard/focus coverage lives in TournamentSection.keyboard.test.tsx (jsdom).
+
+test("stale tab state falls back to exactly one selected tab", async () => {
   tournamentData = baseTournament();
   tournamentData.rounds = [
     {
@@ -110,28 +111,40 @@ test("arrow keys move focus and selection across round tabs (roving tabindex)", 
       matches: [{ id: "m2", tableNumber: 1, player1Id: "pl2", player2Id: "pl1" }],
     },
   ];
-  renderSection();
-  const tab1 = screen.getByRole("tab", { name: "Round 1" });
-  const tab2 = screen.getByRole("tab", { name: "Round 2" });
-  // Latest round is selected by default; only the selected tab is tabbable.
-  expect(tab2).toHaveAttribute("aria-selected", "true");
-  expect(tab2).toHaveAttribute("tabindex", "0");
-  expect(tab1).toHaveAttribute("tabindex", "-1");
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = render(
+    <QueryClientProvider client={qc}>
+      <TournamentSection eventId="e1" />
+    </QueryClientProvider>,
+  );
+  await userEvent.click(screen.getByRole("tab", { name: "Round 1" }));
 
-  tab2.focus();
-  await userEvent.keyboard("{ArrowLeft}");
-  expect(tab1).toHaveFocus();
-  expect(tab1).toHaveAttribute("aria-selected", "true");
-  expect(tab2).toHaveAttribute("aria-selected", "false");
+  // The tab state (round 1) survives while the data changes under it —
+  // e.g. the route swaps to another event's tournament without remounting.
+  tournamentData = baseTournament();
+  tournamentData.rounds = [
+    {
+      number: 2,
+      status: "completed",
+      matches: [{ id: "m3", tableNumber: 1, player1Id: "pl1", player2Id: "pl2" }],
+    },
+    {
+      number: 3,
+      status: "published",
+      matches: [{ id: "m4", tableNumber: 1, player1Id: "pl2", player2Id: "pl1" }],
+    },
+  ];
+  view.rerender(
+    <QueryClientProvider client={qc}>
+      <TournamentSection eventId="e2" />
+    </QueryClientProvider>,
+  );
 
-  await userEvent.keyboard("{ArrowRight}");
-  expect(tab2).toHaveFocus();
-  expect(tab2).toHaveAttribute("aria-selected", "true");
-
-  // Wraps at the ends.
-  await userEvent.keyboard("{ArrowRight}");
-  expect(tab1).toHaveFocus();
-  expect(tab1).toHaveAttribute("aria-selected", "true");
+  const selected = screen
+    .getAllByRole("tab")
+    .filter((el) => el.getAttribute("aria-selected") === "true");
+  expect(selected).toHaveLength(1);
+  expect(selected[0]).toHaveAccessibleName("Round 3");
 });
 
 test("renders nothing before the event starts", () => {
