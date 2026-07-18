@@ -161,7 +161,16 @@
   "wantlist_col_missing": "Missing",
   "wantlist_col_in_cube": "In cube",
   "wantlist_col_owned": "Owned",
-  "wantlist_total": "{count} cards missing",
+  "wantlist_total": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} card missing",
+        "countPlural=other": "{count} cards missing"
+      }
+    }
+  ],
   "wantlist_empty": "You own everything in this cube.",
   "wantlist_download": "Download for Cardmarket",
   "nav_events": "Events",
@@ -264,7 +273,16 @@
   "tournament_games_won": "{name}: games won",
   "tournament_drawn_games": "Drawn games",
   "tournament_gw": "GW%",
-  "tournament_missing_results": "{count} results missing",
+  "tournament_missing_results": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} result missing",
+        "countPlural=other": "{count} results missing"
+      }
+    }
+  ],
   "tournament_none_yet": "The tournament hasn't started yet.",
   "tournament_none_yet_organizer": "No rounds yet — pair round 1 to start the tournament.",
   "tournament_ogw": "OGW%",

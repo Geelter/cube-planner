@@ -108,7 +108,7 @@ test("published round: complete disabled while results missing", () => {
   };
   renderPanel();
   expect(screen.getByRole("button", { name: "Complete round" })).toBeDisabled();
-  expect(screen.getByText("1 results missing")).toBeInTheDocument();
+  expect(screen.getByText("1 result missing")).toBeInTheDocument();
 });
 
 test("reroll clears a pending slot selection", async () => {

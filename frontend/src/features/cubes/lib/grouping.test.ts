@@ -65,6 +65,43 @@ describe("groupCards by color", () => {
     expect(byKey.get("colorless")?.cards.map((c) => c.name)).toEqual(["Sol Ring"]);
   });
 
+  test("mana-cost fallback handles hybrid, phyrexian, and twobrid pips", () => {
+    const cards = [
+      entry({ oracleId: "a", name: "Figure of Destiny", colors: [], manaCost: "{R/W}", cmc: 1 }),
+      entry({
+        oracleId: "b",
+        name: "Dismember",
+        colors: [],
+        manaCost: "{1}{B/P}{B/P}",
+        cmc: 3,
+      }),
+      entry({
+        oracleId: "c",
+        name: "Spectral Procession",
+        colors: [],
+        manaCost: "{2/W}{2/W}{2/W}",
+        cmc: 6,
+      }),
+      entry({
+        oracleId: "d",
+        name: "Kozilek",
+        colors: [],
+        manaCost: "{8}{C}{C}",
+        typeLine: "Legendary Creature",
+        cmc: 10,
+      }),
+    ];
+    const groups = groupCards(cards, "color");
+    const byKey = new Map(groups.map((g) => [g.key, g]));
+    // Hybrid pips carry both colors (Scryfall colors semantics): multicolor.
+    expect(byKey.get("multicolor")?.cards.map((c) => c.name)).toEqual(["Figure of Destiny"]);
+    // Phyrexian black is still black; twobrid white is still white.
+    expect(byKey.get("B")?.cards.map((c) => c.name)).toEqual(["Dismember"]);
+    expect(byKey.get("W")?.cards.map((c) => c.name)).toEqual(["Spectral Procession"]);
+    // {C} pips are colorless, not a color.
+    expect(byKey.get("colorless")?.cards.map((c) => c.name)).toEqual(["Kozilek"]);
+  });
+
   test("cards of equal cmc sort by name", () => {
     const cards = [
       entry({ oracleId: "a", name: "Shock", colors: ["R"], cmc: 1 }),

@@ -27,9 +27,15 @@ function colorLabels(): Record<string, string> {
 // WUBRG pips as a fallback. This is a real derivation, not a guess: Scryfall
 // mana costs use the same letters as the colors array, and cards with no
 // colored pips (true colorless artifacts, lands) correctly parse to no
-// colors either way. The one gap is color-indicator cards with an empty
-// mana cost (e.g. Dryad Arbor) — vanishingly rare in cube contexts, and
-// lands already bucket on type before color regardless.
+// colors either way. Two known gaps, both preview-only (the bucket
+// self-corrects once the card is saved and refetched with real colors):
+//   - color-indicator cards with an empty mana cost (e.g. Dryad Arbor) —
+//     vanishingly rare, and lands bucket on type before color anyway;
+//   - double-faced/modal-DFC cards: CardSummary.manaCost is the FRONT
+//     face only, while the saved card's colors are the union of both
+//     faces — e.g. Valki {1}{B} // Tibalt {2}{B}{R}{R} previews as
+//     mono-black but lands in multicolor after saving.
+// A real fix needs per-card colors on CardSummary (API change).
 function colorsFromManaCost(manaCost: string): string[] {
   return [...new Set(manaCost.match(/[WUBRG]/g) ?? [])];
 }
