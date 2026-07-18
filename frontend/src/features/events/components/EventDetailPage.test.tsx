@@ -96,3 +96,27 @@ test("checkout=success with a paid registration renders server truth", async () 
   expect(await screen.findByText("You're in")).toBeInTheDocument();
   expect(screen.queryByText("Confirming your payment…")).not.toBeInTheDocument();
 });
+
+test("attendees with identical display names render without duplicate React keys", async () => {
+  const payload = { ...eventDetailPayload("paid"), attendees: ["Marek", "Marek"], paidCount: 2 };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: Request) => {
+      if (input.url.includes("/api/me")) {
+        return new Response(
+          JSON.stringify({ id: "u1", email: "x@y", displayName: "X", providers: [], role: "user" }),
+        );
+      }
+      return new Response(JSON.stringify(payload));
+    }),
+  );
+  const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    renderAt("/events/e1");
+    expect(await screen.findAllByText("Marek")).toHaveLength(2);
+    const dupKeyError = errSpy.mock.calls.some((args) => args.join(" ").includes("same key"));
+    expect(dupKeyError).toBe(false);
+  } finally {
+    errSpy.mockRestore();
+  }
+});

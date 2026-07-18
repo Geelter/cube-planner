@@ -56,6 +56,14 @@ export function EventDetailPage() {
   const isAdmin = me.data?.role === "admin";
   const cubes = e.cubes ?? [];
   const attendees = e.attendees ?? [];
+  // Display names are not unique (nothing in the schema enforces it), so
+  // suffix repeats with their occurrence count to keep chip keys distinct.
+  const seenNames = new Map<string, number>();
+  const attendeeChips = attendees.map((name) => {
+    const n = seenNames.get(name) ?? 0;
+    seenNames.set(name, n + 1);
+    return { key: n === 0 ? name : `${name} #${n + 1}`, name };
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -148,12 +156,12 @@ export function EventDetailPage() {
           <p className="text-sm text-fg-muted">{m.event_attendees_empty()}</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
-            {attendees.map((name) => (
+            {attendeeChips.map((a) => (
               <li
-                key={name}
+                key={a.key}
                 className="rounded-full border border-border px-3 py-1 text-sm text-fg"
               >
-                {name}
+                {a.name}
               </li>
             ))}
           </ul>
