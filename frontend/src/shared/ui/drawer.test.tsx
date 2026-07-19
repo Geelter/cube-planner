@@ -33,3 +33,14 @@ test("close button fires onClose", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Close" }));
   expect(onClose).toHaveBeenCalled();
 });
+
+test("backdrop click fires onClose", async () => {
+  const onClose = vi.fn();
+  render(
+    <Drawer open onClose={onClose} label="Menu">
+      <p>Nav items</p>
+    </Drawer>,
+  );
+  await userEvent.click(screen.getByRole("dialog", { name: "Menu" }));
+  expect(onClose).toHaveBeenCalled();
+});

@@ -99,9 +99,10 @@ export function RootLayout() {
               type="button"
               variant="ghost"
               size="icon"
-              className="md:hidden"
+              className="size-11 md:hidden"
               aria-label={m.nav_menu()}
               aria-expanded={menuOpen}
+              aria-controls="mobile-nav-drawer"
               onClick={() => setMenuOpen(true)}
             >
               ☰
@@ -109,7 +110,12 @@ export function RootLayout() {
           </div>
         </div>
       </header>
-      <Drawer open={menuOpen} onClose={() => setMenuOpen(false)} label={m.nav_menu()}>
+      <Drawer
+        id="mobile-nav-drawer"
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        label={m.nav_menu()}
+      >
         <nav className="flex flex-col">
           <Link to="/cards" className={drawerItem}>
             {m.nav_cards()}
