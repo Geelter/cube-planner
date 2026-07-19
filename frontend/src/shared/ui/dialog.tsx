@@ -34,7 +34,7 @@ export function Dialog({
       ref={ref}
       aria-labelledby={titleId}
       onClose={onClose}
-      className="m-auto w-full max-w-lg rounded-xl border border-border bg-surface p-6 text-fg shadow-lg backdrop:bg-black/50"
+      className="m-auto max-h-[85svh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-xl border border-border bg-surface p-6 text-fg shadow-lg backdrop:bg-black/50"
     >
       {open && (
         <div className="flex flex-col gap-4">
