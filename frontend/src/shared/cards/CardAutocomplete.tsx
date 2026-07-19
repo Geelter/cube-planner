@@ -3,6 +3,7 @@ import { m } from "@/paraglide/messages";
 import { useDebouncedValue } from "@/shared/lib/useDebouncedValue";
 import { Combobox } from "@/shared/ui/combobox";
 import { useCardAutocomplete, type CardSummary } from "./api";
+import { ManaCost } from "./ManaCost";
 
 type CardAutocompleteProps = {
   id: string;
@@ -30,7 +31,12 @@ export function CardAutocomplete({ id, onSelect }: CardAutocompleteProps) {
             <span className="font-medium">{c.name}</span>
             <span className="text-xs text-fg-muted">
               {c.typeLine}
-              {c.manaCost !== "" && ` · ${c.manaCost}`}
+              {c.manaCost !== "" && (
+                <>
+                  {" · "}
+                  <ManaCost cost={c.manaCost} />
+                </>
+              )}
             </span>
           </span>
         </span>

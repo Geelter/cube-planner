@@ -3,6 +3,7 @@ import type { CubeCardEntry } from "../api";
 import type { GroupKind } from "../lib/grouping";
 import { groupCards } from "../lib/grouping";
 import { CardHoverPreview } from "@/shared/cards/CardHoverPreview";
+import { ManaCost } from "@/shared/cards/ManaCost";
 
 export function GroupedCardList({
   cards,
@@ -36,7 +37,9 @@ export function GroupedCardList({
                       )}
                       {card.name}
                     </span>
-                    <span className="shrink-0 text-fg-muted">{card.manaCost}</span>
+                    <span className="shrink-0">
+                      <ManaCost cost={card.manaCost} />
+                    </span>
                   </button>
                 </CardHoverPreview>
               </li>

@@ -7,3 +7,4 @@ backend/bin/
 coverage/
 frontend/src/routeTree.gen.ts
 frontend/src/paraglide/
+.playwright-mcp/
