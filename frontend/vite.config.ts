@@ -33,6 +33,7 @@ export default defineConfig({
     setupFiles: ["./src/vitest-setup.ts"],
   },
   build: {
+    // keep mana SVGs as separate cacheable assets; Vite would otherwise inline <4 kB SVGs as data URIs
     assetsInlineLimit: 0,
   },
 });
