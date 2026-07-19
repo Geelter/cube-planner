@@ -100,6 +100,7 @@ vi.mock("./CubeSettingsSection", () => ({
   CubeSettingsSection: () => <div>Settings section (mocked)</div>,
 }));
 
+import { CommitConflictError } from "../api";
 import { CubeEditorPage } from "./CubeEditorPage";
 
 beforeEach(() => {
@@ -270,4 +271,26 @@ test("discard in the sheet hides the bar and empties the sheet", async () => {
   );
   // Sheet closed too — its children unmount.
   expect(within(sheet).queryByText("Sol Ring")).toBeNull();
+});
+
+// Bug: while the sheet is open, everything outside the modal <dialog> is
+// inert (excluded from the a11y tree), so a conflict/error Alert rendered
+// only in the page flow never gets seen or announced. The alert must also
+// render inside the sheet.
+test("commit conflict from the sheet surfaces the conflict alert inside the sheet dialog", async () => {
+  mocks.refetch.mockResolvedValue({ data: { version: 4, cards: [] } });
+  mocks.mutate.mockImplementation(
+    (_vars: unknown, opts: { onError: (err: unknown) => Promise<void> | void }) =>
+      opts.onError(new CommitConflictError("conflict")),
+  );
+
+  render(<CubeEditorPage />);
+  fireEvent.click(screen.getByText("pick sol ring"));
+  const bar = await screen.findByRole("region", { name: /pending changes/i });
+  fireEvent.click(within(bar).getByRole("button", { name: /review pending changes/i }));
+  const sheet = screen.getByRole("dialog", { name: /pending changes/i });
+
+  fireEvent.click(within(sheet).getByRole("button", { name: /save changes/i }));
+
+  await waitFor(() => expect(within(sheet).getByText(/changed elsewhere/i)).toBeDefined());
 });

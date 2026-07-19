@@ -117,16 +117,25 @@ export function CubeEditorPage() {
     );
   };
 
+  // The bottom sheet is a modal <dialog> — everything outside it is inert
+  // (excluded from the a11y tree) while open, so these alerts must also be
+  // rendered inside the sheet or a save failure there is silent.
+  const commitAlerts = (
+    <>
+      {conflict && <Alert variant="danger">{m.cubes_conflict_toast()}</Alert>}
+      {commit.isError && !(commit.error instanceof CommitConflictError) && (
+        <Alert variant="danger">{commit.error.message}</Alert>
+      )}
+    </>
+  );
+
   return (
     <div className={cn("flex flex-col gap-6", dirty && "pb-24 lg:pb-0")}>
       <h1 className="text-2xl font-semibold text-fg">
         {m.cubes_editor_title({ name: cube.data.name })}
       </h1>
 
-      {conflict && <Alert variant="danger">{m.cubes_conflict_toast()}</Alert>}
-      {commit.isError && !(commit.error instanceof CommitConflictError) && (
-        <Alert variant="danger">{commit.error.message}</Alert>
-      )}
+      {commitAlerts}
 
       <div className="flex max-w-md flex-col gap-1.5">
         <Label htmlFor="editor-add">{m.cubes_editor_add_label()}</Label>
@@ -169,6 +178,7 @@ export function CubeEditorPage() {
         onClose={() => setSheetOpen(false)}
         label={m.cubes_pending_title()}
       >
+        {commitAlerts}
         <PendingChangesPanel
           variant="sheet"
           pending={pending}
