@@ -40,7 +40,8 @@ export function QuantityStepper({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
+        size="icon"
+        className="size-11 text-base"
         aria-label={m.collection_qty_decrease({ name })}
         disabled={value <= 0}
         onClick={() => setValue((v) => Math.max(0, v - 1))}
@@ -51,7 +52,8 @@ export function QuantityStepper({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
+        size="icon"
+        className="size-11 text-base"
         aria-label={m.collection_qty_increase({ name })}
         disabled={value >= 999}
         onClick={() => setValue((v) => Math.min(999, v + 1))}
