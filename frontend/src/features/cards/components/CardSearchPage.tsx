@@ -3,6 +3,7 @@ import { m } from "@/paraglide/messages";
 import { Alert } from "@/shared/ui/alert";
 import { Label } from "@/shared/ui/label";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
+import { ManaCost } from "@/shared/cards/ManaCost";
 import { type CardSummary, useCardPrintings } from "@/shared/cards/api";
 
 function SelectedCardPanel({ card }: { card: CardSummary }) {
@@ -24,7 +25,12 @@ function SelectedCardPanel({ card }: { card: CardSummary }) {
         <h2 className="text-lg font-semibold text-fg">{latest.name}</h2>
         <p className="text-sm text-fg-muted">
           {latest.typeLine}
-          {latest.manaCost !== "" && ` · ${latest.manaCost}`}
+          {latest.manaCost !== "" && (
+            <>
+              {" · "}
+              <ManaCost cost={latest.manaCost} />
+            </>
+          )}
         </p>
         {latest.oracleText !== "" && (
           <p className="text-sm whitespace-pre-line text-fg">{latest.oracleText}</p>
