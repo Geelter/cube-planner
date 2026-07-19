@@ -46,7 +46,7 @@ export function CubeDisplayPage() {
             <p className="mt-2 max-w-prose text-sm text-fg">{cube.data.description}</p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
             <Link to="/cubes/$cubeId/wantlist" params={{ cubeId }}>
               {m.wantlist_compare_button()}
