@@ -24,4 +24,10 @@ describe("Button", () => {
     );
     expect(screen.getByRole("link", { name: "Go" })).toBeInTheDocument();
   });
+
+  it("renders the lg touch size", () => {
+    render(<Button size="lg">Report</Button>);
+    const btn = screen.getByRole("button", { name: "Report" });
+    expect(btn.className).toContain("h-11");
+  });
 });
