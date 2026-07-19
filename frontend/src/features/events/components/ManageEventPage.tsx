@@ -68,14 +68,14 @@ export function ManageEventPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-fg">
           <Link to="/events/$eventId" params={{ eventId }} className="hover:text-accent">
             {e.name}
           </Link>
           <EventStatusBadge status={e.status} />
         </h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {ACTIONS.filter((a) => a.from.includes(e.status)).map((a) => (
             <Button
               key={a.action}

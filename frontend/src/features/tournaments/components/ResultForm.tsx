@@ -41,7 +41,7 @@ function GamesField({
         max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-20 rounded-md border border-border bg-surface px-2 py-1 text-fg"
+        className="h-11 w-20 rounded-md border border-border bg-surface px-2 py-1 text-base text-fg"
       />
     </div>
   );
@@ -103,7 +103,7 @@ export function ResultForm({
         max={3}
         onChange={(v) => setResult({ ...result, draws: v })}
       />
-      <Button type="submit" size="sm" disabled={pending}>
+      <Button type="submit" size="lg" disabled={pending}>
         {m.tournament_report_result()}
       </Button>
       {touchedInvalid && (
