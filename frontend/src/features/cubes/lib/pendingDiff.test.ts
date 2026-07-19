@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
 import type { CardSummary } from "@/shared/cards/api";
 import type { CubeCardEntry } from "../api";
-import { emptyPending, pendingCount, pendingReducer, toCommitDiff } from "./pendingDiff";
+import {
+  emptyPending,
+  pendingCount,
+  pendingReducer,
+  pendingTotals,
+  toCommitDiff,
+} from "./pendingDiff";
 
 const bolt: CardSummary = {
   scryfallId: "s-bolt",
@@ -115,4 +121,32 @@ describe("remove clears the whole row", () => {
     expect(pendingCount(s)).toBe(0);
     expect(toCommitDiff(s)).toEqual({ adds: [], removes: [] });
   });
+});
+
+const totalsCard = (oracleId: string) => ({
+  scryfallId: `s-${oracleId}`,
+  oracleId,
+  name: oracleId,
+  manaCost: "{1}",
+  typeLine: "Artifact",
+  imageSmall: null,
+});
+const totalsEntry = (oracleId: string, quantity: number) => ({
+  ...totalsCard(oracleId),
+  cmc: 1,
+  colors: [],
+  colorIdentity: [],
+  rarity: "common",
+  imageNormal: null,
+  quantity,
+});
+
+test("pendingTotals sums copies per side (pendingCount counts cards)", () => {
+  expect(pendingTotals(emptyPending)).toEqual({ adds: 0, removes: 0 });
+  let s = pendingReducer(emptyPending, { type: "add", card: totalsCard("a") });
+  s = pendingReducer(s, { type: "add", card: totalsCard("a") });
+  s = pendingReducer(s, { type: "add", card: totalsCard("b") });
+  s = pendingReducer(s, { type: "decrement", entry: totalsEntry("c", 2) });
+  // 2 copies of a + 1 of b = 3 adds; 1 copy of c removed.
+  expect(pendingTotals(s)).toEqual({ adds: 3, removes: 1 });
 });

@@ -149,3 +149,13 @@ export function toCommitDiff(state: PendingState): {
 export function pendingCount(state: PendingState): number {
   return state.adds.size + state.removes.size;
 }
+
+// Total copies on each side of the pending diff. pendingCount counts
+// distinct cards; the mobile summary bar shows copies ("+3 −1").
+export function pendingTotals(state: PendingState): { adds: number; removes: number } {
+  let adds = 0;
+  for (const { quantity } of state.adds.values()) adds += quantity;
+  let removes = 0;
+  for (const { quantity } of state.removes.values()) removes += quantity;
+  return { adds, removes };
+}

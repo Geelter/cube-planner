@@ -116,46 +116,58 @@ export function RootLayout() {
         onClose={() => setMenuOpen(false)}
         label={m.nav_menu()}
       >
-        <nav className="flex flex-col">
-          <Link to="/cards" className={drawerItem}>
-            {m.nav_cards()}
-          </Link>
-          <Link to="/cubes" className={drawerItem}>
-            {m.nav_cubes()}
-          </Link>
-          <Link to="/events" className={drawerItem}>
-            {m.nav_events()}
-          </Link>
-        </nav>
-        <hr className="border-border" />
-        {me.data ? (
-          <div className="flex flex-col">
-            <Link to="/cubes/mine" className={drawerItem}>
-              {m.cubes_mine_title()}
+        {/* Delegated close-on-link-tap: the pathname effect above misses
+            same-route taps (pathname doesn't change). Links are natively
+            keyboard-activatable (Enter fires click), so the wrapper needs
+            no key handler of its own. */}
+        {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+        <div
+          className="contents"
+          onClick={(e) => {
+            if ((e.target as Element).closest("a")) setMenuOpen(false);
+          }}
+        >
+          <nav className="flex flex-col">
+            <Link to="/cards" className={drawerItem}>
+              {m.nav_cards()}
             </Link>
-            <Link to="/collection" className={drawerItem}>
-              {m.nav_collection()}
+            <Link to="/cubes" className={drawerItem}>
+              {m.nav_cubes()}
             </Link>
-            <Link to="/account" className={drawerItem}>
-              {me.data.displayName}
+            <Link to="/events" className={drawerItem}>
+              {m.nav_events()}
             </Link>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-12 justify-start px-3 text-base font-normal"
-              onClick={() => logout.mutate()}
-            >
-              {m.nav_logout()}
-            </Button>
+          </nav>
+          <hr className="border-border" />
+          {me.data ? (
+            <div className="flex flex-col">
+              <Link to="/cubes/mine" className={drawerItem}>
+                {m.cubes_mine_title()}
+              </Link>
+              <Link to="/collection" className={drawerItem}>
+                {m.nav_collection()}
+              </Link>
+              <Link to="/account" className={drawerItem}>
+                {me.data.displayName}
+              </Link>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-12 justify-start px-3 text-base font-normal"
+                onClick={() => logout.mutate()}
+              >
+                {m.nav_logout()}
+              </Button>
+            </div>
+          ) : (
+            <Link to="/login" className={drawerItem}>
+              {m.nav_login()}
+            </Link>
+          )}
+          <hr className="border-border" />
+          <div className="px-3 py-2">
+            <LanguageSwitcher />
           </div>
-        ) : (
-          <Link to="/login" className={drawerItem}>
-            {m.nav_login()}
-          </Link>
-        )}
-        <hr className="border-border" />
-        <div className="px-3 py-2">
-          <LanguageSwitcher />
         </div>
       </Drawer>
       <main ref={mainRef} tabIndex={-1} className="mx-auto max-w-4xl px-4 py-8 outline-none">

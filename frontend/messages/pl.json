@@ -113,6 +113,7 @@
   "cubes_note_label": "Notatka do zmiany (opcjonalna)",
   "cubes_save_changes": "Zapisz zmiany",
   "cubes_discard_changes": "Odrzuć",
+  "cubes_pending_bar_review": "Przejrzyj oczekujące zmiany: +{adds}, −{removes}",
   "cubes_unsaved_warning": "Masz niezapisane zmiany. Wyjść mimo to?",
   "cubes_conflict_toast": "Ten cube został zmieniony gdzie indziej. Lista została odświeżona — przejrzyj oczekujące zmiany i zapisz ponownie.",
   "cubes_commit_saved": "Zapisano zmiany jako wersję {version}.",
