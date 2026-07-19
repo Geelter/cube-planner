@@ -1,23 +1,42 @@
+import { cva, type VariantProps } from "class-variance-authority";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui/button";
 
-// Right-side sheet on the native <dialog> element (same foundation as
-// Dialog): showModal() provides the focus trap, Esc-to-close (fires the
-// close event), ::backdrop, and focus restoration to the opener.
+// Positioning trick on both sides: the UA gives a modal <dialog> inset:0
+// with auto margins; zeroing all margins and re-adding a single auto
+// margin pins it to the opposite edge.
+const drawerVariants = cva(
+  "fixed m-0 border-border bg-surface p-4 text-fg shadow-lg backdrop:bg-overlay",
+  {
+    variants: {
+      side: {
+        right: "mr-0 ml-auto h-dvh max-h-none w-72 max-w-[80vw] border-l",
+        bottom: "mt-auto max-h-[85svh] w-full max-w-none overflow-y-auto rounded-t-xl border-t",
+      },
+    },
+    defaultVariants: { side: "right" },
+  },
+);
+
+// Sheet on the native <dialog> element (same foundation as Dialog):
+// showModal() provides the focus trap, Esc-to-close (fires the close
+// event), ::backdrop, and focus restoration to the opener.
 export function Drawer({
   open,
   onClose,
   label,
   children,
   id,
+  side,
 }: {
   open: boolean;
   onClose: () => void;
   label: string;
   children: ReactNode;
   id?: string;
+  side?: VariantProps<typeof drawerVariants>["side"];
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -45,7 +64,7 @@ export function Drawer({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed m-0 mr-0 ml-auto h-dvh max-h-none w-72 max-w-[80vw] border-l border-border bg-surface p-4 text-fg shadow-lg backdrop:bg-overlay"
+      className={drawerVariants({ side })}
     >
       {open && (
         <div className="flex h-full flex-col gap-2 overflow-y-auto">
