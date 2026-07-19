@@ -5,6 +5,7 @@
   "error_generic": "Something went wrong. Try again.",
   "nav_login": "Log in",
   "nav_logout": "Log out",
+  "nav_menu": "Menu",
   "lang_label": "Language",
   "theme_light": "Light theme",
   "theme_dark": "Dark theme",
