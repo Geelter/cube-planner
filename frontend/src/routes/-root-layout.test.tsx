@@ -66,3 +66,17 @@ test("drawer closes on navigation", async () => {
   await userEvent.click(within(drawer).getByRole("link", { name: "Cards" }));
   await waitFor(() => expect(screen.getAllByRole("link", { name: "Cards" })).toHaveLength(1));
 });
+
+// #23: tapping the drawer link for the route you are already on doesn't
+// change the pathname, so the pathname-keyed close effect never fires —
+// the delegated click handler must close the drawer anyway.
+test("drawer closes when tapping the current route's link", async () => {
+  await renderShell();
+  // Navigate to /cards via the desktop nav first.
+  await userEvent.click(screen.getByRole("link", { name: "Cards" }));
+  await userEvent.click(screen.getByRole("button", { name: "Menu" }));
+  const drawer = screen.getByRole("dialog");
+  await userEvent.click(within(drawer).getByRole("link", { name: "Cards" }));
+  // Drawer children unmount on close, so only the desktop copy remains.
+  await waitFor(() => expect(screen.getAllByRole("link", { name: "Cards" })).toHaveLength(1));
+});
