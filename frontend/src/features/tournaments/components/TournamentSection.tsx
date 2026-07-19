@@ -81,14 +81,14 @@ export function TournamentSection({ eventId }: { eventId: string }) {
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-medium text-fg">{m.tournament_title()}</h2>
 
-      <div role="tablist" className="flex gap-2">
+      <div role="tablist" className="flex gap-2 overflow-x-auto">
         {rounds.map((r, i) => (
           <button
             key={r.number}
             role="tab"
             aria-selected={r.number === round.number}
             tabIndex={r.number === round.number ? 0 : -1}
-            className={`rounded-md border border-border px-3 py-1 text-sm ${
+            className={`shrink-0 rounded-md border border-border px-3 py-1 text-sm whitespace-nowrap ${
               r.number === round.number ? "bg-accent text-accent-fg" : "text-fg"
             }`}
             onClick={() => setTab(r.number)}
