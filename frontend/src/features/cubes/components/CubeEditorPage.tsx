@@ -3,7 +3,9 @@ import { useBlocker } from "@tanstack/react-router";
 import { useMemo, useReducer, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
+import { cn } from "@/shared/lib/cn";
 import { Alert } from "@/shared/ui/alert";
+import { Drawer } from "@/shared/ui/drawer";
 import { Label } from "@/shared/ui/label";
 import type { CubeCardEntry } from "../api";
 import { CommitConflictError, useCommitChange, useCube, useCubeCards } from "../api";
@@ -11,9 +13,11 @@ import { emptyPending, pendingCount, pendingReducer, toCommitDiff } from "../lib
 import type { PendingState } from "../lib/pendingDiff";
 import { CubeSettingsSection } from "./CubeSettingsSection";
 import { EditableCardList } from "./EditableCardList";
+import { PendingChangesBar } from "./PendingChangesBar";
 import { PendingChangesPanel } from "./PendingChangesPanel";
 
 const route = getRouteApi("/cubes/$cubeId/edit");
+const sheetId = "pending-changes-sheet";
 
 // Server list + pending deltas = what the user will get after saving.
 function previewEntries(server: CubeCardEntry[], pending: PendingState): CubeCardEntry[] {
@@ -57,6 +61,7 @@ export function CubeEditorPage() {
   const [pending, dispatch] = useReducer(pendingReducer, emptyPending);
   const [note, setNote] = useState("");
   const [conflict, setConflict] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const dirty = pendingCount(pending) > 0;
   useBlocker({
@@ -81,6 +86,12 @@ export function CubeEditorPage() {
     return <p className="text-sm text-fg-muted">{m.loading()}</p>;
   if (cube.isError) return <Alert variant="danger">{cube.error.message}</Alert>;
   if (cards.isError) return <Alert variant="danger">{cards.error.message}</Alert>;
+
+  const discard = () => {
+    dispatch({ type: "reset" });
+    setNote("");
+    setSheetOpen(false);
+  };
 
   const save = () => {
     const diff = toCommitDiff(pending);
@@ -107,7 +118,7 @@ export function CubeEditorPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={cn("flex flex-col gap-6", dirty && "pb-24 lg:pb-0")}>
       <h1 className="text-2xl font-semibold text-fg">
         {m.cubes_editor_title({ name: cube.data.name })}
       </h1>
@@ -137,13 +148,38 @@ export function CubeEditorPage() {
           note={note}
           onNoteChange={setNote}
           onSave={save}
-          onDiscard={() => {
-            dispatch({ type: "reset" });
-            setNote("");
-          }}
+          onDiscard={discard}
           saving={commit.isPending}
         />
       </div>
+
+      {dirty && (
+        <PendingChangesBar
+          pending={pending}
+          sheetId={sheetId}
+          onExpand={() => setSheetOpen(true)}
+          onSave={save}
+          saving={commit.isPending}
+        />
+      )}
+      <Drawer
+        side="bottom"
+        id={sheetId}
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        label={m.cubes_pending_title()}
+      >
+        <PendingChangesPanel
+          variant="sheet"
+          pending={pending}
+          dispatch={dispatch}
+          note={note}
+          onNoteChange={setNote}
+          onSave={save}
+          onDiscard={discard}
+          saving={commit.isPending}
+        />
+      </Drawer>
 
       <CubeSettingsSection cube={cube.data} />
     </div>

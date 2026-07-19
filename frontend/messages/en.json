@@ -111,6 +111,7 @@
   "cubes_note_label": "Change note (optional)",
   "cubes_save_changes": "Save changes",
   "cubes_discard_changes": "Discard",
+  "cubes_pending_bar_review": "Review pending changes: +{adds}, −{removes}",
   "cubes_unsaved_warning": "You have unsaved changes. Leave anyway?",
   "cubes_conflict_toast": "This cube was changed elsewhere. The list has been refreshed — review your pending changes and save again.",
   "cubes_commit_saved": "Changes saved as version {version}.",

@@ -115,12 +115,16 @@ afterEach(() => {
 test("add via autocomplete lands in pending and commits with expectedVersion", async () => {
   render(<CubeEditorPage />);
   fireEvent.click(screen.getByText("pick sol ring"));
-  await waitFor(() => expect(screen.getByText(/\+1/)).toBeDefined());
-  // "Sol Ring" now appears twice (optimistic preview list + pending panel) —
+  // "+1" and "Sol Ring" now also appear in the mobile summary bar once dirty —
   // scope to the pending panel (an <aside>, i.e. the "complementary" landmark).
+  await waitFor(() =>
+    expect(within(screen.getByRole("complementary")).getByText(/\+1/)).toBeDefined(),
+  );
   expect(within(screen.getByRole("complementary")).getByText("Sol Ring")).toBeDefined();
 
-  fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+  fireEvent.click(
+    within(screen.getByRole("complementary")).getByRole("button", { name: /save changes/i }),
+  );
   expect(mocks.mutate).toHaveBeenCalledWith(
     expect.objectContaining({
       expectedVersion: 3,
@@ -134,9 +138,14 @@ test("add via autocomplete lands in pending and commits with expectedVersion", a
 test("decrement of existing card lands in pending removes", async () => {
   render(<CubeEditorPage />);
   fireEvent.click(screen.getByRole("button", { name: /decrease quantity of lightning bolt/i }));
-  await waitFor(() => expect(screen.getByText(/−1/)).toBeDefined());
+  // The mobile summary bar mirrors the total once dirty — scope to the panel.
+  await waitFor(() =>
+    expect(within(screen.getByRole("complementary")).getByText(/−1/)).toBeDefined(),
+  );
 
-  fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+  fireEvent.click(
+    within(screen.getByRole("complementary")).getByRole("button", { name: /save changes/i }),
+  );
   expect(mocks.mutate).toHaveBeenCalledWith(
     expect.objectContaining({
       expectedVersion: 3,
@@ -174,8 +183,12 @@ test("saving does not trigger the unsaved-changes blocker", async () => {
 
   render(<CubeEditorPage />);
   fireEvent.click(screen.getByText("pick sol ring"));
-  await waitFor(() => expect(screen.getByText(/\+1/)).toBeDefined());
-  fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+  await waitFor(() =>
+    expect(within(screen.getByRole("complementary")).getByText(/\+1/)).toBeDefined(),
+  );
+  fireEvent.click(
+    within(screen.getByRole("complementary")).getByRole("button", { name: /save changes/i }),
+  );
 
   expect(mocks.navigate).toHaveBeenCalledWith(
     expect.objectContaining({ to: "/cubes/$cubeId", ignoreBlocker: true }),
@@ -193,13 +206,19 @@ test("repeated decrement removes the full server quantity of a multi-copy card",
     fireEvent.click(screen.getByRole("button", { name: /decrease quantity of lightning bolt/i }));
 
   decrease();
-  await waitFor(() => expect(screen.getByText(/−1/)).toBeDefined());
+  await waitFor(() =>
+    expect(within(screen.getByRole("complementary")).getByText(/−1/)).toBeDefined(),
+  );
   decrease();
-  await waitFor(() => expect(screen.getByText(/−2/)).toBeDefined());
+  await waitFor(() =>
+    expect(within(screen.getByRole("complementary")).getByText(/−2/)).toBeDefined(),
+  );
   // Preview drops the fully-removed card.
   expect(screen.queryByRole("button", { name: /decrease quantity of lightning bolt/i })).toBeNull();
 
-  fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+  fireEvent.click(
+    within(screen.getByRole("complementary")).getByRole("button", { name: /save changes/i }),
+  );
   expect(mocks.mutate).toHaveBeenCalledWith(
     expect.objectContaining({
       expectedVersion: 3,
@@ -208,4 +227,47 @@ test("repeated decrement removes the full server quantity of a multi-copy card",
     }),
     expect.anything(),
   );
+});
+
+// #30: below lg the editor shows a fixed summary bar while dirty. CSS
+// isn't loaded in unit tests, so visibility classes (hidden/lg:) are not
+// asserted here — mount/unmount and wiring are.
+test("mobile bar appears when dirty and saves directly", async () => {
+  render(<CubeEditorPage />);
+  expect(screen.queryByRole("region", { name: /pending changes/i })).toBeNull();
+  fireEvent.click(screen.getByText("pick sol ring"));
+  const bar = await screen.findByRole("region", { name: /pending changes/i });
+  fireEvent.click(within(bar).getByRole("button", { name: /save changes/i }));
+  expect(mocks.mutate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      expectedVersion: 3,
+      adds: [{ scryfallId: "s-ring", quantity: 1 }],
+      removes: [],
+    }),
+    expect.anything(),
+  );
+});
+
+test("tapping the bar summary opens the sheet with the full panel", async () => {
+  render(<CubeEditorPage />);
+  fireEvent.click(screen.getByText("pick sol ring"));
+  const bar = await screen.findByRole("region", { name: /pending changes/i });
+  fireEvent.click(within(bar).getByRole("button", { name: /review pending changes/i }));
+  const sheet = screen.getByRole("dialog", { name: /pending changes/i });
+  expect(within(sheet).getByText("Sol Ring")).toBeDefined();
+  expect(within(sheet).getByRole("button", { name: /save changes/i })).toBeDefined();
+});
+
+test("discard in the sheet hides the bar and empties the sheet", async () => {
+  render(<CubeEditorPage />);
+  fireEvent.click(screen.getByText("pick sol ring"));
+  const bar = await screen.findByRole("region", { name: /pending changes/i });
+  fireEvent.click(within(bar).getByRole("button", { name: /review pending changes/i }));
+  const sheet = screen.getByRole("dialog", { name: /pending changes/i });
+  fireEvent.click(within(sheet).getByRole("button", { name: /discard/i }));
+  await waitFor(() =>
+    expect(screen.queryByRole("region", { name: /pending changes/i })).toBeNull(),
+  );
+  // Sheet closed too — its children unmount.
+  expect(within(sheet).queryByText("Sol Ring")).toBeNull();
 });
