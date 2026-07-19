@@ -98,6 +98,22 @@ src/
    | `src/paraglide/` | no (gitignored) | `pnpm gen` / any vite run |
 
    Never hand-edit generated files; oxlint/oxfmt ignore them.
+9. **Responsive design.** Mobile is an acceptance criterion, not a
+   follow-up: every new screen/component is verified at 360px and
+   desktop width before PR (same footing as the axe smoke test).
+   - **Support floor 360px.** No horizontal page scroll at ≥360px.
+     Intrinsically wide content (tables) scrolls inside its own
+     `overflow-x-auto` wrapper.
+   - **Mobile-first Tailwind.** Base classes are the phone layout;
+     `sm:`/`md:`/`lg:` layer desktop on top.
+   - **Touch targets.** Interactive controls on player-facing flows are
+     ≥44px tall (`h-11`+) or have equivalent hit area; never two small
+     targets adjacent without a gap.
+   - **Use the established patterns.** App nav = the header drawer
+     (`shared/ui/drawer.tsx`); wide tables = `overflow-x-auto` wrapper;
+     dialogs = `shared/ui/dialog.tsx` (handles mobile sizing); forms =
+     single-column `max-w-md`. Inputs use ≥16px font on mobile
+     (`text-base sm:text-sm`) so iOS Safari does not zoom on focus.
 
 ### Adding shadcn/ui components
 
