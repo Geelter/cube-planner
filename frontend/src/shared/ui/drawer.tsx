@@ -45,7 +45,7 @@ export function Drawer({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed m-0 mr-0 ml-auto h-dvh max-h-none w-72 max-w-[80vw] border-l border-border bg-surface p-4 text-fg shadow-lg backdrop:bg-black/50"
+      className="fixed m-0 mr-0 ml-auto h-dvh max-h-none w-72 max-w-[80vw] border-l border-border bg-surface p-4 text-fg shadow-lg backdrop:bg-overlay"
     >
       {open && (
         <div className="flex h-full flex-col gap-2 overflow-y-auto">

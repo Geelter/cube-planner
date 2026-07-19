@@ -17,6 +17,7 @@
   --accent-fg: var(--color-white);
   --danger: var(--color-red-600);
   --danger-fg: var(--color-white);
+  --overlay: --alpha(var(--color-black) / 50%);
 }
 
 [data-theme="dark"] {
@@ -30,6 +31,7 @@
   --accent-fg: var(--color-zinc-950);
   --danger: var(--color-red-500);
   --danger-fg: var(--color-zinc-950);
+  --overlay: --alpha(var(--color-black) / 50%);
 }
 
 @theme inline {
@@ -42,6 +44,7 @@
   --color-accent-fg: var(--accent-fg);
   --color-danger: var(--danger);
   --color-danger-fg: var(--danger-fg);
+  --color-overlay: var(--overlay);
 }
 
 body {
