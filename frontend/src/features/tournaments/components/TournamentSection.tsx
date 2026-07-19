@@ -88,7 +88,7 @@ export function TournamentSection({ eventId }: { eventId: string }) {
             role="tab"
             aria-selected={r.number === round.number}
             tabIndex={r.number === round.number ? 0 : -1}
-            className={`shrink-0 rounded-md border border-border px-3 py-1 text-sm whitespace-nowrap ${
+            className={`h-11 shrink-0 rounded-md border border-border px-3 py-1 text-sm whitespace-nowrap ${
               r.number === round.number ? "bg-accent text-accent-fg" : "text-fg"
             }`}
             onClick={() => setTab(r.number)}
