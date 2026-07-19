@@ -21,16 +21,29 @@ export function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const firstRender = useRef(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const lastFocusedPathname = useRef(pathname);
 
   // A11y: move focus to the page content on route change so screen readers
   // announce the new page instead of staying on the clicked link.
+  //
+  // The effect also depends on menuOpen and bails while the drawer is open:
+  // the drawer is a native modal <dialog>, so while it is open everything
+  // outside it is inert and unfocusable — focusing <main> here would be a
+  // silent no-op, and dialog.close() would then restore focus to the
+  // hamburger opener. Waiting for the drawer-closed commit works because the
+  // child Drawer's effect (which calls el.close()) runs before this parent
+  // effect in that commit. Tracking the last-focused pathname keeps plain
+  // Esc/✕ closes (no navigation) at the native restore-to-opener behavior.
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
       return;
     }
+    if (menuOpen) return;
+    if (lastFocusedPathname.current === pathname) return;
+    lastFocusedPathname.current = pathname;
     mainRef.current?.focus();
-  }, [pathname]);
+  }, [pathname, menuOpen]);
 
   // Close the mobile drawer whenever the route changes.
   useEffect(() => {
