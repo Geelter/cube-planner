@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { client } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
@@ -32,11 +33,18 @@ export function useLogin() {
 
 export function useLogout() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   return useMutation({
     mutationFn: async () => {
       await client.POST("/api/auth/logout");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    onSuccess: async () => {
+      // Navigate first so user-scoped queries on the current page unmount
+      // instead of refetching into 401s; then invalidate everything so no
+      // stale user data (me, collection, my cubes) survives the session.
+      await navigate({ to: "/login" });
+      void qc.invalidateQueries();
+    },
   });
 }
 
