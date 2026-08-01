@@ -30,6 +30,14 @@ beforeEach(() => {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
+      if (url.includes("/api/me")) {
+        return json({
+          id: "u1",
+          email: "user@example.com",
+          displayName: "Test User",
+          role: "user",
+        });
+      }
       if (url.includes("/wantlist")) {
         return json({
           cubeName: "Vintage Cube",

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { requireAuth } from "@/features/auth/guard";
 import { ManageEventPage } from "@/features/events/components/ManageEventPage";
 import { TournamentPanel } from "@/features/tournaments/components/TournamentPanel";
 
@@ -12,4 +13,7 @@ function ManageEventRoute() {
   );
 }
 
-export const Route = createFileRoute("/events/$eventId/manage")({ component: ManageEventRoute });
+export const Route = createFileRoute("/events/$eventId/manage")({
+  beforeLoad: requireAuth,
+  component: ManageEventRoute,
+});
