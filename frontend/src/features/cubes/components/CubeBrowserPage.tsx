@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { m } from "@/paraglide/messages";
+import { useMe } from "@/features/auth/api";
 import { useDebouncedValue } from "@/shared/lib/useDebouncedValue";
 import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
@@ -14,6 +15,7 @@ export function CubeBrowserPage() {
   const [page, setPage] = useState(0);
   const debounced = useDebouncedValue(search, 250);
   const list = useCubeList(debounced, page);
+  const me = useMe();
 
   const totalPages = list.data ? Math.ceil(list.data.total / CUBES_PAGE_SIZE) : 0;
 
@@ -21,9 +23,11 @@ export function CubeBrowserPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-fg">{m.cubes_browser_title()}</h1>
-        <Button asChild size="sm">
-          <Link to="/cubes/new">{m.cubes_new_button()}</Link>
-        </Button>
+        {me.data && (
+          <Button asChild size="sm">
+            <Link to="/cubes/new">{m.cubes_new_button()}</Link>
+          </Button>
+        )}
       </div>
       <div className="flex max-w-md flex-col gap-1.5">
         <Label htmlFor="cube-search">{m.cubes_search_label()}</Label>

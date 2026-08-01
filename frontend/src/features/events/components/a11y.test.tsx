@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import { afterEach, expect, it, vi } from "vitest";
 import { routeTree } from "@/routeTree.gen";
@@ -103,11 +103,12 @@ afterEach(() => {
 });
 
 async function renderRoute(path: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [path] }),
+    context: { queryClient: qc },
   });
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { container } = render(
     <QueryClientProvider client={qc}>
       <RouterProvider router={router} />
@@ -165,5 +166,8 @@ it("/events/$eventId/manage has no axe violations", async () => {
   );
   vi.stubEnv("DEV", false);
 
-  expect(await axe(await renderRoute("/events/e1/manage"))).toHaveNoViolations();
+  const container = await renderRoute("/events/e1/manage");
+  // Guarded route: make sure we axe-check ManageEventPage, not a login redirect.
+  await waitFor(() => expect(container.textContent).toContain("Draft Cube Night"));
+  expect(await axe(container)).toHaveNoViolations();
 });

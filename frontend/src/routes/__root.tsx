@@ -1,6 +1,7 @@
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { createRootRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
+import { createRootRouteWithContext, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useEffect, useRef, useState } from "react";
 import { useLogout, useMe } from "@/features/auth/api";
@@ -10,7 +11,9 @@ import { Button } from "@/shared/ui/button";
 import { Drawer } from "@/shared/ui/drawer";
 import { ThemeToggle } from "@/shared/ui/theme-toggle";
 
-export const Route = createRootRoute({ component: RootLayout });
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  component: RootLayout,
+});
 
 const drawerItem = "flex h-12 items-center rounded-md px-3 text-fg hover:bg-surface-raised";
 

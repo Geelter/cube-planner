@@ -186,7 +186,7 @@ export function EventForm({
           </p>
         )}
       </div>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" loading={pending}>
         {submitLabel}
       </Button>
     </form>

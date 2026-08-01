@@ -34,11 +34,12 @@ afterEach(() => {
 });
 
 function renderVerifyRoute() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: ["/verify-email?token=abc123"] }),
+    context: { queryClient: qc },
   });
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <StrictMode>
       <QueryClientProvider client={qc}>

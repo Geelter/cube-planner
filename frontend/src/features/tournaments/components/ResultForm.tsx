@@ -103,7 +103,7 @@ export function ResultForm({
         max={3}
         onChange={(v) => setResult({ ...result, draws: v })}
       />
-      <Button type="submit" size="lg" disabled={pending}>
+      <Button type="submit" size="lg" loading={pending}>
         {m.tournament_report_result()}
       </Button>
       {touchedInvalid && (

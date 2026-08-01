@@ -81,7 +81,7 @@ export function CreateCubePage() {
               </div>
             </fieldset>
             {create.isError && <Alert variant="danger">{create.error.message}</Alert>}
-            <Button type="submit" disabled={create.isPending}>
+            <Button type="submit" loading={create.isPending}>
               {m.cubes_create_submit()}
             </Button>
           </form>

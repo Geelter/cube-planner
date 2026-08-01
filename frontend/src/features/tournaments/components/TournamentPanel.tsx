@@ -126,7 +126,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
               className="w-24 rounded-md border border-border bg-surface px-2 py-1 text-fg"
             />
           </div>
-          <Button type="submit" size="sm" variant="outline" disabled={upsert.isPending}>
+          <Button type="submit" size="sm" variant="outline" loading={upsert.isPending}>
             {m.tournament_save()}
           </Button>
           {canPair && (

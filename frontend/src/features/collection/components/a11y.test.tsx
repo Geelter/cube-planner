@@ -30,6 +30,15 @@ beforeEach(() => {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
+      if (url.includes("/api/me")) {
+        return json({
+          id: "u1",
+          email: "user@example.com",
+          displayName: "Test User",
+          providers: [],
+          role: "user",
+        });
+      }
       if (url.includes("/wantlist")) {
         return json({
           cubeName: "Vintage Cube",
@@ -52,11 +61,12 @@ afterEach(() => {
 });
 
 async function renderRoute(path: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [path] }),
+    context: { queryClient: qc },
   });
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { container } = render(
     <QueryClientProvider client={qc}>
       <RouterProvider router={router} />
