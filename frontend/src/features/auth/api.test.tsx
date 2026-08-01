@@ -72,5 +72,8 @@ test("useLogout navigates to /login and invalidates the whole cache", async () =
   result.current.mutate();
   await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith({ to: "/login" }));
   expect(invalidate).toHaveBeenCalledWith();
+  expect(mockNavigate.mock.invocationCallOrder[0]).toBeLessThan(
+    invalidate.mock.invocationCallOrder[0] ?? Infinity,
+  );
   vi.unstubAllGlobals();
 });

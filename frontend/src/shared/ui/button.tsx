@@ -51,7 +51,7 @@ export function Button({
       className={cn(buttonVariants({ variant, size }), className)}
       {...props}
       disabled={loading || props.disabled}
-      aria-busy={loading || undefined}
+      aria-busy={loading ? true : props["aria-busy"]}
     >
       {loading && <Spinner />}
       {children}
