@@ -16,9 +16,10 @@ Everything still needed for the full stack to run end-to-end, in order:
 
 1. **VPS with Docker.** Install Docker Engine + the compose plugin.
    Open ports 80 and 443. Create a deploy user that can run `docker`.
-2. **DNS.** Point an A/AAAA record for your domain at the VPS. Caddy
-   provisions Let's Encrypt certificates automatically once the domain
-   resolves — no manual TLS setup.
+2. **DNS.** Point A/AAAA records for both the apex domain and `www` at
+   the VPS (`www` permanently redirects to the apex). Caddy provisions
+   Let's Encrypt certificates automatically once the domains resolve —
+   no manual TLS setup.
 3. **Files on the VPS** (placed manually, not managed by the pipeline):
    - `/opt/cube-planner/docker-compose.prod.yml` — copy from this
      directory.
