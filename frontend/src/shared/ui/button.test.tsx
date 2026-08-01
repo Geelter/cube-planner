@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Button } from "./button";
 
@@ -29,5 +29,22 @@ describe("Button", () => {
     render(<Button size="lg">Report</Button>);
     const btn = screen.getByRole("button", { name: "Report" });
     expect(btn.className).toContain("h-11");
+  });
+
+  it("shows a spinner and disables the button while loading", () => {
+    render(<Button loading>Save</Button>);
+    // The spinner's aria-label joins the accessible name, so match loosely.
+    const btn = screen.getByRole("button", { name: /Save/ });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute("aria-busy", "true");
+    expect(within(btn).getByRole("status")).toBeInTheDocument();
+  });
+
+  it("renders no spinner when not loading", () => {
+    render(<Button>Save</Button>);
+    const btn = screen.getByRole("button", { name: "Save" });
+    expect(btn).not.toBeDisabled();
+    expect(btn).not.toHaveAttribute("aria-busy");
+    expect(within(btn).queryByRole("status")).toBeNull();
   });
 });

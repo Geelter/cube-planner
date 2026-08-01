@@ -2,9 +2,10 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps } from "react";
 import { cn } from "@/shared/lib/cn";
+import { Spinner } from "@/shared/ui/spinner";
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -26,9 +27,34 @@ export const buttonVariants = cva(
 );
 
 type ButtonProps = ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & { asChild?: boolean };
+  VariantProps<typeof buttonVariants> & { asChild?: boolean; loading?: boolean };
 
-export function Button({ className, variant, size, asChild = false, ...props }: ButtonProps) {
-  const Comp = asChild ? Slot : "button";
-  return <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+export function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  loading = false,
+  children,
+  ...props
+}: ButtonProps) {
+  // loading is meaningless on asChild (links can't be pending) — ignore it.
+  if (asChild) {
+    return (
+      <Slot className={cn(buttonVariants({ variant, size }), className)} {...props}>
+        {children}
+      </Slot>
+    );
+  }
+  return (
+    <button
+      className={cn(buttonVariants({ variant, size }), className)}
+      {...props}
+      disabled={loading || props.disabled}
+      aria-busy={loading || undefined}
+    >
+      {loading && <Spinner />}
+      {children}
+    </button>
+  );
 }
