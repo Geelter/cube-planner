@@ -7,12 +7,15 @@ SSHes into the VPS to `docker compose pull && up -d` in
 proxies `/api/*` and `/auth/oauth/*` to the API container; migrations
 run automatically when the API boots.
 
-As of 2026-07-17 the images build and push to ghcr successfully, but the
-deploy job stops at the SSH step because nothing below is set up yet.
+Production has been live at https://cubeplanner.pl since 2026-08-01
+(OAuth and Resend email included; Stripe is not configured yet, so paid
+events 503 until the live keys land). The checklist below is kept as the
+from-scratch runbook; "The production box" section after it documents
+the machine as it actually stands.
 
 ## Go-live checklist
 
-Everything still needed for the full stack to run end-to-end, in order:
+Everything needed for the full stack to run end-to-end, in order:
 
 1. **VPS with Docker.** Install Docker Engine + the compose plugin.
    Open ports 80 and 443. Create a deploy user that can run `docker`.
@@ -51,6 +54,80 @@ Everything still needed for the full stack to run end-to-end, in order:
    `charge.refunded`); put its signing secret in
    `STRIPE_WEBHOOK_SECRET`. Setting exactly one of the two is a fatal
    startup error by design.
+
+## The production box (as of 2026-08-01)
+
+OVH VPS (4 vCPU / 8 GB / 75 GB NVMe), Debian 13, host `51.83.240.147`
+(= what cubeplanner.pl resolves to). SSH as `debian` (passwordless
+sudo); password auth is disabled
+(`/etc/ssh/sshd_config.d/50-hardening.conf`), so access is key-only:
+the GitHub Actions deploy key plus personal keys. To grant a new
+machine access, generate a key on it and append its **public** half
+from an already-authorized machine:
+
+    ssh debian@51.83.240.147 'echo "ssh-ed25519 AAAA…" >> ~/.ssh/authorized_keys'
+
+Installed beyond stock Debian:
+
+- **unattended-upgrades** — security patches apply themselves.
+- **Docker Engine + compose plugin** from Docker's own apt repo
+  (`/etc/apt/sources.list.d/docker.list`); `debian` is in the `docker`
+  group. Log rotation via `/etc/docker/daemon.json` (json-file,
+  10 MB × 3 per container).
+- **ghcr pull auth**: a `read:packages` PAT via `docker login`, stored
+  in `~/.docker/config.json`.
+- **Nightly DB backups**: systemd timer `cube-backup.timer` (03:00
+  UTC, `Persistent=true`) runs `/opt/cube-planner/backup.sh` — a
+  gzipped `pg_dump --clean --if-exists` into
+  `/opt/cube-planner/backups/`, 14-day retention. Pull copies off-box
+  now and then (only transfers dumps you don't already have locally):
+
+      rsync -av debian@51.83.240.147:/opt/cube-planner/backups/ ~/cube-backups/
+
+Everything app-shaped lives in `/opt/cube-planner`: the compose file,
+`.env` (chmod 600, never touched by the pipeline), `backup.sh`, and
+`backups/`. Three containers (`web` = Caddy on 80/443, `api`,
+`postgres`) and two volumes (`caddy_data` = TLS certs, `pgdata` = the
+database). Deploys only ever `pull && up -d && image prune` — the
+system layer is hand-managed.
+
+Day-to-day commands (from `/opt/cube-planner`):
+
+    # what's running + health/restart state
+    docker compose -f docker-compose.prod.yml ps
+    # follow backend logs live (Ctrl-C to stop); --since 1h for a slice
+    docker compose -f docker-compose.prod.yml logs -f api
+    # SQL shell straight into the production database
+    docker compose -f docker-compose.prod.yml exec postgres psql -U cube
+    # when the next nightly backup fires + when the last one ran
+    systemctl list-timers cube-backup.timer
+
+**Changing `.env`:** edit it, then run
+`docker compose -f docker-compose.prod.yml up -d`. Containers read env
+only at creation, so compose recreates just the affected ones (a few
+seconds of api downtime). Exception: `POSTGRES_PASSWORD` cannot be
+rotated by editing alone — Postgres keeps the old password internally.
+
+**Restoring a backup** (works on a dirty database or a brand-new box —
+the dump carries `--clean`; on a fresh box bring up only `postgres`
+first):
+
+    # stop the backend so nothing writes mid-restore
+    docker compose -f docker-compose.prod.yml stop api
+    # decompress the dump and pipe it into psql inside the postgres
+    # container; the dump's --clean statements drop + recreate every
+    # table before loading, so no manual wipe is needed
+    gunzip -c backups/cube-YYYY-MM-DD.sql.gz | \
+      docker compose -f docker-compose.prod.yml exec -T postgres \
+        psql -U cube -d cube
+    # bring the backend back
+    docker compose -f docker-compose.prod.yml start api
+
+**Monitoring**: UptimeRobot pings the apex plus a keyword monitor
+(`scryfallId`) on `/api/cards/search?name=bolt` — keyword type because
+plain monitors probe with HEAD, which the GET-only API routes answer
+with 405; and the apex alone stays green when only the api container
+dies (Caddy still serves the SPA).
 
 ## First boot
 
