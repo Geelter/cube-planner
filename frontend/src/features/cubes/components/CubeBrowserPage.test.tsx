@@ -10,7 +10,13 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { CubeBrowserPage } from "./CubeBrowserPage";
 
-afterEach(() => vi.unstubAllGlobals());
+const auth: { me: { id: string; displayName: string } | null } = { me: null };
+vi.mock("@/features/auth/api", () => ({ useMe: () => ({ data: auth.me }) }));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  auth.me = null;
+});
 
 // Minimal router shell: Link in CubeListItem needs a RouterProvider.
 function renderWithRouter(ui: () => React.ReactElement) {
@@ -79,4 +85,34 @@ test("shows empty state", async () => {
   );
   renderWithRouter(() => <CubeBrowserPage />);
   await waitFor(() => expect(screen.getByText(/no cubes/i)).toBeDefined());
+});
+
+test("hides the new cube button when logged out", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ cubes: [], total: 0 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ),
+  );
+  renderWithRouter(() => <CubeBrowserPage />);
+  await waitFor(() => expect(screen.getByText(/no cubes/i)).toBeDefined());
+  expect(screen.queryByRole("link", { name: /new cube/i })).toBeNull();
+});
+
+test("shows the new cube button when logged in", async () => {
+  auth.me = { id: "u1", displayName: "Mat" };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ cubes: [], total: 0 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ),
+  );
+  renderWithRouter(() => <CubeBrowserPage />);
+  await waitFor(() => expect(screen.getByRole("link", { name: /new cube/i })).toBeInTheDocument());
 });
