@@ -1,20 +1,19 @@
 import { useState } from "react";
 import { m } from "@/paraglide/messages";
-import { client } from "@/shared/api/client";
 import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { useRegister } from "../api";
 
 export function RegisterPage() {
+  const register = useRegister();
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
-  const [message, setMessage] = useState("");
 
-  if (status === "sent") {
+  if (register.isSuccess) {
     return (
       <div className="mx-auto w-full max-w-sm">
         <Card>
@@ -36,22 +35,12 @@ export function RegisterPage() {
           <CardTitle as="h1">{m.register_title()}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {status === "error" && <Alert variant="danger">{message}</Alert>}
+          {register.isError && <Alert variant="danger">{register.error.message}</Alert>}
           <form
             className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
-              void (async () => {
-                const { error } = await client.POST("/api/auth/register", {
-                  body: { email, displayName, password },
-                });
-                if (error) {
-                  setStatus("error");
-                  setMessage(error.detail ?? m.register_error_fallback());
-                } else {
-                  setStatus("sent");
-                }
-              })();
+              register.mutate({ email, displayName, password });
             }}
           >
             <div className="flex flex-col gap-1.5">
@@ -84,7 +73,9 @@ export function RegisterPage() {
                 required
               />
             </div>
-            <Button type="submit">{m.register_submit()}</Button>
+            <Button type="submit" loading={register.isPending}>
+              {m.register_submit()}
+            </Button>
           </form>
         </CardContent>
       </Card>

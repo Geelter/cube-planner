@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { m } from "@/paraglide/messages";
-import { client } from "@/shared/api/client";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { useForgotPassword } from "../api";
 
 export function ForgotPasswordPage() {
+  const forgot = useForgotPassword();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
 
-  if (sent) {
+  if (forgot.isSuccess) {
     return (
       <div className="mx-auto w-full max-w-sm">
         <Card>
@@ -32,9 +32,7 @@ export function ForgotPasswordPage() {
             className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
-              void client
-                .POST("/api/auth/forgot-password", { body: { email } })
-                .then(() => setSent(true));
+              forgot.mutate({ email });
             }}
           >
             <div className="flex flex-col gap-1.5">
@@ -47,7 +45,9 @@ export function ForgotPasswordPage() {
                 required
               />
             </div>
-            <Button type="submit">{m.forgot_submit()}</Button>
+            <Button type="submit" loading={forgot.isPending}>
+              {m.forgot_submit()}
+            </Button>
           </form>
         </CardContent>
       </Card>
