@@ -72,7 +72,7 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
             className="rounded-md border border-border bg-surface p-2 font-mono text-sm text-fg"
           />
           {resolve.isError && <Alert variant="danger">{resolve.error.message}</Alert>}
-          <Button type="submit" disabled={resolve.isPending}>
+          <Button type="submit" loading={resolve.isPending}>
             {m.collection_import_resolve_button()}
           </Button>
         </form>
@@ -153,7 +153,7 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
             ) : (
               <Button
                 type="button"
-                disabled={importItems.isPending}
+                loading={importItems.isPending}
                 onClick={() =>
                   importItems.mutate(
                     { items },

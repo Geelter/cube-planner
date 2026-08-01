@@ -57,7 +57,7 @@ export function LoginPage() {
                 required
               />
             </div>
-            <Button type="submit" disabled={login.isPending}>
+            <Button type="submit" loading={login.isPending}>
               {m.login_submit()}
             </Button>
           </form>

@@ -74,7 +74,7 @@ export function CubeSettingsSection({ cube }: { cube: CubeDetail }) {
           </div>
         </fieldset>
         {update.isError && <Alert variant="danger">{update.error.message}</Alert>}
-        <Button type="submit" disabled={update.isPending}>
+        <Button type="submit" loading={update.isPending}>
           {m.cubes_save_meta()}
         </Button>
       </form>
