@@ -16,10 +16,12 @@ edit).
 **Design:** Centralize the redirect in the hook — both call sites (desktop
 header and mobile drawer in `routes/__root.tsx`) share `useLogout`.
 
-- `useLogout` gains `useNavigate()`; `onSuccess` becomes: invalidate the
-  **entire** query cache (`qc.invalidateQueries()` with no filter, so stale
-  user-scoped data like collection and my-cubes doesn't linger), then
-  `navigate({ to: "/login" })`.
+- `useLogout` gains `useNavigate()`; `onSuccess` becomes:
+  `await navigate({ to: "/login" })`, then invalidate the **entire** query
+  cache (`qc.invalidateQueries()` with no filter, so stale user-scoped
+  data like collection and my-cubes doesn't linger). Navigation goes first
+  so user-scoped queries on the departed page unmount instead of
+  refetching into 401s.
 - No call-site changes needed.
 
 ## 2. Pending-request feedback in forms
