@@ -1,16 +1,20 @@
-{$DOMAIN:localhost}
-
-handle /api/* {
-	reverse_proxy api:8080
+www.{$DOMAIN:localhost} {
+	redir https://{$DOMAIN:localhost}{uri} permanent
 }
 
-handle /auth/oauth/* {
-	reverse_proxy api:8080
-}
+{$DOMAIN:localhost} {
+	handle /api/* {
+		reverse_proxy api:8080
+	}
 
-handle {
-	root * /srv
-	header /assets/* Cache-Control "public, max-age=31536000, immutable"
-	try_files {path} /index.html
-	file_server
+	handle /auth/oauth/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		root * /srv
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
 }
