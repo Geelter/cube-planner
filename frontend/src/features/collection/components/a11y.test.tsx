@@ -35,6 +35,7 @@ beforeEach(() => {
           id: "u1",
           email: "user@example.com",
           displayName: "Test User",
+          providers: [],
           role: "user",
         });
       }

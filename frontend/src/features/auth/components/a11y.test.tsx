@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routeTree } from "@/routeTree.gen";
@@ -14,7 +14,6 @@ const PATHS = [
   "/forgot-password",
   "/reset-password?token=t",
   "/verify-email?token=t",
-  "/account",
 ];
 
 describe("auth screens have no axe violations", () => {
@@ -58,4 +57,42 @@ describe("auth screens have no axe violations", () => {
       expect(await axe(container)).toHaveNoViolations();
     });
   }
+
+  // /account is behind requireAuth: with the suite's always-401 stub it would
+  // redirect to /login (already covered above), so render it authenticated.
+  it("/account", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: Request | string) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("/api/me")) {
+          return new Response(
+            JSON.stringify({
+              id: "u1",
+              email: "x@y",
+              displayName: "X",
+              providers: [],
+              role: "user",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response("{}", { status: 401 });
+      }),
+    );
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = createRouter({
+      routeTree,
+      history: createMemoryHistory({ initialEntries: ["/account"] }),
+      context: { queryClient: qc },
+    });
+    const { container } = render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await router.load();
+    await waitFor(() => expect(container.textContent).toContain("Account"));
+    expect(await axe(container)).toHaveNoViolations();
+  });
 });
