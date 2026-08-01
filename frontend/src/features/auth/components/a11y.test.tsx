@@ -43,11 +43,12 @@ describe("auth screens have no axe violations", () => {
 
   for (const path of PATHS) {
     it(path, async () => {
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const router = createRouter({
         routeTree,
         history: createMemoryHistory({ initialEntries: [path] }),
+        context: { queryClient: qc },
       });
-      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const { container } = render(
         <QueryClientProvider client={qc}>
           <RouterProvider router={router} />

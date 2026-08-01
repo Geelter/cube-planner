@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { client } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/helpers";
@@ -7,17 +7,19 @@ import { m } from "@/paraglide/messages";
 
 export type User = components["schemas"]["UserBody"];
 
+export const meQueryOptions = queryOptions({
+  queryKey: ["me"],
+  retry: false,
+  queryFn: async (): Promise<User | null> => {
+    const { data, response } = await client.GET("/api/me");
+    if (response.status === 401) return null;
+    if (!data) throw new Error("failed to load current user");
+    return data;
+  },
+});
+
 export function useMe() {
-  return useQuery({
-    queryKey: ["me"],
-    retry: false,
-    queryFn: async (): Promise<User | null> => {
-      const { data, response } = await client.GET("/api/me");
-      if (response.status === 401) return null;
-      if (!data) throw new Error("failed to load current user");
-      return data;
-    },
-  });
+  return useQuery(meQueryOptions);
 }
 
 export function useLogin() {

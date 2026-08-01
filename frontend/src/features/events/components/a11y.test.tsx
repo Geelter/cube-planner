@@ -103,11 +103,12 @@ afterEach(() => {
 });
 
 async function renderRoute(path: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [path] }),
+    context: { queryClient: qc },
   });
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { container } = render(
     <QueryClientProvider client={qc}>
       <RouterProvider router={router} />

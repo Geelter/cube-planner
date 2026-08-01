@@ -22,11 +22,12 @@ afterEach(() => {
 });
 
 it("root layout with open nav drawer has no axe violations", async () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: ["/"] }),
+    context: { queryClient: qc },
   });
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { container } = render(
     <QueryClientProvider client={qc}>
       <RouterProvider router={router} />
