@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
+import { m } from "@/paraglide/messages";
 
 export type User = components["schemas"]["UserBody"];
 
@@ -36,5 +37,33 @@ export function useLogout() {
       await client.POST("/api/auth/logout");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+  });
+}
+
+export function useRegister() {
+  return useMutation({
+    mutationFn: async (body: { email: string; displayName: string; password: string }) => {
+      const { error } = await client.POST("/api/auth/register", { body });
+      if (error) throw new Error(error.detail ?? m.error_generic());
+    },
+  });
+}
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: async (body: { email: string }) => {
+      // Anti-enumeration: succeed regardless of the response so the page
+      // shows "sent" either way (matches previous page behavior).
+      await client.POST("/api/auth/forgot-password", { body });
+    },
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: async (body: { token: string; newPassword: string }) => {
+      const { error } = await client.POST("/api/auth/reset-password", { body });
+      if (error) throw new Error(error.detail ?? m.error_generic());
+    },
   });
 }
