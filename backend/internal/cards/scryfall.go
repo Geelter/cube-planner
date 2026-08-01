@@ -1,9 +1,12 @@
 package cards
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -60,35 +63,42 @@ func (c *ScryfallClient) DefaultCardsMetadata(ctx context.Context) (BulkMetadata
 	defer func() { _ = resp.Body.Close() }()
 	var body struct {
 		UpdatedAt   time.Time `json:"updated_at"`
-		DownloadURI string    `json:"download_uri"`
+		DownloadURI string    `json:"jsonl_download_uri"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		return BulkMetadata{}, fmt.Errorf("decode bulk metadata: %w", err)
 	}
+	if body.DownloadURI == "" {
+		return BulkMetadata{}, fmt.Errorf("bulk metadata: descriptor has no jsonl_download_uri")
+	}
 	return BulkMetadata{UpdatedAt: body.UpdatedAt, DownloadURI: body.DownloadURI}, nil
 }
 
-// StreamCards downloads the bulk file (a single huge JSON array) and
-// invokes fn per card, decoding incrementally so the ~450MB body is never
-// held in memory.
+// StreamCards downloads the bulk file (gzipped JSONL, one card object per
+// line) and invokes fn per card, decoding incrementally so the
+// multi-hundred-MB uncompressed body is never held in memory.
 func (c *ScryfallClient) StreamCards(ctx context.Context, downloadURI string, fn func(scryfallCard) error) error {
 	resp, err := c.get(ctx, downloadURI)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	dec := json.NewDecoder(resp.Body)
-	if _, err := dec.Token(); err != nil { // opening '['
-		return fmt.Errorf("read bulk array start: %w", err)
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		return fmt.Errorf("gunzip bulk file: %w", err)
 	}
-	for dec.More() {
+	defer func() { _ = gz.Close() }()
+	dec := json.NewDecoder(gz)
+	for {
 		var sc scryfallCard
 		if err := dec.Decode(&sc); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
 			return fmt.Errorf("decode bulk card: %w", err)
 		}
 		if err := fn(sc); err != nil {
 			return err
 		}
 	}
-	return nil
 }

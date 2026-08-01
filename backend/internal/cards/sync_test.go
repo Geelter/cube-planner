@@ -18,7 +18,7 @@ import (
 )
 
 // fakeScryfall serves a mutable bulk file: metadata at
-// /bulk-data/default-cards, the array itself at /download.
+// /bulk-data/default-cards, the gzipped JSONL itself at /download.
 type fakeScryfall struct {
 	srv          *httptest.Server
 	updatedAt    time.Time
@@ -32,8 +32,8 @@ func newFakeScryfall(t *testing.T) *fakeScryfall {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/bulk-data/default-cards", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"updated_at":   f.updatedAt,
-			"download_uri": f.srv.URL + "/download",
+			"updated_at":         f.updatedAt,
+			"jsonl_download_uri": f.srv.URL + "/download",
 		})
 	})
 	mux.HandleFunc("/download", func(w http.ResponseWriter, _ *http.Request) {
@@ -41,7 +41,11 @@ func newFakeScryfall(t *testing.T) *fakeScryfall {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(f.cards)
+		values := make([]any, len(f.cards))
+		for i, c := range f.cards {
+			values[i] = c
+		}
+		_, _ = w.Write(gzipJSONL(t, values...))
 	})
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
