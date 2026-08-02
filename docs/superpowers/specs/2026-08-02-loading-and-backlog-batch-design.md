@@ -95,10 +95,11 @@ owner-only, body `{ scryfallId }` (the new printing):
   oracle-keyed, so concurrent commits stay valid and history replay showing
   the current printing for still-present cards is acceptable (decided
   2026-08-02).
-- Semantics and error taxonomy mirror the collection's `change-printing`:
-  404 unknown cube / oracle not in cube (and private non-owner), 403 public
-  non-owner, 422 when `scryfallId` is not a printing of that oracle or is
-  the current printing.
+- Semantics and error taxonomy mirror the collection's `change-printing`
+  and the cube commit's invalid-change handling: 404 unknown cube / private
+  non-owner, 403 public non-owner, 422 (`invalid-cube-change`) when the
+  oracle is not in the cube, `scryfallId` is not a printing of that oracle,
+  or it is already the current printing.
 - `make api-generate` regenerates the frontend client.
 
 Testing: table-driven service tests + endpoint coverage in the
