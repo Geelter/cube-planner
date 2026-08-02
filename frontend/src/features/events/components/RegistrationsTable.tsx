@@ -36,6 +36,8 @@ export function RegistrationsTable({ eventId }: { eventId: string }) {
 
   const err = refund.error ?? deny.error;
   const locale = getLocale();
+  const refundingId = refund.isPending ? refund.variables : null;
+  const denyingId = deny.isPending ? deny.variables : null;
 
   const rowMeta = (r: EventRegistrationRow) => {
     if (r.status === "pending_payment" && r.expiresAt) {
@@ -87,7 +89,7 @@ export function RegistrationsTable({ eventId }: { eventId: string }) {
                           type="button"
                           size="sm"
                           variant="outline"
-                          disabled={refund.isPending}
+                          loading={refundingId === r.id}
                           onClick={() => setConfirm({ kind: "refund", row: r })}
                         >
                           {m.regs_refund()}
@@ -98,7 +100,7 @@ export function RegistrationsTable({ eventId }: { eventId: string }) {
                           type="button"
                           size="sm"
                           variant="ghost"
-                          disabled={deny.isPending}
+                          loading={denyingId === r.id}
                           onClick={() => setConfirm({ kind: "deny", row: r })}
                         >
                           {m.regs_deny()}
