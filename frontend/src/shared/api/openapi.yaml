@@ -139,6 +139,22 @@ components:
         - typeLine
         - imageSmall
       type: object
+    ChangeCubePrintingInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/ChangeCubePrintingInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        newScryfallId:
+          format: uuid
+          type: string
+      required:
+        - newScryfallId
+      type: object
     ChangePrintingInputBody:
       additionalProperties: false
       properties:
@@ -2369,6 +2385,38 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Cube card list, current or at a historical version
+      tags:
+        - cubes
+  /api/cubes/{cubeId}/cards/{oracleId}/change-printing:
+    post:
+      operationId: changeCubePrinting
+      parameters:
+        - in: path
+          name: cubeId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: oracleId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeCubePrintingInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Swap the stored printing of a cube entry (cosmetic; no new version)
       tags:
         - cubes
   /api/cubes/{cubeId}/changes:

@@ -299,6 +299,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/cubes/{cubeId}/cards/{oracleId}/change-printing": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Swap the stored printing of a cube entry (cosmetic; no new version) */
+    post: operations["changeCubePrinting"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/cubes/{cubeId}/changes": {
     parameters: {
       query?: never;
@@ -814,6 +831,16 @@ export interface components {
       /** @description Representative printing */
       scryfallId: string;
       typeLine: string;
+    };
+    ChangeCubePrintingInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/ChangeCubePrintingInputBody.json
+       */
+      readonly $schema?: string;
+      /** Format: uuid */
+      newScryfallId: string;
     };
     ChangePrintingInputBody: {
       /**
@@ -2220,6 +2247,40 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["GetCubeCardsOutputBody"];
         };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  changeCubePrinting: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        cubeId: string;
+        oracleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChangeCubePrintingInputBody"];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Error */
       default: {

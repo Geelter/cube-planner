@@ -100,6 +100,21 @@ describe("pendingReducer", () => {
     pendingReducer(s1, { type: "add", card: bolt });
     expect(s1.adds.get("o-bolt")?.quantity).toBe(1);
   });
+
+  test("setAddPrinting rewrites a pending add's printing and ignores unknown oracles", () => {
+    const withAdd = pendingReducer(emptyPending, { type: "add", card: bolt });
+    const swapped = pendingReducer(withAdd, {
+      type: "setAddPrinting",
+      oracleId: bolt.oracleId,
+      scryfallId: "new-printing-id",
+    });
+    expect(swapped.adds.get(bolt.oracleId)?.card.scryfallId).toBe("new-printing-id");
+    expect(swapped.adds.get(bolt.oracleId)?.quantity).toBe(1);
+    // Unknown oracle: state returned unchanged.
+    expect(
+      pendingReducer(swapped, { type: "setAddPrinting", oracleId: "nope", scryfallId: "x" }),
+    ).toBe(swapped);
+  });
 });
 
 describe("remove clears the whole row", () => {
