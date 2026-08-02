@@ -34,9 +34,10 @@ export function RegistrationPanel({
   const deadline = event.refundDeadline ? new Date(event.refundDeadline) : new Date(event.startsAt);
   const pastDeadline = Date.now() > deadline.getTime();
 
+  // Keep the dialog open while the cancellation is in flight so its confirm
+  // button's spinner is visible; close once the mutation settles.
   const confirmCancel = () => {
-    setConfirmOpen(false);
-    cancel.mutate(undefined);
+    cancel.mutate(undefined, { onSettled: () => setConfirmOpen(false) });
   };
 
   if (!registrable && !reg) return null;

@@ -136,8 +136,11 @@ export function ManageEventPage() {
             type="button"
             loading={act.isPending}
             onClick={() => {
-              if (confirmAction) act.mutate(confirmAction);
-              setConfirmAction(null);
+              // Keep the dialog open while the action is in flight so the
+              // spinner is visible; close once the mutation settles.
+              if (confirmAction) {
+                act.mutate(confirmAction, { onSettled: () => setConfirmAction(null) });
+              }
             }}
           >
             {pendingConfirm?.label()}

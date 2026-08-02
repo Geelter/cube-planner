@@ -7,16 +7,21 @@ import type { EventDetail } from "../api";
 const register = vi.fn();
 const pay = vi.fn();
 const cancel = vi.fn();
+const cancelState: { isPending: boolean } = { isPending: false };
 vi.mock("../api", async (orig) => ({
   ...(await orig()),
   useRegister: () => ({ mutate: register, isPending: false, error: null }),
   usePay: () => ({ mutate: pay, isPending: false, error: null }),
-  useCancelRegistration: () => ({ mutate: cancel, isPending: false, error: null }),
+  useCancelRegistration: () => ({ mutate: cancel, error: null, ...cancelState }),
 }));
 
 import { RegistrationPanel } from "./RegistrationPanel";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  cancel.mockReset();
+  cancelState.isPending = false;
+});
 
 function baseEvent(overrides: Partial<EventDetail>): EventDetail {
   return {
@@ -41,11 +46,15 @@ function baseEvent(overrides: Partial<EventDetail>): EventDetail {
 
 function renderPanel(event: EventDetail, checkoutCancelled = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  // Fresh element per (re)render — reusing one element reference makes React
+  // bail out of reconciling the subtree, hiding mock-state changes.
+  const makeUi = () => (
     <QueryClientProvider client={qc}>
       <RegistrationPanel event={event} checkoutCancelled={checkoutCancelled} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(makeUi());
+  return { ...view, rerenderSame: () => view.rerender(makeUi()) };
 }
 
 test("no registration, spots free → Register", async () => {
@@ -100,6 +109,33 @@ test("free event past deadline → cancel shows plain confirm, no refund footnot
   expect(
     screen.queryByText(/only get your money back if the organizer approves/),
   ).not.toBeInTheDocument();
+});
+
+test("confirm-cancel keeps the dialog open and spins while the cancellation is pending", async () => {
+  // The mocked mutate flips the hook into its pending state (as the real
+  // mutation would); rerenderSame lets the component observe it.
+  cancel.mockImplementation(() => {
+    cancelState.isPending = true;
+  });
+  const view = renderPanel(
+    baseEvent({
+      refundDeadline: new Date(Date.now() + 3600_000).toISOString(),
+      myRegistration: { id: "r1", status: "paid" },
+    }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Cancel registration" }));
+  const confirmButtons = screen.getAllByRole("button", { name: "Cancel registration" });
+  await userEvent.click(confirmButtons[confirmButtons.length - 1]!);
+  view.rerenderSame();
+  // The dialog stays open while the mutation is in flight…
+  expect(screen.getByText(/Cancel your registration for Cube Night\?/)).toBeInTheDocument();
+  // …and its confirm button carries the spinner (match by textContent — the
+  // spinner's aria-label joins the accessible name while loading).
+  const confirm = screen
+    .getAllByRole("button")
+    .filter((b) => b.textContent === "Cancel registration")
+    .at(-1)!;
+  expect(confirm).toHaveAttribute("aria-busy", "true");
 });
 
 test("refund_requested → status note, no buttons", () => {
