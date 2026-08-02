@@ -152,7 +152,7 @@ export function TournamentSection({ eventId }: { eventId: string }) {
             type="button"
             variant="outline"
             size="sm"
-            disabled={playerAction.isPending}
+            loading={playerAction.isPending}
             onClick={() => playerAction.mutate({ playerId: myPlayer.id, action: "undrop" })}
           >
             {m.tournament_undrop()}
@@ -177,7 +177,7 @@ export function TournamentSection({ eventId }: { eventId: string }) {
           </Button>
           <Button
             type="button"
-            disabled={playerAction.isPending}
+            loading={playerAction.isPending}
             onClick={() => {
               if (myPlayer) playerAction.mutate({ playerId: myPlayer.id, action: "drop" });
               setConfirmDrop(false);

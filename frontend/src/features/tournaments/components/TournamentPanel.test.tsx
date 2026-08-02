@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
+import { m } from "@/paraglide/messages";
 import type { TournamentInfo } from "../api";
 import { NotFoundError } from "../api";
 
@@ -11,6 +12,9 @@ const roundMut = vi.fn();
 const upsertMut = vi.fn();
 let tournamentData: TournamentInfo | null = null;
 let tournamentOpts: unknown;
+const roundState: { isPending: boolean; variables?: { action: string; number: number } } = {
+  isPending: false,
+};
 
 vi.mock("@/features/auth/api", () => ({
   useMe: () => ({ data: { id: "org", role: "admin" } }),
@@ -26,7 +30,7 @@ vi.mock("../api", async (orig) => ({
   },
   useUpsertTournament: () => ({ mutate: upsertMut, isPending: false, error: null }),
   usePairNextRound: () => ({ mutate: pairMut, isPending: false, error: null }),
-  useRoundAction: () => ({ mutate: roundMut, isPending: false, error: null }),
+  useRoundAction: () => ({ mutate: roundMut, error: null, ...roundState }),
   useSwapSlots: () => ({ mutate: swapMut, isPending: false, error: null }),
   useReportResult: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   usePlayerAction: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -39,6 +43,8 @@ afterEach(() => {
   vi.clearAllMocks();
   tournamentData = null;
   tournamentOpts = undefined;
+  roundState.isPending = false;
+  delete roundState.variables;
 });
 
 function renderPanel() {
@@ -129,6 +135,24 @@ test("publish button fires for a draft round", async () => {
   renderPanel();
   await userEvent.click(screen.getByRole("button", { name: "Publish pairings" }));
   expect(roundMut).toHaveBeenCalledWith({ action: "publish", number: 1 });
+});
+
+test("publish spins while reroll is only disabled", () => {
+  tournamentData = draftTournament();
+  roundState.isPending = true;
+  roundState.variables = { action: "publish", number: 1 };
+  renderPanel();
+  // Match by textContent, not accessible name: the spinner's visually-hidden
+  // "Loading…" label joins the accessible name while a button is busy.
+  const publish = screen
+    .getAllByRole("button")
+    .find((b) => b.textContent === m.tournament_publish())!;
+  const reroll = screen
+    .getAllByRole("button")
+    .find((b) => b.textContent === m.tournament_reroll())!;
+  expect(publish.getAttribute("aria-busy")).toBe("true");
+  expect(reroll.getAttribute("aria-busy")).not.toBe("true");
+  expect(reroll).toBeDisabled();
 });
 
 test("polls the tournament while the event is live", () => {
