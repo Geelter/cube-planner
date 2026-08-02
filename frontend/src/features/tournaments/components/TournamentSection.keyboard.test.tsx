@@ -86,3 +86,25 @@ test("arrow keys move focus and selection across round tabs (roving tabindex)", 
   expect(tab1).toHaveFocus();
   expect(tab1).toHaveAttribute("aria-selected", "true");
 });
+
+test("Home and End jump selection and focus to first/last tab", async () => {
+  tournamentData = twoRoundTournament();
+  renderSection();
+  const tabs = screen.getAllByRole("tab");
+  tabs[1]!.focus(); // round 2 is selected (latest) and tabbable
+  await userEvent.keyboard("{Home}");
+  expect(tabs[0]!.getAttribute("aria-selected")).toBe("true");
+  expect(document.activeElement).toBe(tabs[0]);
+  await userEvent.keyboard("{End}");
+  expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
+  expect(document.activeElement).toBe(tabs[1]);
+});
+
+test("match list is a tabpanel labelled by the active tab", () => {
+  tournamentData = twoRoundTournament();
+  renderSection();
+  const panel = screen.getByRole("tabpanel");
+  const activeTab = screen.getAllByRole("tab")[1]!;
+  expect(activeTab.getAttribute("aria-controls")).toBe(panel.id);
+  expect(panel.getAttribute("aria-labelledby")).toBe(activeTab.id);
+});

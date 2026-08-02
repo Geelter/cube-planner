@@ -7,7 +7,7 @@ function EventDetailRoute() {
   return (
     <div className="flex flex-col gap-8">
       <EventDetailPage />
-      <TournamentSection eventId={eventId} />
+      <TournamentSection key={eventId} eventId={eventId} />
     </div>
   );
 }
