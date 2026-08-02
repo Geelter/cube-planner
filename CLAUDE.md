@@ -23,7 +23,11 @@ Router/Query + Tailwind v4 + Paraglide i18n). Master design:
    Never commit or hand-edit them.
 5. **Auth decisions are settled.** Register on an unverified email
    overwrites; login returns distinct 401/403; OAuth verified-email
-   collisions link + wipe password; unverified collisions are rejected.
+   collisions link + wipe password; unverified collisions are rejected;
+   `useForgotPassword` deliberately never surfaces API errors
+   (anti-enumeration — the page shows "sent" regardless); logout
+   navigates to `/login` *before* invalidating the query cache (so
+   user-scoped queries unmount instead of refetching into 401s).
    These were explicitly adjudicated — do not "fix" them.
 6. **Tooling:** oxlint + oxfmt (never eslint/prettier), gofumpt +
    golangci-lint, lefthook (fast pre-commit, CI-mirroring pre-push),

@@ -64,6 +64,14 @@ src/
    (`validateSearch`, etc.) and points `component` at a feature component.
    No markup or logic in route files. Components read search params via
    `getRouteApi("/path")`, keeping them out of route files.
+   User-scoped routes additionally declare `beforeLoad: requireAuth`
+   (from `@/features/auth/guard`) so logged-out visitors are redirected
+   to `/login`; ownership/role checks stay server-side. Tests that build
+   a router from the real `routeTree.gen` must pass
+   `context: { queryClient }` to `createRouter` (typecheck enforces it),
+   and tests rendering a guarded route must serve `/api/me` a 200 — an
+   unhandled 401 makes the guard silently render `/login` instead of the
+   page under test.
 3. **Variants are props, implemented with cva.** `ButtonPrimary.tsx` or
    `Button2.tsx` are defects. One file per component; variants are typed
    cva config. All conditional/merged classes go through `cn()`
@@ -85,7 +93,10 @@ src/
    error belongs to one field, associate it via `aria-describedby`. Route
    changes focus `<main>` (handled by the shell). `<html lang>` follows
    the active locale. Screen-level components get a vitest-axe smoke test
-   (with `// @vitest-environment jsdom` — axe needs jsdom).
+   (with `// @vitest-environment jsdom` — axe needs jsdom). Buttons that
+   trigger a mutation show the request in flight via
+   `<Button loading={mutation.isPending}>` (disabled + spinner +
+   `aria-busy`) rather than a bare `disabled`.
 7. **Test placement.** Tests sit next to what they test. Inside
    `src/routes/` a test file needs a `-` filename prefix so route
    generation skips it; elsewhere use plain `*.test.ts(x)`.
