@@ -6,14 +6,17 @@ import {
   createMemoryHistory,
   RouterProvider,
 } from "@tanstack/react-router";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
+import { m } from "@/paraglide/messages";
 import { CubeBrowserPage } from "./CubeBrowserPage";
 
 const auth: { me: { id: string; displayName: string } | null } = { me: null };
 vi.mock("@/features/auth/api", () => ({ useMe: () => ({ data: auth.me }) }));
 
 afterEach(() => {
+  cleanup();
   vi.unstubAllGlobals();
   auth.me = null;
 });
@@ -115,4 +118,37 @@ test("shows the new cube button when logged in", async () => {
   );
   renderWithRouter(() => <CubeBrowserPage />);
   await waitFor(() => expect(screen.getByRole("link", { name: /new cube/i })).toBeInTheDocument());
+});
+
+test("pagination buttons spin while the next page loads", async () => {
+  const pageOne = () =>
+    new Response(
+      JSON.stringify({
+        cubes: [
+          {
+            id: "c1",
+            name: "Vintage Cube",
+            description: "",
+            ownerName: "Mat",
+            cardCount: 540,
+            visibility: "public",
+            updatedAt: "2026-07-12T10:00:00Z",
+          },
+        ],
+        total: 21, // > CUBES_PAGE_SIZE → pagination renders
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(pageOne())
+    .mockImplementation(() => new Promise(() => {})); // page 2 never resolves
+  vi.stubGlobal("fetch", fetchMock);
+  renderWithRouter(() => <CubeBrowserPage />);
+  await waitFor(() => expect(screen.getByText("Vintage Cube")).toBeDefined());
+  const next = screen.getByRole("button", { name: m.pagination_next() });
+  await userEvent.click(next);
+  await waitFor(() => expect(next.getAttribute("aria-busy")).toBe("true"));
+  // keepPreviousData: page 1 content stays visible while spinning.
+  expect(screen.getByText("Vintage Cube")).toBeDefined();
 });

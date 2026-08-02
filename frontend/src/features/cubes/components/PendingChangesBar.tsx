@@ -37,7 +37,7 @@ export function PendingChangesBar({
           <span className="font-semibold text-accent">+{totals.adds}</span>
           <span className="font-semibold text-danger">−{totals.removes}</span>
         </button>
-        <Button type="button" size="lg" disabled={saving} onClick={onSave}>
+        <Button type="button" size="lg" loading={saving} onClick={onSave}>
           {m.cubes_save_changes()}
         </Button>
       </div>
