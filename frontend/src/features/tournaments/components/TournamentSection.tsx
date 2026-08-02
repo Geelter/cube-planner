@@ -81,7 +81,7 @@ export function TournamentSection({ eventId }: { eventId: string }) {
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-medium text-fg">{m.tournament_title()}</h2>
 
-      <div role="tablist" className="flex gap-2 overflow-x-auto">
+      <div role="tablist" className="-m-1 flex gap-2 overflow-x-auto p-1">
         {rounds.map((r, i) => (
           <button
             key={r.number}

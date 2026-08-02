@@ -23,6 +23,7 @@ export function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon"
+      className="size-11"
       aria-label={LABEL[setting]()}
       title={LABEL[setting]()}
       onClick={() => {
