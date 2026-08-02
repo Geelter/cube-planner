@@ -82,6 +82,8 @@ export function ManageEventPage() {
               type="button"
               size="sm"
               {...(a.action === "cancel" ? { variant: "outline" as const } : {})}
+              disabled={act.isPending}
+              loading={act.isPending && act.variables === a.action}
               onClick={() => setConfirmAction(a.action)}
             >
               {a.label()}
@@ -132,10 +134,13 @@ export function ManageEventPage() {
           </Button>
           <Button
             type="button"
-            disabled={act.isPending}
+            loading={act.isPending}
             onClick={() => {
-              if (confirmAction) act.mutate(confirmAction);
-              setConfirmAction(null);
+              // Keep the dialog open while the action is in flight so the
+              // spinner is visible; close once the mutation settles.
+              if (confirmAction) {
+                act.mutate(confirmAction, { onSettled: () => setConfirmAction(null) });
+              }
             }}
           >
             {pendingConfirm?.label()}

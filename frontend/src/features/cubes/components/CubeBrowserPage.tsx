@@ -64,6 +64,7 @@ export function CubeBrowserPage() {
             variant="outline"
             size="sm"
             disabled={page === 0}
+            loading={list.isFetching && list.isPlaceholderData}
             onClick={() => setPage((p) => p - 1)}
             aria-label={m.pagination_prev()}
           >
@@ -77,6 +78,7 @@ export function CubeBrowserPage() {
             variant="outline"
             size="sm"
             disabled={page + 1 >= totalPages}
+            loading={list.isFetching && list.isPlaceholderData}
             onClick={() => setPage((p) => p + 1)}
             aria-label={m.pagination_next()}
           >

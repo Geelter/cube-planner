@@ -94,9 +94,17 @@ src/
    changes focus `<main>` (handled by the shell). `<html lang>` follows
    the active locale. Screen-level components get a vitest-axe smoke test
    (with `// @vitest-environment jsdom` — axe needs jsdom). Buttons that
-   trigger a mutation show the request in flight via
-   `<Button loading={mutation.isPending}>` (disabled + spinner +
-   `aria-busy`) rather than a bare `disabled`.
+   trigger a network request show it in flight via
+   `<Button loading>` (disabled + spinner + `aria-busy`) rather than a
+   bare `disabled`, in one of three shapes:
+   `loading={mutation.isPending}` for single-action buttons and form
+   submits; row-scoped for one-mutation-many-rows lists — only the
+   clicked row spins, derived from the in-flight variables
+   (`const pendingId = mut.isPending ? mut.variables.<key> : null`, then
+   `loading={pendingId === row.<key>}`) while other rows stay enabled;
+   and `loading={query.isFetching && query.isPlaceholderData}` for
+   pagination over `keepPreviousData` queries. Buttons that only change
+   local state (filters, opening dialogs) get no loading prop.
 7. **Test placement.** Tests sit next to what they test. Inside
    `src/routes/` a test file needs a `-` filename prefix so route
    generation skips it; elsewhere use plain `*.test.ts(x)`.

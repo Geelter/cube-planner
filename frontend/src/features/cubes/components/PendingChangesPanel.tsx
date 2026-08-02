@@ -96,7 +96,7 @@ export function PendingChangesPanel({
         />
       </div>
       <div className="flex gap-2">
-        <Button type="button" disabled={count === 0 || saving} onClick={onSave}>
+        <Button type="button" disabled={count === 0} loading={saving} onClick={onSave}>
           {m.cubes_save_changes()}
         </Button>
         <Button

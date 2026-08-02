@@ -67,6 +67,12 @@ export function CollectionPage() {
     : changePrinting.isPending
       ? changePrinting.variables?.scryfallId
       : undefined;
+  // The ✕ shares setQuantity with the debounced stepper — only spin it for
+  // an actual remove (quantity 0), not every stepper commit.
+  const removingId =
+    setQuantity.isPending && setQuantity.variables.quantity === 0
+      ? setQuantity.variables.scryfallId
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -162,6 +168,7 @@ export function CollectionPage() {
                   size="sm"
                   aria-label={m.collection_remove_card({ name: item.name })}
                   disabled={mutatingRowId === item.scryfallId}
+                  loading={removingId === item.scryfallId}
                   onClick={() => setQuantity.mutate({ scryfallId: item.scryfallId, quantity: 0 })}
                 >
                   ✕
@@ -195,6 +202,7 @@ export function CollectionPage() {
             variant="outline"
             size="sm"
             disabled={page === 0}
+            loading={collection.isFetching && collection.isPlaceholderData}
             onClick={() => setPage((p) => p - 1)}
             aria-label={m.pagination_prev()}
           >
@@ -208,6 +216,7 @@ export function CollectionPage() {
             variant="outline"
             size="sm"
             disabled={page + 1 >= pages}
+            loading={collection.isFetching && collection.isPlaceholderData}
             onClick={() => setPage((p) => p + 1)}
             aria-label={m.pagination_next()}
           >

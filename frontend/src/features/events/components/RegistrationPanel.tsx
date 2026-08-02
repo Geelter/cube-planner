@@ -34,9 +34,10 @@ export function RegistrationPanel({
   const deadline = event.refundDeadline ? new Date(event.refundDeadline) : new Date(event.startsAt);
   const pastDeadline = Date.now() > deadline.getTime();
 
+  // Keep the dialog open while the cancellation is in flight so its confirm
+  // button's spinner is visible; close once the mutation settles.
   const confirmCancel = () => {
-    setConfirmOpen(false);
-    cancel.mutate(undefined);
+    cancel.mutate(undefined, { onSettled: () => setConfirmOpen(false) });
   };
 
   if (!registrable && !reg) return null;
@@ -51,7 +52,7 @@ export function RegistrationPanel({
       {!reg && registrable && (
         <Button
           type="button"
-          disabled={register.isPending}
+          loading={register.isPending}
           onClick={() => register.mutate(undefined)}
         >
           {full ? m.event_join_waitlist() : m.event_register()}
@@ -68,13 +69,13 @@ export function RegistrationPanel({
             </p>
           )}
           <div className="flex gap-2">
-            <Button type="button" disabled={pay.isPending} onClick={() => pay.mutate(undefined)}>
+            <Button type="button" loading={pay.isPending} onClick={() => pay.mutate(undefined)}>
               {m.event_pay_now()}
             </Button>
             <Button
               type="button"
               variant="outline"
-              disabled={cancel.isPending}
+              loading={cancel.isPending}
               onClick={() => cancel.mutate(undefined)}
             >
               {m.event_cancel_registration()}
@@ -90,7 +91,7 @@ export function RegistrationPanel({
           <Button
             type="button"
             variant="outline"
-            disabled={cancel.isPending}
+            loading={cancel.isPending}
             onClick={() => cancel.mutate(undefined)}
           >
             {m.event_leave_waitlist()}
@@ -122,7 +123,7 @@ export function RegistrationPanel({
               <Button
                 type="button"
                 variant="danger"
-                disabled={cancel.isPending}
+                loading={cancel.isPending}
                 onClick={confirmCancel}
               >
                 {m.event_cancel_registration()}

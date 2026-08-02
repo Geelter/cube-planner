@@ -2,9 +2,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
+import { m } from "@/paraglide/messages";
 
 const refundMutate = vi.fn();
 const denyMutate = vi.fn();
+const refundState: { isPending: boolean; variables?: string } = { isPending: false };
+const denyState: { isPending: boolean; variables?: string } = { isPending: false };
 const rows = [
   {
     id: "r1",
@@ -40,13 +43,19 @@ const rows = [
 vi.mock("../api", async (orig) => ({
   ...(await orig()),
   useEventRegistrations: () => ({ data: rows, isPending: false, error: null }),
-  useRefundRegistration: () => ({ mutate: refundMutate, isPending: false, error: null }),
-  useDenyRefund: () => ({ mutate: denyMutate, isPending: false, error: null }),
+  useRefundRegistration: () => ({ mutate: refundMutate, error: null, ...refundState }),
+  useDenyRefund: () => ({ mutate: denyMutate, error: null, ...denyState }),
 }));
 
 import { RegistrationsTable } from "./RegistrationsTable";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  refundState.isPending = false;
+  delete refundState.variables;
+  denyState.isPending = false;
+  delete denyState.variables;
+});
 
 function renderTable() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -80,4 +89,18 @@ test("refund flows through the confirm dialog", async () => {
   const buttons = screen.getAllByRole("button", { name: "Refund" });
   await userEvent.click(buttons[buttons.length - 1]!);
   expect(refundMutate).toHaveBeenCalledWith("r3");
+});
+
+test("only the acted-on row's refund button spins; other rows stay enabled", () => {
+  refundState.isPending = true;
+  refundState.variables = "r1"; // the paid row
+  renderTable();
+  // r1 (paid) and r3 (refund_requested) both render a refund button.
+  const refundButtons = screen
+    .getAllByRole("button")
+    .filter((b) => b.textContent === m.regs_refund());
+  const busy = refundButtons.filter((b) => b.getAttribute("aria-busy") === "true");
+  expect(busy).toHaveLength(1);
+  const idle = refundButtons.find((b) => b.getAttribute("aria-busy") !== "true");
+  expect(idle).toBeEnabled();
 });

@@ -133,7 +133,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
             <Button
               type="button"
               size="sm"
-              disabled={pair.isPending}
+              loading={pair.isPending}
               onClick={() => pair.mutate(undefined)}
             >
               {m.tournament_pair_round({ number: nextRoundNumber })}
@@ -193,6 +193,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
               size="sm"
               variant="outline"
               disabled={roundAction.isPending}
+              loading={roundAction.isPending && roundAction.variables?.action === "reroll"}
               onClick={() => {
                 // New pairings invalidate any stored match/slot ref — a kept
                 // selection would swap against a match that no longer exists.
@@ -206,6 +207,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
               type="button"
               size="sm"
               disabled={roundAction.isPending}
+              loading={roundAction.isPending && roundAction.variables?.action === "publish"}
               onClick={() => roundAction.mutate({ action: "publish", number: draft.number })}
             >
               {m.tournament_publish()}
@@ -273,6 +275,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
               type="button"
               size="sm"
               disabled={missing > 0 || roundAction.isPending}
+              loading={roundAction.isPending && roundAction.variables?.action === "complete"}
               onClick={() => roundAction.mutate({ action: "complete", number: published.number })}
             >
               {m.tournament_complete_round()}
@@ -304,7 +307,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
                     type="button"
                     size="sm"
                     variant="ghost"
-                    disabled={playerAction.isPending}
+                    loading={playerAction.isPending && playerAction.variables?.playerId === p.id}
                     onClick={() =>
                       playerAction.mutate({
                         playerId: p.id,

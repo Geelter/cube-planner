@@ -87,6 +87,7 @@ export function CubeHistoryPage() {
             size="sm"
             aria-label={m.pagination_prev()}
             disabled={page === 0}
+            loading={changes.isFetching && changes.isPlaceholderData}
             onClick={() => setPage((p) => p - 1)}
           >
             ←
@@ -100,6 +101,7 @@ export function CubeHistoryPage() {
             size="sm"
             aria-label={m.pagination_next()}
             disabled={page + 1 >= totalPages}
+            loading={changes.isFetching && changes.isPlaceholderData}
             onClick={() => setPage((p) => p + 1)}
           >
             →

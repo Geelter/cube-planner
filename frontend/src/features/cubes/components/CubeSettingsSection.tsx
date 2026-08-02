@@ -83,7 +83,7 @@ export function CubeSettingsSection({ cube }: { cube: CubeDetail }) {
       <Button
         type="button"
         variant="danger"
-        disabled={del.isPending}
+        loading={del.isPending}
         onClick={() => {
           if (window.confirm(m.cubes_delete_confirm())) {
             del.mutate(undefined, {

@@ -96,6 +96,7 @@ export function EventCubesEditor({ event }: { event: EventDetail }) {
             type="button"
             size="sm"
             disabled={!adding}
+            loading={setCubes.isPending}
             onClick={() => {
               const cube = linkable.data?.find((c) => c.id === adding);
               if (!cube) return;
