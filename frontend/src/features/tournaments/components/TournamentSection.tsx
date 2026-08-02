@@ -48,8 +48,9 @@ export function TournamentSection({ eventId }: { eventId: string }) {
   const rounds = (t.rounds ?? []).filter((r) => r.status !== "draft");
   if (rounds.length === 0) return null;
   const activeNumber = tab ?? rounds[rounds.length - 1]!.number;
-  // tab is component state and survives eventId changes (the route component
-  // is not remounted), so it can point at a round this tournament lacks.
+  // The route remounts this component per event (key={eventId}), so tab can't
+  // outlive an event switch — but polling can shrink rounds in place, leaving
+  // tab pointing at a round that no longer exists; fall back to the latest.
   const round = rounds.find((r) => r.number === activeNumber) ?? rounds[rounds.length - 1]!;
   const players = t.players ?? [];
   const playerNames = new Map(players.map((p) => [p.id, p.displayName]));
