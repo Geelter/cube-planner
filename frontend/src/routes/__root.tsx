@@ -86,7 +86,13 @@ export function RootLayout() {
                   <Button asChild variant="ghost" size="sm">
                     <Link to="/account">{me.data.displayName}</Link>
                   </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => logout.mutate()}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    loading={logout.isPending}
+                    onClick={() => logout.mutate()}
+                  >
                     {m.nav_logout()}
                   </Button>
                 </>
@@ -157,6 +163,7 @@ export function RootLayout() {
                 type="button"
                 variant="ghost"
                 className="h-12 justify-start px-3 text-base font-normal"
+                loading={logout.isPending}
                 onClick={() => logout.mutate()}
               >
                 {m.nav_logout()}
