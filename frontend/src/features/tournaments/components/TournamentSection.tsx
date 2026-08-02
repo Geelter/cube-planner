@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent } from "react";
 import { m } from "@/paraglide/messages";
 import { useMe } from "@/features/auth/api";
 import { Button } from "@/shared/ui/button";
@@ -33,6 +33,7 @@ export function TournamentSection({ eventId }: { eventId: string }) {
   const playerAction = usePlayerAction(eventId);
   const [tab, setTab] = useState<number | null>(null);
   const [confirmDrop, setConfirmDrop] = useState(false);
+  const panelId = useId();
 
   // Not started, no tournament yet, or still loading: render nothing.
   if (!relevant || tournament.isPending || tournament.error instanceof NotFoundError) return null;
@@ -47,8 +48,9 @@ export function TournamentSection({ eventId }: { eventId: string }) {
   const rounds = (t.rounds ?? []).filter((r) => r.status !== "draft");
   if (rounds.length === 0) return null;
   const activeNumber = tab ?? rounds[rounds.length - 1]!.number;
-  // tab is component state and survives eventId changes (the route component
-  // is not remounted), so it can point at a round this tournament lacks.
+  // The route remounts this component per event (key={eventId}), so tab can't
+  // outlive an event switch — but polling can shrink rounds in place, leaving
+  // tab pointing at a round that no longer exists; fall back to the latest.
   const round = rounds.find((r) => r.number === activeNumber) ?? rounds[rounds.length - 1]!;
   const players = t.players ?? [];
   const playerNames = new Map(players.map((p) => [p.id, p.displayName]));
@@ -64,12 +66,21 @@ export function TournamentSection({ eventId }: { eventId: string }) {
     round.number === rounds[rounds.length - 1]!.number;
 
   // ARIA tabs keyboard pattern: arrows move focus AND selection, wrapping
-  // at the ends; roving tabindex keeps only the selected tab tabbable.
+  // at the ends; Home/End jump to the first/last tab; roving tabindex keeps
+  // only the selected tab tabbable.
   const onTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>, from: number) => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    let next: number;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      const delta = e.key === "ArrowRight" ? 1 : -1;
+      next = (from + delta + rounds.length) % rounds.length;
+    } else if (e.key === "Home") {
+      next = 0;
+    } else if (e.key === "End") {
+      next = rounds.length - 1;
+    } else {
+      return;
+    }
     e.preventDefault();
-    const delta = e.key === "ArrowRight" ? 1 : -1;
-    const next = (from + delta + rounds.length) % rounds.length;
     setTab(rounds[next]!.number);
     const tabs = e.currentTarget
       .closest('[role="tablist"]')
@@ -81,12 +92,14 @@ export function TournamentSection({ eventId }: { eventId: string }) {
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-medium text-fg">{m.tournament_title()}</h2>
 
-      <div role="tablist" className="flex gap-2 overflow-x-auto">
+      <div role="tablist" className="-m-1 flex gap-2 overflow-x-auto p-1">
         {rounds.map((r, i) => (
           <button
             key={r.number}
+            id={`${panelId}-tab-${r.number}`}
             role="tab"
             aria-selected={r.number === round.number}
+            aria-controls={`${panelId}-panel`}
             tabIndex={r.number === round.number ? 0 : -1}
             className={`h-11 shrink-0 rounded-md border border-border px-3 py-1 text-sm whitespace-nowrap ${
               r.number === round.number ? "bg-accent text-accent-fg" : "text-fg"
@@ -99,29 +112,37 @@ export function TournamentSection({ eventId }: { eventId: string }) {
         ))}
       </div>
 
-      <ul className="flex flex-col gap-1">
-        {matches.map((mt) => (
-          <li
-            key={mt.id}
-            className={`flex flex-wrap items-center gap-2 rounded-md border border-border p-2 text-sm ${
-              myMatch?.id === mt.id ? "bg-surface-raised" : ""
-            }`}
-          >
-            <span className="text-fg-muted">{m.tournament_table({ number: mt.tableNumber })}</span>
-            <span className="text-fg">
-              {playerNames.get(mt.player1Id)}{" "}
-              {mt.player2Id ? (
-                <>
-                  {m.tournament_vs()} {playerNames.get(mt.player2Id)}
-                </>
-              ) : (
-                <span className="text-fg-muted">— {m.tournament_bye()}</span>
-              )}
-            </span>
-            <span className="ml-auto text-fg-muted">{score(mt)}</span>
-          </li>
-        ))}
-      </ul>
+      <div
+        id={`${panelId}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${panelId}-tab-${round.number}`}
+      >
+        <ul className="flex flex-col gap-1">
+          {matches.map((mt) => (
+            <li
+              key={mt.id}
+              className={`flex flex-wrap items-center gap-2 rounded-md border border-border p-2 text-sm ${
+                myMatch?.id === mt.id ? "bg-surface-raised" : ""
+              }`}
+            >
+              <span className="text-fg-muted">
+                {m.tournament_table({ number: mt.tableNumber })}
+              </span>
+              <span className="text-fg">
+                {playerNames.get(mt.player1Id)}{" "}
+                {mt.player2Id ? (
+                  <>
+                    {m.tournament_vs()} {playerNames.get(mt.player2Id)}
+                  </>
+                ) : (
+                  <span className="text-fg-muted">— {m.tournament_bye()}</span>
+                )}
+              </span>
+              <span className="ml-auto text-fg-muted">{score(mt)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {canReportMine && myMatch && (
         <div className="rounded-lg border border-border bg-surface-raised p-3">

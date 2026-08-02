@@ -45,7 +45,8 @@ export function Dialog({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="icon"
+              className="-m-2 size-11"
               aria-label={m.dialog_close()}
               onClick={onClose}
             >
