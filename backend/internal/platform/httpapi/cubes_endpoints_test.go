@@ -210,6 +210,90 @@ func TestCubeBrowserAndMine(t *testing.T) {
 	}
 }
 
+type cubeCardsBody struct {
+	Cards []struct {
+		ScryfallID string `json:"scryfallId"`
+		OracleID   string `json:"oracleId"`
+		Quantity   int32  `json:"quantity"`
+	} `json:"cards"`
+	Version int32 `json:"version"`
+}
+
+func getCubeCards(t *testing.T, c *cookieClient, cubeID string) cubeCardsBody {
+	t.Helper()
+	resp := c.do(t, "GET", "/api/cubes/"+cubeID+"/cards", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get cube cards: %d", resp.StatusCode)
+	}
+	return decode[cubeCardsBody](t, resp)
+}
+
+// commitAdd commits a single add against expectedVersion 0 → the first
+// commit, bumping the cube from version 0 to 1.
+func commitAdd(t *testing.T, c *cookieClient, cubeID string, scryfallID uuid.UUID, quantity int) {
+	t.Helper()
+	resp := c.do(t, "POST", "/api/cubes/"+cubeID+"/changes", fmt.Sprintf(
+		`{"expectedVersion":0,"adds":[{"scryfallId":%q,"quantity":%d}]}`, scryfallID, quantity,
+	))
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("commit add: %d", resp.StatusCode)
+	}
+}
+
+func TestChangeCubePrinting(t *testing.T) {
+	srv, pool, q := newCubesServer(t)
+	c := loggedInClient(t, srv, q, "cp1@test.dev")
+
+	boltO := uuid.New()
+	alphaS, m10S := uuid.New(), uuid.New()
+	seedCard(t, pool, testCard{scryfallID: alphaS, oracleID: boltO, name: "Lightning Bolt", released: "1993-08-05"})
+	seedCard(t, pool, testCard{scryfallID: m10S, oracleID: boltO, name: "Lightning Bolt", released: "2010-07-16"})
+	strikeS := uuid.New()
+	seedCard(t, pool, testCard{scryfallID: strikeS, oracleID: uuid.New(), name: "Lightning Strike"})
+
+	// Create a cube and commit 2× alpha Bolt (reuse the file's helpers for both).
+	cube := createCube(t, c, "Printing Cube", "public")
+	cubeID := cube.ID
+	commitAdd(t, c, cubeID, alphaS, 2) // expectedVersion 0 → version 1
+
+	change := func(cl *cookieClient, oracle, target uuid.UUID) *http.Response {
+		return cl.do(t, "POST",
+			"/api/cubes/"+cubeID+"/cards/"+oracle.String()+"/change-printing",
+			fmt.Sprintf(`{"newScryfallId":%q}`, target))
+	}
+
+	// Happy path: 204, list shows the new printing, version untouched.
+	if resp := change(c, boltO, m10S); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("change = %d, want 204", resp.StatusCode)
+	}
+	cards := getCubeCards(t, c, cubeID)
+	if cards.Version != 1 {
+		t.Fatalf("version = %d, want 1 (printing swap must not bump)", cards.Version)
+	}
+	if len(cards.Cards) != 1 || cards.Cards[0].ScryfallID != m10S.String() ||
+		cards.Cards[0].Quantity != 2 {
+		t.Fatalf("cards = %+v, want 2× m10 printing", cards.Cards)
+	}
+
+	// 422 family.
+	for name, resp := range map[string]*http.Response{
+		"same printing":    change(c, boltO, m10S),
+		"foreign oracle":   change(c, boltO, strikeS),
+		"not in cube":      change(c, uuid.New(), m10S),
+		"malformed target": change(c, boltO, uuid.Nil),
+	} {
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("%s = %d, want 422", name, resp.StatusCode)
+		}
+	}
+
+	// Non-owner on a public cube: 403.
+	other := loggedInClient(t, srv, q, "cp2@test.dev")
+	if resp := change(other, boltO, alphaS); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-owner = %d, want 403", resp.StatusCode)
+	}
+}
+
 func TestCommitChangeAndHistory(t *testing.T) {
 	srv, pool, q := newCubesServer(t)
 	owner := loggedInClient(t, srv, q, "owner@x.y")

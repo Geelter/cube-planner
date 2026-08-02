@@ -260,6 +260,29 @@ func (q *Queries) GetCubeCardQuantities(ctx context.Context, cubeID uuid.UUID) (
 	return items, nil
 }
 
+const getCubeCardRow = `-- name: GetCubeCardRow :one
+select scryfall_id, quantity from cube_cards
+where cube_id = $1 and oracle_id = $2
+`
+
+type GetCubeCardRowParams struct {
+	CubeID   uuid.UUID
+	OracleID uuid.UUID
+}
+
+type GetCubeCardRowRow struct {
+	ScryfallID uuid.UUID
+	Quantity   int32
+}
+
+// Current printing + quantity of one oracle row (printing-swap validation).
+func (q *Queries) GetCubeCardRow(ctx context.Context, arg GetCubeCardRowParams) (GetCubeCardRowRow, error) {
+	row := q.db.QueryRow(ctx, getCubeCardRow, arg.CubeID, arg.OracleID)
+	var i GetCubeCardRowRow
+	err := row.Scan(&i.ScryfallID, &i.Quantity)
+	return i, err
+}
+
 const getCubeCards = `-- name: GetCubeCards :many
 select cc.oracle_id, cc.scryfall_id, cc.quantity,
     ca.name, ca.mana_cost, ca.type_line, ca.cmc, ca.colors,
@@ -676,6 +699,23 @@ type RemoveCubeCardQuantityParams struct {
 
 func (q *Queries) RemoveCubeCardQuantity(ctx context.Context, arg RemoveCubeCardQuantityParams) error {
 	_, err := q.db.Exec(ctx, removeCubeCardQuantity, arg.Quantity, arg.CubeID, arg.OracleID)
+	return err
+}
+
+const setCubeCardPrinting = `-- name: SetCubeCardPrinting :exec
+update cube_cards set scryfall_id = $1
+where cube_id = $2 and oracle_id = $3
+`
+
+type SetCubeCardPrintingParams struct {
+	ScryfallID uuid.UUID
+	CubeID     uuid.UUID
+	OracleID   uuid.UUID
+}
+
+// Cosmetic printing swap: no version bump, no changelog (see Service.ChangePrinting).
+func (q *Queries) SetCubeCardPrinting(ctx context.Context, arg SetCubeCardPrintingParams) error {
+	_, err := q.db.Exec(ctx, setCubeCardPrinting, arg.ScryfallID, arg.CubeID, arg.OracleID)
 	return err
 }
 
