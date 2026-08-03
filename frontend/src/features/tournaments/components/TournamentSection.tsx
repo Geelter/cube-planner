@@ -200,8 +200,16 @@ export function TournamentSection({ eventId }: { eventId: string }) {
             type="button"
             loading={playerAction.isPending}
             onClick={() => {
-              if (myPlayer) playerAction.mutate({ playerId: myPlayer.id, action: "drop" });
-              setConfirmDrop(false);
+              // Keep the dialog open while the action is in flight so the
+              // spinner is visible; close once the mutation settles.
+              if (myPlayer) {
+                playerAction.mutate(
+                  { playerId: myPlayer.id, action: "drop" },
+                  { onSettled: () => setConfirmDrop(false) },
+                );
+              } else {
+                setConfirmDrop(false);
+              }
             }}
           >
             {m.tournament_drop()}
