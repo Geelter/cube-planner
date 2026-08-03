@@ -11,6 +11,15 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { RootLayout } from "./__root";
 
+// Same pattern as CubeBrowserPage.test.tsx: mock useMe so tests can flip
+// between guest (null) and signed-in. useLogout is mocked too because
+// RootLayout renders its logout buttons off it.
+const auth: { me: { id: string; displayName: string } | null } = { me: null };
+vi.mock("@/features/auth/api", () => ({
+  useMe: () => ({ data: auth.me }),
+  useLogout: () => ({ isPending: false, mutate: vi.fn() }),
+}));
+
 beforeEach(() => {
   vi.stubGlobal(
     "fetch",
@@ -22,11 +31,21 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  auth.me = null;
 });
 
 async function renderShell() {
   const rootRoute = createRootRoute({ component: RootLayout });
-  const paths = ["/", "/cards", "/cubes", "/events", "/collection", "/login"];
+  const paths = [
+    "/",
+    "/cards",
+    "/cubes",
+    "/events",
+    "/collection",
+    "/login",
+    "/cubes/mine",
+    "/account",
+  ];
   const children = paths.map((path) =>
     createRoute({ getParentRoute: () => rootRoute, path, component: () => null }),
   );
@@ -56,8 +75,23 @@ test("primary destinations live in the bottom nav; drawer keeps secondary items"
   }
   await userEvent.click(screen.getByRole("button", { name: "Menu" }));
   const drawer = screen.getByRole("dialog");
-  expect(within(drawer).queryByRole("link", { name: "Cards" })).toBeNull();
+  for (const name of ["Cards", "Cubes", "Events", "Collection"]) {
+    expect(within(drawer).queryByRole("link", { name })).toBeNull();
+  }
   expect(within(drawer).getByRole("link", { name: "Log in" })).toBeInTheDocument();
+});
+
+test("signed-in drawer keeps My cubes/account/logout but not Collection", async () => {
+  auth.me = { id: "user-1", displayName: "Ada Lovelace" };
+  await renderShell();
+  await userEvent.click(screen.getByRole("button", { name: "Menu" }));
+  const drawer = screen.getByRole("dialog");
+  for (const name of ["Cards", "Cubes", "Events", "Collection"]) {
+    expect(within(drawer).queryByRole("link", { name })).toBeNull();
+  }
+  expect(within(drawer).getByRole("link", { name: "My cubes" })).toBeInTheDocument();
+  expect(within(drawer).getByRole("link", { name: "Ada Lovelace" })).toBeInTheDocument();
+  expect(within(drawer).getByRole("button", { name: "Log out" })).toBeInTheDocument();
 });
 
 test("drawer closes on navigation", async () => {
