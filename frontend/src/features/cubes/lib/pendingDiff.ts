@@ -17,7 +17,8 @@ export type PendingAction =
   | { type: "undoAdd"; oracleId: string }
   | { type: "undoRemove"; oracleId: string }
   | { type: "revalidate"; current: CubeCardEntry[] }
-  | { type: "reset" };
+  | { type: "reset" }
+  | { type: "setAddPrinting"; oracleId: string; scryfallId: string };
 
 export const emptyPending: PendingState = { adds: new Map(), removes: new Map() };
 
@@ -127,6 +128,16 @@ export function pendingReducer(state: PendingState, action: PendingAction): Pend
     }
     case "reset":
       return emptyPending;
+    case "setAddPrinting": {
+      const add = state.adds.get(action.oracleId);
+      if (!add) return state;
+      const next = clone(state);
+      next.adds.set(action.oracleId, {
+        ...add,
+        card: { ...add.card, scryfallId: action.scryfallId },
+      });
+      return next;
+    }
   }
 }
 

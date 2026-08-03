@@ -464,6 +464,39 @@ func (s *Service) ApplyChange(ctx context.Context, cubeID, authorID uuid.UUID, e
 	return entry, newVersion, nil
 }
 
+// ChangePrinting swaps the stored printing of one oracle entry in place.
+// Deliberately no version bump and no changelog entry: printing is
+// cosmetic, diffs and replay are oracle-keyed, and concurrent editors'
+// expectedVersion must stay valid. A lost update between the read and
+// the write just means last-picker-wins, which is fine for cosmetics.
+func (s *Service) ChangePrinting(ctx context.Context, cubeID, viewerID, oracleID, newScryfallID uuid.UUID) error {
+	if _, err := s.getOwned(ctx, cubeID, viewerID); err != nil {
+		return err
+	}
+	row, err := s.queries.GetCubeCardRow(ctx, db.GetCubeCardRowParams{
+		CubeID: cubeID, OracleID: oracleID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: oracle %s is not in the cube", ErrInvalidChange, oracleID)
+	}
+	if err != nil {
+		return err
+	}
+	if row.ScryfallID == newScryfallID {
+		return fmt.Errorf("%w: target is the current printing", ErrInvalidChange)
+	}
+	cards, err := s.queries.GetCardsByScryfallIDs(ctx, []uuid.UUID{newScryfallID})
+	if err != nil {
+		return err
+	}
+	if len(cards) == 0 || cards[0].OracleID != oracleID {
+		return fmt.Errorf("%w: target is not a printing of this card", ErrInvalidChange)
+	}
+	return s.queries.SetCubeCardPrinting(ctx, db.SetCubeCardPrintingParams{
+		CubeID: cubeID, OracleID: oracleID, ScryfallID: newScryfallID,
+	})
+}
+
 func (s *Service) ListChanges(ctx context.Context, cubeID, viewerID uuid.UUID, limit, offset int32) ([]ChangeEntry, int64, error) {
 	if _, err := s.Get(ctx, cubeID, viewerID); err != nil {
 		return nil, 0, err

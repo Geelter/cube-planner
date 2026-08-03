@@ -125,3 +125,13 @@ select scryfall_id, oracle_id, name, mana_cost, type_line, cmc, colors,
     color_identity, rarity, image_small, image_normal
 from cards
 where scryfall_id = any(sqlc.arg(ids)::uuid[]);
+
+-- Current printing + quantity of one oracle row (printing-swap validation).
+-- name: GetCubeCardRow :one
+select scryfall_id, quantity from cube_cards
+where cube_id = sqlc.arg(cube_id) and oracle_id = sqlc.arg(oracle_id);
+
+-- Cosmetic printing swap: no version bump, no changelog (see Service.ChangePrinting).
+-- name: SetCubeCardPrinting :exec
+update cube_cards set scryfall_id = sqlc.arg(scryfall_id)
+where cube_id = sqlc.arg(cube_id) and oracle_id = sqlc.arg(oracle_id);

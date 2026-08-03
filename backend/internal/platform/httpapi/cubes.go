@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -232,6 +233,14 @@ type commitCubeChangeOutput struct {
 	}
 }
 
+type changeCubePrintingInput struct {
+	CubeID   string `path:"cubeId"`
+	OracleID string `path:"oracleId"`
+	Body     struct {
+		NewScryfallID uuid.UUID `json:"newScryfallId" format:"uuid"`
+	}
+}
+
 func registerCubes(api huma.API, deps Deps) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "createCube",
@@ -452,5 +461,32 @@ func registerCubes(api huma.API, deps Deps) {
 		out.Body.Change = changelogEntryFrom(entry)
 		out.Body.Version = version
 		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "changeCubePrinting",
+		Method:        http.MethodPost,
+		Path:          "/api/cubes/{cubeId}/cards/{oracleId}/change-printing",
+		Summary:       "Swap the stored printing of a cube entry (cosmetic; no new version)",
+		Tags:          []string{"cubes"},
+		DefaultStatus: http.StatusNoContent,
+	}, func(ctx context.Context, in *changeCubePrintingInput) (*struct{}, error) {
+		uid, ok := CurrentUserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("authentication required")
+		}
+		cubeID, err := parseCubeID(in.CubeID)
+		if err != nil {
+			return nil, err
+		}
+		oracleID, err := uuid.Parse(in.OracleID)
+		if err != nil {
+			// A malformed oracle is just "not in the cube" — same 422 family.
+			return nil, mapCubeErr(fmt.Errorf("%w: malformed oracle id", cubes.ErrInvalidChange))
+		}
+		if err := deps.Cubes.ChangePrinting(ctx, cubeID, uid, oracleID, in.Body.NewScryfallID); err != nil {
+			return nil, mapCubeErr(err)
+		}
+		return nil, nil
 	})
 }

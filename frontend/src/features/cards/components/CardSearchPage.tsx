@@ -1,47 +1,68 @@
 import { useState } from "react";
 import { m } from "@/paraglide/messages";
 import { Alert } from "@/shared/ui/alert";
+import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
 import { ManaCost } from "@/shared/cards/ManaCost";
 import { type CardSummary, useCardPrintings } from "@/shared/cards/api";
+import { PrintingPickerDialog } from "@/shared/cards/PrintingPickerDialog";
 
 function SelectedCardPanel({ card }: { card: CardSummary }) {
   const printings = useCardPrintings(card.oracleId);
-  const latest = printings.data?.[0];
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const printingList = printings.data ?? [];
+  const shown = printingList.find((p) => p.scryfallId === pickedId) ?? printingList[0];
 
   if (printings.isPending) {
     return <p className="text-sm text-fg-muted">{m.loading()}</p>;
   }
-  if (printings.isError || latest === undefined) {
+  if (printings.isError || shown === undefined) {
     return <Alert variant="danger">{m.error_generic()}</Alert>;
   }
   return (
     <div className="flex flex-wrap gap-6">
-      {latest.imageNormal != null && (
-        <img src={latest.imageNormal} alt={latest.name} className="w-64 self-start rounded-xl" />
+      {shown.imageNormal != null && (
+        <img src={shown.imageNormal} alt={shown.name} className="w-64 self-start rounded-xl" />
       )}
       <div className="flex max-w-md flex-col gap-2">
-        <h2 className="text-lg font-semibold text-fg">{latest.name}</h2>
+        <h2 className="text-lg font-semibold text-fg">{shown.name}</h2>
         <p className="text-sm text-fg-muted">
-          {latest.typeLine}
-          {latest.manaCost !== "" && (
+          {shown.typeLine}
+          {shown.manaCost !== "" && (
             <>
               {" · "}
-              <ManaCost cost={latest.manaCost} />
+              <ManaCost cost={shown.manaCost} />
             </>
           )}
         </p>
-        {latest.oracleText !== "" && (
-          <p className="text-sm whitespace-pre-line text-fg">{latest.oracleText}</p>
+        {shown.oracleText !== "" && (
+          <p className="text-sm whitespace-pre-line text-fg">{shown.oracleText}</p>
         )}
         <p className="text-sm text-fg-muted">
-          {m.cards_set_line({ setName: latest.setName, collectorNumber: latest.collectorNumber })}
+          {m.cards_set_line({ setName: shown.setName, collectorNumber: shown.collectorNumber })}
         </p>
         <p className="text-sm text-fg-muted">
           {m.cards_printings_count({ count: printings.data?.length ?? 0 })}
         </p>
+        <div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+            {m.cards_change_printing()}
+          </Button>
+        </div>
       </div>
+      <PrintingPickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        oracleId={card.oracleId}
+        name={shown.name}
+        currentScryfallId={shown.scryfallId}
+        onPick={(id) => {
+          setPickedId(id);
+          setPickerOpen(false);
+        }}
+      />
     </div>
   );
 }

@@ -10,6 +10,8 @@ export function EditableCardList({
   serverByOracle,
   groupKind,
   dispatch,
+  onChangePrinting,
+  printingPendingOracleId,
 }: {
   /** Preview entries (server list with pending deltas applied) — display only. */
   cards: CubeCardEntry[];
@@ -17,6 +19,8 @@ export function EditableCardList({
   serverByOracle: Map<string, CubeCardEntry>;
   groupKind: GroupKind;
   dispatch: (action: PendingAction) => void;
+  onChangePrinting: (entry: CubeCardEntry) => void;
+  printingPendingOracleId: string | null;
 }) {
   if (cards.length === 0) {
     return <p className="text-sm text-fg-muted">{m.cubes_empty_list()}</p>;
@@ -62,6 +66,16 @@ export function EditableCardList({
                     onClick={() => dispatch({ type: "increment", entry: serverEntry(card) })}
                   >
                     +
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={m.cubes_change_printing({ name: card.name })}
+                    loading={printingPendingOracleId === card.oracleId}
+                    onClick={() => onChangePrinting(card)}
+                  >
+                    ⇄
                   </Button>
                   <Button
                     type="button"

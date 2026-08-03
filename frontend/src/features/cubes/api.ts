@@ -154,3 +154,19 @@ export function useCommitChange(cubeId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cubes"] }),
   });
 }
+
+export function useChangeCubePrinting(cubeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { oracleId: string; newScryfallId: string }) => {
+      // 204 No Content on success: no body to unwrap, so the error check
+      // stays inline (same pattern as useDeleteCube).
+      const { error } = await client.POST("/api/cubes/{cubeId}/cards/{oracleId}/change-printing", {
+        params: { path: { cubeId, oracleId: vars.oracleId } },
+        body: { newScryfallId: vars.newScryfallId },
+      });
+      if (error) throw new Error(error.detail ?? m.error_generic());
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cubes"] }),
+  });
+}

@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { m } from "@/paraglide/messages";
 
 type BlockerOptions = { shouldBlockFn: () => boolean; disabled?: boolean };
 
@@ -103,6 +106,25 @@ vi.mock("./CubeSettingsSection", () => ({
 import { CommitConflictError } from "../api";
 import { CubeEditorPage } from "./CubeEditorPage";
 
+// useChangeCubePrinting/useCardPrintings are real hooks (not mocked above),
+// so every render needs a QueryClient in context even for tests that never
+// touch the printing picker.
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <CubeEditorPage />
+    </QueryClientProvider>,
+  );
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 beforeEach(() => {
   mocks.mutate.mockReset();
   mocks.navigate.mockReset();
@@ -111,10 +133,11 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 test("add via autocomplete lands in pending and commits with expectedVersion", async () => {
-  render(<CubeEditorPage />);
+  renderPage();
   fireEvent.click(screen.getByText("pick sol ring"));
   // "+1" and "Sol Ring" now also appear in the mobile summary bar once dirty —
   // scope to the pending panel (an <aside>, i.e. the "complementary" landmark).
@@ -137,7 +160,7 @@ test("add via autocomplete lands in pending and commits with expectedVersion", a
 });
 
 test("decrement of existing card lands in pending removes", async () => {
-  render(<CubeEditorPage />);
+  renderPage();
   fireEvent.click(screen.getByRole("button", { name: /decrease quantity of lightning bolt/i }));
   // The mobile summary bar mirrors the total once dirty — scope to the panel.
   await waitFor(() =>
@@ -158,7 +181,7 @@ test("decrement of existing card lands in pending removes", async () => {
 });
 
 test("save disabled with no pending changes", () => {
-  render(<CubeEditorPage />);
+  renderPage();
   const saveButton = screen.getByRole("button", { name: /save changes/i });
   expect(saveButton.hasAttribute("disabled")).toBe(true);
 });
@@ -182,7 +205,7 @@ test("saving does not trigger the unsaved-changes blocker", async () => {
       opts.onSuccess({ version: 4 }),
   );
 
-  render(<CubeEditorPage />);
+  renderPage();
   fireEvent.click(screen.getByText("pick sol ring"));
   await waitFor(() =>
     expect(within(screen.getByRole("complementary")).getByText(/\+1/)).toBeDefined(),
@@ -202,7 +225,7 @@ test("saving does not trigger the unsaved-changes blocker", async () => {
 // preview entry whose quantity has pending removes baked in — otherwise the
 // reducer's remove cap makes the second decrement of a 2-copy card a no-op.
 test("repeated decrement removes the full server quantity of a multi-copy card", async () => {
-  render(<CubeEditorPage />);
+  renderPage();
   const decrease = () =>
     fireEvent.click(screen.getByRole("button", { name: /decrease quantity of lightning bolt/i }));
 
@@ -234,7 +257,7 @@ test("repeated decrement removes the full server quantity of a multi-copy card",
 // isn't loaded in unit tests, so visibility classes (hidden/lg:) are not
 // asserted here — mount/unmount and wiring are.
 test("mobile bar appears when dirty and saves directly", async () => {
-  render(<CubeEditorPage />);
+  renderPage();
   expect(screen.queryByRole("region", { name: /pending changes/i })).toBeNull();
   fireEvent.click(screen.getByText("pick sol ring"));
   const bar = await screen.findByRole("region", { name: /pending changes/i });
@@ -250,7 +273,7 @@ test("mobile bar appears when dirty and saves directly", async () => {
 });
 
 test("tapping the bar summary opens the sheet with the full panel", async () => {
-  render(<CubeEditorPage />);
+  renderPage();
   fireEvent.click(screen.getByText("pick sol ring"));
   const bar = await screen.findByRole("region", { name: /pending changes/i });
   fireEvent.click(within(bar).getByRole("button", { name: /review pending changes/i }));
@@ -260,7 +283,7 @@ test("tapping the bar summary opens the sheet with the full panel", async () => 
 });
 
 test("discard in the sheet hides the bar and empties the sheet", async () => {
-  render(<CubeEditorPage />);
+  renderPage();
   fireEvent.click(screen.getByText("pick sol ring"));
   const bar = await screen.findByRole("region", { name: /pending changes/i });
   fireEvent.click(within(bar).getByRole("button", { name: /review pending changes/i }));
@@ -284,7 +307,7 @@ test("commit conflict from the sheet surfaces the conflict alert inside the shee
       opts.onError(new CommitConflictError("conflict")),
   );
 
-  render(<CubeEditorPage />);
+  renderPage();
   fireEvent.click(screen.getByText("pick sol ring"));
   const bar = await screen.findByRole("region", { name: /pending changes/i });
   fireEvent.click(within(bar).getByRole("button", { name: /review pending changes/i }));
@@ -293,4 +316,53 @@ test("commit conflict from the sheet surfaces the conflict alert inside the shee
   fireEvent.click(within(sheet).getByRole("button", { name: /save changes/i }));
 
   await waitFor(() => expect(within(sheet).getByText(/changed elsewhere/i)).toBeDefined());
+});
+
+test("picking a new printing for a saved entry posts change-printing", async () => {
+  const alpha = {
+    scryfallId: "s-bolt",
+    oracleId: "o-bolt",
+    name: "Lightning Bolt",
+    manaCost: "{R}",
+    typeLine: "Instant",
+    cmc: 1,
+    colorIdentity: ["R"],
+    colors: ["R"],
+    imageSmall: null,
+    imageNormal: null,
+    backImageNormal: null,
+    oracleText: "",
+    promo: false,
+    rarity: "common",
+    releasedAt: "1993-08-05",
+    setCode: "lea",
+    setName: "Limited Edition Alpha",
+    collectorNumber: "161",
+  };
+  const beta = {
+    ...alpha,
+    scryfallId: "s-bolt-beta",
+    setCode: "leb",
+    setName: "Limited Edition Beta",
+  };
+  const fetchMock = vi.fn(async (input: Request | string) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.includes("/printings")) return jsonResponse({ printings: [alpha, beta] });
+    if (url.includes("/change-printing")) return new Response(null, { status: 204 });
+    return jsonResponse({});
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderPage();
+  await userEvent.click(
+    screen.getByRole("button", { name: m.cubes_change_printing({ name: "Lightning Bolt" }) }),
+  );
+  // Dialog fetches printings and lists the non-current one.
+  await userEvent.click(await screen.findByRole("button", { name: /Beta/ }));
+  await waitFor(() => {
+    const calls = fetchMock.mock.calls.map((c) =>
+      typeof c[0] === "string" ? c[0] : (c[0] as Request).url,
+    );
+    expect(calls.some((u) => u.includes("/change-printing"))).toBe(true);
+  });
 });
