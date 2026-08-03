@@ -136,25 +136,10 @@ export function RootLayout() {
             if ((e.target as Element).closest("a")) setMenuOpen(false);
           }}
         >
-          <nav className="flex flex-col">
-            <Link to="/cards" className={drawerItem}>
-              {m.nav_cards()}
-            </Link>
-            <Link to="/cubes" className={drawerItem}>
-              {m.nav_cubes()}
-            </Link>
-            <Link to="/events" className={drawerItem}>
-              {m.nav_events()}
-            </Link>
-          </nav>
-          <hr className="border-border" />
           {me.data ? (
             <div className="flex flex-col">
               <Link to="/cubes/mine" className={drawerItem}>
                 {m.cubes_mine_title()}
-              </Link>
-              <Link to="/collection" className={drawerItem}>
-                {m.nav_collection()}
               </Link>
               <Link to="/account" className={drawerItem}>
                 {me.data.displayName}
@@ -180,9 +165,36 @@ export function RootLayout() {
           </div>
         </div>
       </Drawer>
-      <main ref={mainRef} tabIndex={-1} className="mx-auto max-w-4xl px-4 py-8 outline-none">
+      <main
+        ref={mainRef}
+        tabIndex={-1}
+        className="mx-auto max-w-4xl px-4 pt-8 pb-24 outline-none md:pb-8"
+      >
         <Outlet />
       </main>
+      <nav
+        aria-label={m.nav_primary()}
+        className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface-raised pb-[env(safe-area-inset-bottom)] md:hidden"
+      >
+        <div className="mx-auto flex h-14 max-w-4xl items-stretch">
+          {(
+            [
+              ["/cards", m.nav_cards],
+              ["/cubes", m.nav_cubes],
+              ["/events", m.nav_events],
+              ["/collection", m.nav_collection],
+            ] as const
+          ).map(([to, label]) => (
+            <Link
+              key={to}
+              to={to}
+              className="flex flex-1 items-center justify-center text-sm text-fg-muted data-[status=active]:font-medium data-[status=active]:text-accent"
+            >
+              {label()}
+            </Link>
+          ))}
+        </div>
+      </nav>
       {import.meta.env.DEV && (
         <TanStackDevtools
           plugins={[
