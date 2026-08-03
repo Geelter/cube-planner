@@ -118,6 +118,50 @@ test("shows a loading state while printings are in flight", async () => {
   ).toBeInTheDocument();
 });
 
+test("details view can show a different printing", async () => {
+  const printings = [
+    { ...boltPrinting, scryfallId: "new", setName: "Magic 2010", collectorNumber: "146" },
+    {
+      ...boltPrinting,
+      scryfallId: "old",
+      setName: "Alpha",
+      collectorNumber: "161",
+      imageSmall: null,
+      imageNormal: null,
+    },
+  ];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: Request) => {
+      const url = new URL(input.url);
+      if (url.pathname === "/api/cards/autocomplete") {
+        return jsonResponse({ cards: [bolt] });
+      }
+      if (url.pathname === `/api/cards/${bolt.oracleId}/printings`) {
+        return jsonResponse({ printings });
+      }
+      return new Response("{}", { status: 404 });
+    }),
+  );
+
+  const user = userEvent.setup();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <CardSearchPage />
+    </QueryClientProvider>,
+  );
+
+  await user.type(screen.getByRole("combobox"), "bolt");
+  const option = await screen.findByRole("option", { name: /Lightning Bolt/ });
+  await user.click(option);
+
+  expect(await screen.findByText(/Magic 2010/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: m.cards_change_printing() }));
+  await user.click(await screen.findByRole("button", { name: /Alpha/ }));
+  await waitFor(() => expect(screen.getByText(/Alpha/)).toBeInTheDocument());
+});
+
 test("shows a generic error alert when printings fail to load", async () => {
   vi.stubGlobal(
     "fetch",

@@ -53,6 +53,7 @@
   "cards_select_hint": "Search and select a card to see its details.",
   "cards_set_line": "{setName} · #{collectorNumber}",
   "cards_printings_count": "Printings: {count}",
+  "cards_change_printing": "Change printing",
   "cubes_browser_title": "Cubes",
   "cubes_search_label": "Search cubes",
   "cubes_search_placeholder": "Cube name…",

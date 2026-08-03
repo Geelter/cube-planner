@@ -53,6 +53,7 @@
   "cards_select_hint": "Wyszukaj i wybierz kartę, aby zobaczyć szczegóły.",
   "cards_set_line": "{setName} · #{collectorNumber}",
   "cards_printings_count": "Wydania: {count}",
+  "cards_change_printing": "Zmień wydanie",
   "cubes_browser_title": "Cuby",
   "cubes_search_label": "Szukaj cubów",
   "cubes_search_placeholder": "Nazwa cuba…",
