@@ -23,9 +23,9 @@ export function PendingChangesBar({
   return (
     <section
       aria-label={m.cubes_pending_title()}
-      className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-surface-raised shadow-lg lg:hidden"
+      className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 border-t border-border bg-surface-raised shadow-lg md:bottom-0 lg:hidden"
     >
-      <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 p-3 pb-3 md:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
           aria-label={m.cubes_pending_bar_review({ adds: totals.adds, removes: totals.removes })}
