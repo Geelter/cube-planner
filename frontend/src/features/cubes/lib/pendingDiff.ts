@@ -132,6 +132,9 @@ export function pendingReducer(state: PendingState, action: PendingAction): Pend
       const add = state.adds.get(action.oracleId);
       if (!add) return state;
       const next = clone(state);
+      // Only scryfallId is rewritten — other per-printing fields (e.g.
+      // imageSmall) are left stale by design, since the pending-add UI
+      // renders only name/quantity and never displays them.
       next.adds.set(action.oracleId, {
         ...add,
         card: { ...add.card, scryfallId: action.scryfallId },

@@ -104,7 +104,15 @@ src/
    `loading={pendingId === row.<key>}`) while other rows stay enabled;
    and `loading={query.isFetching && query.isPlaceholderData}` for
    pagination over `keepPreviousData` queries. Buttons that only change
-   local state (filters, opening dialogs) get no loading prop.
+   local state (filters, opening dialogs) get no loading prop. Dialogs
+   that confirm a mutation defer closing until it settles
+   (`mutate(vars, { onSettled: () => close() })`) so the spinner stays
+   visible instead of the dialog vanishing mid-request. Multi-panel tab
+   UIs (e.g. tournament rounds) implement the full APG tabs pattern:
+   `role="tablist"`/`role="tab"`/`role="tabpanel"`, `aria-selected`,
+   `aria-controls`/`aria-labelledby` (via `useId`), roving `tabIndex`
+   (`0` on the selected tab, `-1` on the rest), and Arrow/Home/End key
+   handling that moves both focus and selection.
 7. **Test placement.** Tests sit next to what they test. Inside
    `src/routes/` a test file needs a `-` filename prefix so route
    generation skips it; elsewhere use plain `*.test.ts(x)`.
@@ -127,12 +135,23 @@ src/
      `sm:`/`md:`/`lg:` layer desktop on top.
    - **Touch targets.** Interactive controls on player-facing flows are
      ≥44px tall (`h-11`+) or have equivalent hit area; never two small
-     targets adjacent without a gap.
-   - **Use the established patterns.** App nav = the header drawer
-     (`shared/ui/drawer.tsx`); wide tables = `overflow-x-auto` wrapper;
-     dialogs = `shared/ui/dialog.tsx` (handles mobile sizing); forms =
-     single-column `max-w-md`. Inputs use ≥16px font on mobile
-     (`text-base sm:text-sm`) so iOS Safari does not zoom on focus.
+     targets adjacent without a gap. Icon-only affordances (dialog close,
+     theme toggle) use `size="icon"` at `size-11`; when the visual icon
+     must stay small, pull the hit area out with a negative margin
+     (`-m-2`) rather than growing the icon itself.
+   - **Use the established patterns.** Primary nav = header links on
+     `md:`+ and a fixed bottom tab bar below `md:`
+     (`<nav aria-label={m.nav_primary()}>`, Cards/Cubes/Events/Collection,
+     `data-status="active"` styling from TanStack Router, safe-area
+     padding); `<main>` reserves `pb-24 md:pb-8` for it, and floating
+     bars like `PendingChangesBar` stack above it
+     (`bottom-[calc(3.5rem+env(safe-area-inset-bottom))] md:bottom-0`).
+     Secondary nav (My Cubes, account, logout, log in, language switcher)
+     = the header drawer (`shared/ui/drawer.tsx`). Wide tables =
+     `overflow-x-auto` wrapper; dialogs = `shared/ui/dialog.tsx` (handles
+     mobile sizing); forms = single-column `max-w-md`. Inputs use ≥16px
+     font on mobile (`text-base sm:text-sm`) so iOS Safari does not zoom
+     on focus.
 
 ### Adding shadcn/ui components
 

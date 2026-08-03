@@ -6,6 +6,7 @@ import type { TournamentInfo } from "../api";
 
 const report = vi.fn();
 const playerAct = vi.fn();
+const playerActState: { isPending: boolean } = { isPending: false };
 let tournamentData: TournamentInfo | undefined;
 let eventStatus = "started";
 
@@ -17,7 +18,7 @@ vi.mock("../api", async (orig) => ({
   useEventStatus: () => ({ data: { status: eventStatus } }),
   useTournament: () => ({ data: tournamentData, isPending: false, error: null }),
   useReportResult: () => ({ mutate: report, isPending: false, error: null }),
-  usePlayerAction: () => ({ mutate: playerAct, isPending: false, error: null }),
+  usePlayerAction: () => ({ mutate: playerAct, error: null, ...playerActState }),
 }));
 
 import { TournamentSection } from "./TournamentSection";
@@ -25,15 +26,20 @@ import { TournamentSection } from "./TournamentSection";
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  playerActState.isPending = false;
 });
 
 function renderSection() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  // Fresh element per (re)render — reusing one element reference makes React
+  // bail out of reconciling the subtree, hiding mock-state changes.
+  const makeUi = () => (
     <QueryClientProvider client={qc}>
       <TournamentSection eventId="e1" />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(makeUi());
+  return { ...view, rerenderSame: () => view.rerender(makeUi()) };
 }
 
 function baseTournament(): TournamentInfo {
@@ -145,6 +151,32 @@ test("stale tab state falls back to exactly one selected tab", async () => {
     .filter((el) => el.getAttribute("aria-selected") === "true");
   expect(selected).toHaveLength(1);
   expect(selected[0]).toHaveAccessibleName("Round 3");
+});
+
+test("confirm-drop keeps the dialog open and spins while the drop is pending", async () => {
+  // The mocked mutate flips the hook into its pending state (as the real
+  // mutation would); rerenderSame lets the component observe it.
+  playerAct.mockImplementation(() => {
+    playerActState.isPending = true;
+  });
+  tournamentData = baseTournament();
+  const view = renderSection();
+  await userEvent.click(screen.getByRole("button", { name: "Drop from tournament" }));
+  await userEvent.click(screen.getByRole("button", { name: "Drop" }));
+  view.rerenderSame();
+  // The dialog stays open while the mutation is in flight…
+  expect(
+    screen.getByText(
+      "Drop from the tournament? You'll be excluded from the next round's pairings. Results you played stay on the books.",
+    ),
+  ).toBeInTheDocument();
+  // …and its confirm button carries the spinner (match by textContent — the
+  // spinner's aria-label joins the accessible name while loading).
+  const confirm = screen
+    .getAllByRole("button")
+    .filter((b) => b.textContent === "Drop")
+    .at(-1)!;
+  expect(confirm).toHaveAttribute("aria-busy", "true");
 });
 
 test("renders nothing before the event starts", () => {

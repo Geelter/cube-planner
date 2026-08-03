@@ -292,6 +292,12 @@ func TestChangeCubePrinting(t *testing.T) {
 	if resp := change(other, boltO, alphaS); resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("non-owner = %d, want 403", resp.StatusCode)
 	}
+
+	// Anonymous: 401.
+	anon := newCookieClient(t, srv)
+	if resp := change(anon, boltO, alphaS); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anon = %d, want 401", resp.StatusCode)
+	}
 }
 
 func TestCommitChangeAndHistory(t *testing.T) {
