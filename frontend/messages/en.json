@@ -118,6 +118,7 @@
   "cubes_qty_increase": "Increase quantity of {name}",
   "cubes_qty_decrease": "Decrease quantity of {name}",
   "cubes_remove_card": "Remove {name}",
+  "cubes_change_printing": "Change printing of {name}",
   "cubes_history_title": "History of {name}",
   "cubes_history_empty": "No changes yet.",
   "cubes_history_view_version": "View cube at this version",

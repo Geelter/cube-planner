@@ -120,6 +120,7 @@
   "cubes_qty_increase": "Zwiększ liczbę kopii {name}",
   "cubes_qty_decrease": "Zmniejsz liczbę kopii {name}",
   "cubes_remove_card": "Usuń {name}",
+  "cubes_change_printing": "Zmień wydanie {name}",
   "cubes_history_title": "Historia: {name}",
   "cubes_history_empty": "Brak zmian.",
   "cubes_history_view_version": "Zobacz cube w tej wersji",

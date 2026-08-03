@@ -3,12 +3,19 @@ import { useBlocker } from "@tanstack/react-router";
 import { useMemo, useReducer, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
+import { PrintingPickerDialog } from "@/shared/cards/PrintingPickerDialog";
 import { cn } from "@/shared/lib/cn";
 import { Alert } from "@/shared/ui/alert";
 import { Drawer } from "@/shared/ui/drawer";
 import { Label } from "@/shared/ui/label";
 import type { CubeCardEntry } from "../api";
-import { CommitConflictError, useCommitChange, useCube, useCubeCards } from "../api";
+import {
+  CommitConflictError,
+  useChangeCubePrinting,
+  useCommitChange,
+  useCube,
+  useCubeCards,
+} from "../api";
 import { emptyPending, pendingCount, pendingReducer, toCommitDiff } from "../lib/pendingDiff";
 import type { PendingState } from "../lib/pendingDiff";
 import { CubeSettingsSection } from "./CubeSettingsSection";
@@ -58,10 +65,12 @@ export function CubeEditorPage() {
   const cube = useCube(cubeId);
   const cards = useCubeCards(cubeId);
   const commit = useCommitChange(cubeId);
+  const changePrinting = useChangeCubePrinting(cubeId);
   const [pending, dispatch] = useReducer(pendingReducer, emptyPending);
   const [note, setNote] = useState("");
   const [conflict, setConflict] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [pickerEntry, setPickerEntry] = useState<CubeCardEntry | null>(null);
 
   const dirty = pendingCount(pending) > 0;
   useBlocker({
@@ -136,6 +145,7 @@ export function CubeEditorPage() {
       </h1>
 
       {commitAlerts}
+      {changePrinting.isError && <Alert variant="danger">{changePrinting.error.message}</Alert>}
 
       <div className="flex max-w-md flex-col gap-1.5">
         <Label htmlFor="editor-add">{m.cubes_editor_add_label()}</Label>
@@ -149,6 +159,10 @@ export function CubeEditorPage() {
             serverByOracle={serverByOracle}
             groupKind="color"
             dispatch={dispatch}
+            onChangePrinting={setPickerEntry}
+            printingPendingOracleId={
+              changePrinting.isPending ? changePrinting.variables.oracleId : null
+            }
           />
         </div>
         <PendingChangesPanel
@@ -192,6 +206,28 @@ export function CubeEditorPage() {
       </Drawer>
 
       <CubeSettingsSection cube={cube.data} />
+
+      {pickerEntry && (
+        <PrintingPickerDialog
+          open
+          onClose={() => setPickerEntry(null)}
+          oracleId={pickerEntry.oracleId}
+          name={pickerEntry.name}
+          currentScryfallId={pickerEntry.scryfallId}
+          onPick={(newScryfallId) => {
+            if (serverByOracle.has(pickerEntry.oracleId)) {
+              changePrinting.mutate({ oracleId: pickerEntry.oracleId, newScryfallId });
+            } else {
+              dispatch({
+                type: "setAddPrinting",
+                oracleId: pickerEntry.oracleId,
+                scryfallId: newScryfallId,
+              });
+            }
+            setPickerEntry(null);
+          }}
+        />
+      )}
     </div>
   );
 }
