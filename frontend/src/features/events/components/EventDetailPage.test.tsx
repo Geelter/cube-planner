@@ -84,6 +84,20 @@ function stubDetailFetch(status: "pending_payment" | "paid") {
   );
 }
 
+function renderEventPage(payload: Record<string, unknown>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: Request) => {
+      const url = input.url;
+      if (url.includes("/api/events/")) {
+        return new Response(JSON.stringify(payload));
+      }
+      return new Response(JSON.stringify({}), { status: 401 });
+    }),
+  );
+  return renderAt("/events/e1");
+}
+
 test("checkout=success with a pending registration shows the confirming panel", async () => {
   stubDetailFetch("pending_payment");
   renderAt("/events/e1?checkout=success");
@@ -119,4 +133,38 @@ test("attendees with identical display names render without duplicate React keys
   } finally {
     errSpy.mockRestore();
   }
+});
+
+const eventFixture = {
+  id: "e1",
+  name: "Draft Night",
+  description: "Casual draft",
+  location: "Hall",
+  startsAt: "2026-08-15T16:00:00Z",
+  status: "published",
+  feeCents: 0,
+  currency: "pln",
+  maxParticipants: 8,
+  organizerName: "Org",
+  attendees: [],
+  cubes: [],
+  paidCount: 0,
+  pendingCount: 0,
+  waitlistCount: 0,
+};
+
+test("published event shows both calendar buttons with a Google template link", async () => {
+  renderEventPage(eventFixture);
+  const google = await screen.findByRole("link", { name: "Google Calendar" });
+  expect(google).toHaveAttribute("target", "_blank");
+  expect(google.getAttribute("href")).toContain(
+    "calendar.google.com/calendar/render?action=TEMPLATE",
+  );
+  expect(screen.getByRole("button", { name: "Apple Calendar (.ics)" })).toBeInTheDocument();
+});
+
+test("cancelled event hides the calendar row", async () => {
+  renderEventPage({ ...eventFixture, status: "cancelled" });
+  await screen.findByText("Draft Night");
+  expect(screen.queryByText("Add to calendar")).not.toBeInTheDocument();
 });

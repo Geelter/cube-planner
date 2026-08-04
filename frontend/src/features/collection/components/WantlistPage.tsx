@@ -4,7 +4,8 @@ import { CardHoverPreview } from "@/shared/cards/CardHoverPreview";
 import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { UnauthorizedError, useWantlist } from "../api";
-import { downloadTextFile, wantlistFilename, wantlistToCardmarketText } from "../lib/cardmarket";
+import { downloadTextFile } from "@/shared/lib/download";
+import { wantlistFilename, wantlistToCardmarketText } from "../lib/cardmarket";
 
 const route = getRouteApi("/cubes/$cubeId/wantlist");
 

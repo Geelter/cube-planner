@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import { getLocale } from "@/paraglide/runtime";
 import { m } from "@/paraglide/messages";
 import { useMe } from "@/features/auth/api";
+import { downloadTextFile } from "@/shared/lib/download";
 import { Button } from "@/shared/ui/button";
 import { UnauthorizedError, useEvent } from "../api";
+import { buildIcs, googleCalendarUrl, icsFilename } from "../lib/calendar";
 import { formatFee } from "../lib/money";
 import { EventStatusBadge } from "./EventsListPage";
 import { RegistrationPanel } from "./RegistrationPanel";
@@ -101,6 +103,27 @@ export function EventDetailPage() {
           <dd className="text-fg">{e.organizerName}</dd>
         </div>
       </dl>
+
+      {e.status !== "cancelled" && e.status !== "finished" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-fg-muted">{m.event_add_to_calendar()}</span>
+          <Button asChild variant="outline" size="sm">
+            <a href={googleCalendarUrl(e)} target="_blank" rel="noopener noreferrer">
+              {m.event_calendar_google()}
+            </a>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              downloadTextFile(icsFilename(e.name), buildIcs(e), "text/calendar;charset=utf-8")
+            }
+          >
+            {m.event_calendar_ics()}
+          </Button>
+        </div>
+      )}
 
       {e.description && <p className="whitespace-pre-wrap text-fg">{e.description}</p>}
 
