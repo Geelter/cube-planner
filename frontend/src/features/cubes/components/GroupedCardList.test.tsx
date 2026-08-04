@@ -25,6 +25,7 @@ test("renders color group headings and quantity badges", () => {
   render(
     <GroupedCardList
       groupKind="color"
+      onCardActivate={() => {}}
       cards={[
         entry({
           oracleId: "a",
@@ -45,6 +46,6 @@ test("renders color group headings and quantity badges", () => {
 });
 
 test("renders empty state", () => {
-  render(<GroupedCardList groupKind="color" cards={[]} />);
+  render(<GroupedCardList groupKind="color" cards={[]} onCardActivate={() => {}} />);
   expect(screen.getByText(/no cards/i)).toBeDefined();
 });

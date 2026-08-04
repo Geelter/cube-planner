@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
 import { CardHoverPreview } from "@/shared/cards/CardHoverPreview";
+import { CardPreviewSheet, type PreviewCard } from "@/shared/cards/CardPreviewSheet";
 import { PrintingPickerDialog } from "@/shared/cards/PrintingPickerDialog";
 import { useDebouncedValue } from "@/shared/lib/useDebouncedValue";
 import { Alert } from "@/shared/ui/alert";
@@ -26,6 +27,7 @@ export function CollectionPage() {
   const [page, setPage] = useState(0);
   const [pickerItem, setPickerItem] = useState<CollectionItemEntry | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<PreviewCard | null>(null);
   const debouncedSearch = useDebouncedValue(search, 300);
   const collection = useCollection(debouncedSearch, page);
   const setQuantity = useSetQuantity();
@@ -134,7 +136,17 @@ export function CollectionPage() {
           {collection.data.items.map((item) => (
             <li key={item.scryfallId} className="flex items-center justify-between gap-3 py-1.5">
               <CardHoverPreview card={item}>
-                <span className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewItem({
+                      oracleId: item.oracleId,
+                      scryfallId: item.scryfallId,
+                      name: item.name,
+                    })
+                  }
+                  className="flex w-full flex-col rounded text-left hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
                   <span className="truncate text-sm text-fg">{item.name}</span>
                   <span className="text-xs text-fg-muted">
                     {m.cards_set_line({
@@ -142,7 +154,7 @@ export function CollectionPage() {
                       collectorNumber: item.collectorNumber,
                     })}
                   </span>
-                </span>
+                </button>
               </CardHoverPreview>
               <span className="flex shrink-0 items-center gap-1">
                 <QuantityStepper
@@ -180,6 +192,8 @@ export function CollectionPage() {
       )}
 
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+
+      {previewItem && <CardPreviewSheet card={previewItem} onClose={() => setPreviewItem(null)} />}
 
       {pickerItem && (
         <PrintingPickerDialog

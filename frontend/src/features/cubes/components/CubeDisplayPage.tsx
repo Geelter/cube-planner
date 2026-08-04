@@ -1,9 +1,12 @@
 import { Link, getRouteApi } from "@tanstack/react-router";
 import { useState } from "react";
 import { m } from "@/paraglide/messages";
+import { useMe } from "@/features/auth/api";
+import { CardPreviewSheet, type PreviewCard } from "@/shared/cards/CardPreviewSheet";
+import { PrintingPickerDialog } from "@/shared/cards/PrintingPickerDialog";
 import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
-import { useCube, useCubeCards } from "../api";
+import { useChangeCubePrinting, useCube, useCubeCards, type CubeCardEntry } from "../api";
 import type { GroupKind } from "../lib/grouping";
 import { GroupedCardList } from "./GroupedCardList";
 
@@ -21,11 +24,16 @@ export function CubeDisplayPage() {
   const [groupKind, setGroupKind] = useState<GroupKind>("color");
   const cube = useCube(cubeId);
   const cards = useCubeCards(cubeId, atVersion);
+  const me = useMe();
+  const changePrinting = useChangeCubePrinting(cubeId);
+  const [previewCard, setPreviewCard] = useState<CubeCardEntry | null>(null);
+  const [pickerCard, setPickerCard] = useState<PreviewCard | null>(null);
 
   if (cube.isPending) return <p className="text-sm text-fg-muted">{m.loading()}</p>;
   if (cube.isError) return <Alert variant="danger">{cube.error.message}</Alert>;
 
   const viewingPast = atVersion !== undefined && atVersion !== cube.data.version;
+  const isOwner = me.data?.id === cube.data.ownerId;
 
   return (
     <div className="flex flex-col gap-6">
@@ -99,7 +107,36 @@ export function CubeDisplayPage() {
 
       {cards.isPending && <p className="text-sm text-fg-muted">{m.loading()}</p>}
       {cards.isError && <Alert variant="danger">{cards.error.message}</Alert>}
-      {cards.data && <GroupedCardList cards={cards.data.cards} groupKind={groupKind} />}
+      {cards.data && (
+        <GroupedCardList
+          cards={cards.data.cards}
+          groupKind={groupKind}
+          onCardActivate={setPreviewCard}
+        />
+      )}
+      {previewCard && (
+        <CardPreviewSheet
+          card={previewCard}
+          onClose={() => setPreviewCard(null)}
+          {...(isOwner && !viewingPast ? { onChangePrinting: setPickerCard } : {})}
+        />
+      )}
+      {pickerCard && pickerCard.scryfallId !== undefined && (
+        <PrintingPickerDialog
+          open
+          onClose={() => setPickerCard(null)}
+          oracleId={pickerCard.oracleId}
+          name={pickerCard.name}
+          currentScryfallId={pickerCard.scryfallId}
+          onPick={(newScryfallId) => {
+            changePrinting.mutate({ oracleId: pickerCard.oracleId, newScryfallId });
+            setPickerCard(null);
+            // Keep the sheet showing the freshly picked printing (the cubes
+            // query invalidation refetches the list in the background).
+            setPreviewCard((prev) => (prev ? { ...prev, scryfallId: newScryfallId } : prev));
+          }}
+        />
+      )}
     </div>
   );
 }
