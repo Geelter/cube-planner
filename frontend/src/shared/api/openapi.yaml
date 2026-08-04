@@ -116,6 +116,12 @@ components:
     CardSummary:
       additionalProperties: false
       properties:
+        colors:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         imageSmall:
           type:
             - string
@@ -137,6 +143,7 @@ components:
         - name
         - manaCost
         - typeLine
+        - colors
         - imageSmall
       type: object
     ChangeCubePrintingInputBody:

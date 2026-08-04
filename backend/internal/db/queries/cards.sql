@@ -89,7 +89,7 @@ with matches as (
        or sqlc.arg(query)::text <% normalized_name
     order by oracle_id, promo, released_at desc, (image_small is null)
 )
-select scryfall_id, oracle_id, name, mana_cost, type_line, image_small
+select scryfall_id, oracle_id, name, mana_cost, type_line, image_small, colors
 from matches
 order by
     (normalized_name like sqlc.arg(prefix) || '%') desc,

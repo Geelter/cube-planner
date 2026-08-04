@@ -20,7 +20,7 @@ with matches as (
        or $2::text <% normalized_name
     order by oracle_id, promo, released_at desc, (image_small is null)
 )
-select scryfall_id, oracle_id, name, mana_cost, type_line, image_small
+select scryfall_id, oracle_id, name, mana_cost, type_line, image_small, colors
 from matches
 order by
     (normalized_name like $1 || '%') desc,
@@ -42,6 +42,7 @@ type AutocompleteCardsRow struct {
 	ManaCost   string
 	TypeLine   string
 	ImageSmall *string
+	Colors     []string
 }
 
 // Autocomplete: oracle-level with a representative printing (non-promo
@@ -69,6 +70,7 @@ func (q *Queries) AutocompleteCards(ctx context.Context, arg AutocompleteCardsPa
 			&i.ManaCost,
 			&i.TypeLine,
 			&i.ImageSmall,
+			&i.Colors,
 		); err != nil {
 			return nil, err
 		}

@@ -824,6 +824,7 @@ export interface components {
       printings: components["schemas"]["CardDetail"][] | null;
     };
     CardSummary: {
+      colors: string[] | null;
       imageSmall: string | null;
       manaCost: string;
       name: string;
