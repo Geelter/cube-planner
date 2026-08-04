@@ -20,31 +20,11 @@ function colorLabels(): Record<string, string> {
   };
 }
 
-// Pending adds are built from CardSummary (see CubeEditorPage.previewEntries),
-// which the API doesn't return colors/colorIdentity for — the card hasn't
-// been saved to the cube yet, so there's no CubeCardEntry row to read them
-// from. manaCost IS available on CardSummary, so we derive color from its
-// WUBRG pips as a fallback. This is a real derivation, not a guess: Scryfall
-// mana costs use the same letters as the colors array, and cards with no
-// colored pips (true colorless artifacts, lands) correctly parse to no
-// colors either way. Two known gaps, both preview-only (the bucket
-// self-corrects once the card is saved and refetched with real colors):
-//   - color-indicator cards with an empty mana cost (e.g. Dryad Arbor) —
-//     vanishingly rare, and lands bucket on type before color anyway;
-//   - double-faced/modal-DFC cards: CardSummary.manaCost is the FRONT
-//     face only, while the saved card's colors are the union of both
-//     faces — e.g. Valki {1}{B} // Tibalt {2}{B}{R}{R} previews as
-//     mono-black but lands in multicolor after saving.
-// A real fix needs per-card colors on CardSummary (API change).
-function colorsFromManaCost(manaCost: string): string[] {
-  return [...new Set(manaCost.match(/[WUBRG]/g) ?? [])];
-}
-
 function colorBucket(card: CubeCardEntry): string {
   // Type wins over color: dual lands with a color identity are lands.
   if (card.typeLine.includes("Land")) return "land";
-  const colors =
-    card.colors && card.colors.length > 0 ? card.colors : colorsFromManaCost(card.manaCost);
+  // colors is nullable in the generated type; null = colorless.
+  const colors = card.colors ?? [];
   if (colors.length === 0) return "colorless";
   if (colors.length > 1) return "multicolor";
   return colors[0] ?? "colorless";
