@@ -6,7 +6,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { CollectionPage } from "./CollectionPage";
@@ -68,6 +68,29 @@ const item2 = {
   imageNormal: null,
   quantity: 2,
 };
+
+const printings = [
+  {
+    scryfallId: "s1",
+    oracleId: "o1",
+    name: "Lightning Bolt",
+    manaCost: "{R}",
+    typeLine: "Instant",
+    oracleText: "Add {C}{C}.",
+    setName: "Magic 2010",
+    setCode: "m10",
+    collectorNumber: "146",
+    rarity: "common",
+    releasedAt: "2010-07-16",
+    cmc: 1,
+    colors: ["R"],
+    colorIdentity: ["R"],
+    promo: false,
+    imageSmall: null,
+    imageNormal: null,
+    backImageNormal: null,
+  },
+];
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -220,6 +243,20 @@ test("a mutation on one row leaves another row's buttons enabled", async () => {
   expect(changeB).not.toBeDisabled();
   resolvePut(jsonResponse({ item: null }));
   await waitFor(() => expect(removeA).not.toBeDisabled());
+});
+
+test("clicking a card name opens the info-only preview sheet", async () => {
+  const fetchMock = vi.fn(async (input: Request | string) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.includes("/printings")) return jsonResponse({ printings });
+    return jsonResponse({ items: [item], total: 1, totalCopies: 4 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  renderPage();
+  await userEvent.click(await screen.findByRole("button", { name: /^Lightning Bolt/ }));
+  const dialog = await screen.findByRole("dialog");
+  expect(await within(dialog).findByText("Add {C}{C}.")).toBeInTheDocument();
+  expect(within(dialog).queryByRole("button", { name: "Change printing" })).not.toBeInTheDocument();
 });
 
 test("search input enforces the API's 100-char limit", async () => {

@@ -1,6 +1,8 @@
 import { getRouteApi, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardHoverPreview } from "@/shared/cards/CardHoverPreview";
+import { CardPreviewSheet, type PreviewCard } from "@/shared/cards/CardPreviewSheet";
 import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { UnauthorizedError, useWantlist } from "../api";
@@ -12,6 +14,7 @@ const route = getRouteApi("/cubes/$cubeId/wantlist");
 export function WantlistPage() {
   const { cubeId } = route.useParams();
   const wantlist = useWantlist(cubeId);
+  const [previewItem, setPreviewItem] = useState<PreviewCard | null>(null);
 
   if (wantlist.isPending) return <p className="text-sm text-fg-muted">{m.loading()}</p>;
   if (wantlist.isError) {
@@ -78,7 +81,19 @@ export function WantlistPage() {
                 {/* eslint-disable-next-line jsx-a11y/control-has-associated-label */}
                 <td className="py-1.5">
                   <CardHoverPreview card={item}>
-                    <span className="text-fg">{item.name}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewItem({
+                          oracleId: item.oracleId,
+                          scryfallId: item.scryfallId,
+                          name: item.name,
+                        })
+                      }
+                      className="rounded text-left text-fg hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      {item.name}
+                    </button>
                   </CardHoverPreview>
                 </td>
                 <td className="py-1.5 text-right font-semibold text-accent tabular-nums">
@@ -95,6 +110,8 @@ export function WantlistPage() {
           </tbody>
         </table>
       )}
+
+      {previewItem && <CardPreviewSheet card={previewItem} onClose={() => setPreviewItem(null)} />}
     </div>
   );
 }
