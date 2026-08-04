@@ -31,12 +31,12 @@ insert into cards (
     scryfall_id, oracle_id, name, normalized_name, released_at, set_code,
     set_name, collector_number, rarity, layout, mana_cost, cmc, type_line,
     oracle_text, colors, color_identity, promo, image_small, image_normal,
-    back_image_small, back_image_normal, updated_at
+    back_image_small, back_image_normal, edhrec_rank, updated_at
 )
 select scryfall_id, oracle_id, name, normalized_name, released_at, set_code,
     set_name, collector_number, rarity, layout, mana_cost, cmc, type_line,
     oracle_text, colors, color_identity, promo, image_small, image_normal,
-    back_image_small, back_image_normal, now()
+    back_image_small, back_image_normal, edhrec_rank, now()
 from cards_staging
 on conflict (scryfall_id) do update set
     oracle_id = excluded.oracle_id,
@@ -59,6 +59,7 @@ on conflict (scryfall_id) do update set
     image_normal = excluded.image_normal,
     back_image_small = excluded.back_image_small,
     back_image_normal = excluded.back_image_normal,
+    edhrec_rank = excluded.edhrec_rank,
     updated_at = now();
 
 -- Cards referenced by cubes (current lists or changelog history) or by a

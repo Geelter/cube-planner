@@ -173,3 +173,25 @@ func TestTransformReversibleCardTakesFaceOracleID(t *testing.T) {
 		t.Fatalf("oracle_id = %v, want face fallback", c.OracleID)
 	}
 }
+
+func TestTransformCardEdhrecRank(t *testing.T) {
+	rank := int32(120)
+	sc := scryfallCard{
+		ID: "11111111-1111-1111-1111-111111111111", OracleID: "22222222-2222-2222-2222-222222222222",
+		Name: "Lightning Bolt", ReleasedAt: "1993-08-05", Layout: "normal",
+		Games: []string{"paper"}, EdhrecRank: &rank,
+	}
+	c, ok := transformCard(sc)
+	if !ok {
+		t.Fatal("expected transform ok")
+	}
+	if c.EdhrecRank == nil || *c.EdhrecRank != 120 {
+		t.Fatalf("EdhrecRank = %v, want 120", c.EdhrecRank)
+	}
+
+	sc.EdhrecRank = nil
+	c, _ = transformCard(sc)
+	if c.EdhrecRank != nil {
+		t.Fatalf("EdhrecRank = %v, want nil for unranked card", c.EdhrecRank)
+	}
+}

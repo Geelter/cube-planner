@@ -14,7 +14,7 @@ import (
 
 const autocompleteCards = `-- name: AutocompleteCards :many
 with matches as (
-    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at
+    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, edhrec_rank
     from cards
     where normalized_name like $1 || '%'
        or $2::text <% normalized_name
@@ -189,7 +189,7 @@ func (q *Queries) GetLastSucceededSyncRun(ctx context.Context) (CardSyncRun, err
 }
 
 const getPrintingsByOracleID = `-- name: GetPrintingsByOracleID :many
-select scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at from cards
+select scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, edhrec_rank from cards
 where oracle_id = $1
 order by released_at desc, set_code asc, collector_number asc
 `
@@ -226,6 +226,7 @@ func (q *Queries) GetPrintingsByOracleID(ctx context.Context, oracleID uuid.UUID
 			&i.BackImageSmall,
 			&i.BackImageNormal,
 			&i.UpdatedAt,
+			&i.EdhrecRank,
 		); err != nil {
 			return nil, err
 		}
@@ -239,7 +240,7 @@ func (q *Queries) GetPrintingsByOracleID(ctx context.Context, oracleID uuid.UUID
 
 const searchCards = `-- name: SearchCards :many
 with matches as (
-    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at
+    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, edhrec_rank
     from cards
     where ($1::text is null
            or normalized_name like $4 || '%'
@@ -252,7 +253,7 @@ with matches as (
       and ($10::text is null or set_code = $10)
     order by oracle_id, promo, released_at desc, (image_small is null)
 )
-select scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, count(*) over () as total
+select scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, edhrec_rank, count(*) over () as total
 from matches
 order by
     case when $1::text is not null
@@ -299,6 +300,7 @@ type SearchCardsRow struct {
 	BackImageSmall  *string
 	BackImageNormal *string
 	UpdatedAt       time.Time
+	EdhrecRank      *int32
 	Total           int64
 }
 
@@ -349,6 +351,7 @@ func (q *Queries) SearchCards(ctx context.Context, arg SearchCardsParams) ([]Sea
 			&i.BackImageSmall,
 			&i.BackImageNormal,
 			&i.UpdatedAt,
+			&i.EdhrecRank,
 			&i.Total,
 		); err != nil {
 			return nil, err
@@ -375,12 +378,12 @@ insert into cards (
     scryfall_id, oracle_id, name, normalized_name, released_at, set_code,
     set_name, collector_number, rarity, layout, mana_cost, cmc, type_line,
     oracle_text, colors, color_identity, promo, image_small, image_normal,
-    back_image_small, back_image_normal, updated_at
+    back_image_small, back_image_normal, edhrec_rank, updated_at
 )
 select scryfall_id, oracle_id, name, normalized_name, released_at, set_code,
     set_name, collector_number, rarity, layout, mana_cost, cmc, type_line,
     oracle_text, colors, color_identity, promo, image_small, image_normal,
-    back_image_small, back_image_normal, now()
+    back_image_small, back_image_normal, edhrec_rank, now()
 from cards_staging
 on conflict (scryfall_id) do update set
     oracle_id = excluded.oracle_id,
@@ -403,6 +406,7 @@ on conflict (scryfall_id) do update set
     image_normal = excluded.image_normal,
     back_image_small = excluded.back_image_small,
     back_image_normal = excluded.back_image_normal,
+    edhrec_rank = excluded.edhrec_rank,
     updated_at = now()
 `
 
