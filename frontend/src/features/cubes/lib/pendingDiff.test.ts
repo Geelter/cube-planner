@@ -15,6 +15,7 @@ const bolt: CardSummary = {
   name: "Lightning Bolt",
   manaCost: "{R}",
   typeLine: "Instant",
+  colors: ["R"],
   imageSmall: null,
 };
 
@@ -144,6 +145,7 @@ const totalsCard = (oracleId: string) => ({
   name: oracleId,
   manaCost: "{1}",
   typeLine: "Artifact",
+  colors: [],
   imageSmall: null,
 });
 const totalsEntry = (oracleId: string, quantity: number) => ({

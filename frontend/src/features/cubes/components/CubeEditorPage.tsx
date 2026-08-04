@@ -47,7 +47,7 @@ function previewEntries(server: CubeCardEntry[], pending: PendingState): CubeCar
         manaCost: card.manaCost,
         typeLine: card.typeLine,
         cmc: 0, // unknown until saved; grouping sorts CMC-unaware buckets fine
-        colors: [], // unknown here; grouping.ts falls back to card.manaCost
+        colors: card.colors ?? [],
         colorIdentity: [],
         rarity: "",
         imageSmall: card.imageSmall,

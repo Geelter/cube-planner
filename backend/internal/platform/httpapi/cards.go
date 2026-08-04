@@ -20,6 +20,7 @@ type CardSummary struct {
 	Name       string    `json:"name"`
 	ManaCost   string    `json:"manaCost"`
 	TypeLine   string    `json:"typeLine"`
+	Colors     []string  `json:"colors"`
 	ImageSmall *string   `json:"imageSmall"`
 }
 
@@ -135,6 +136,7 @@ func registerCards(api huma.API, deps Deps) {
 				Name:       r.Name,
 				ManaCost:   r.ManaCost,
 				TypeLine:   r.TypeLine,
+				Colors:     r.Colors,
 				ImageSmall: r.ImageSmall,
 			}
 		}

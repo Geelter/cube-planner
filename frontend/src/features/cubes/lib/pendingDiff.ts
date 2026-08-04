@@ -33,6 +33,7 @@ function summaryFromEntry(entry: CubeCardEntry): CardSummary {
     name: entry.name,
     manaCost: entry.manaCost,
     typeLine: entry.typeLine,
+    colors: entry.colors,
     imageSmall: entry.imageSmall,
   };
 }

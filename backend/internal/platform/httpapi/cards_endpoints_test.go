@@ -95,8 +95,9 @@ func TestAutocompleteEndpoint(t *testing.T) {
 
 	var body struct {
 		Cards []struct {
-			Name     string `json:"name"`
-			OracleID string `json:"oracleId"`
+			Name     string   `json:"name"`
+			OracleID string   `json:"oracleId"`
+			Colors   []string `json:"colors"`
 		} `json:"cards"`
 	}
 	if code := getJSON(t, srv, "/api/cards/autocomplete?q=lightning+bo", &body); code != http.StatusOK {
@@ -107,6 +108,9 @@ func TestAutocompleteEndpoint(t *testing.T) {
 	}
 	if body.Cards[0].Name != "Lightning Bolt" {
 		t.Fatalf("first = %q", body.Cards[0].Name)
+	}
+	if len(body.Cards[0].Colors) != 1 || body.Cards[0].Colors[0] != "R" {
+		t.Fatalf("colors = %v, want [R]", body.Cards[0].Colors)
 	}
 
 	// Validation: q shorter than 2 chars → 422.
