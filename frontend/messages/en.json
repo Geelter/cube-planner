@@ -55,6 +55,7 @@
   "cards_set_line": "{setName} · #{collectorNumber}",
   "cards_printings_count": "Printings: {count}",
   "cards_change_printing": "Change printing",
+  "cards_preview_back_face": "Back face of {name}",
   "cubes_browser_title": "Cubes",
   "cubes_search_label": "Search cubes",
   "cubes_search_placeholder": "Cube name…",
