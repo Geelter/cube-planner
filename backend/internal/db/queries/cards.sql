@@ -82,6 +82,7 @@ where scryfall_id not in (select scryfall_id from cards_staging)
 -- via pg_trgm.word_similarity_threshold (see migration 00003), not inlined
 -- here, because the function-call form defeats the index. ORDER BY still
 -- uses word_similarity()/similarity() for ranking — that's fine post-filter.
+-- edhrec_rank (1 = most popular) breaks word-similarity ties toward popular cards (issue #9).
 -- name: AutocompleteCards :many
 with matches as (
     select distinct on (oracle_id) *
@@ -95,6 +96,7 @@ from matches
 order by
     (normalized_name like sqlc.arg(prefix) || '%') desc,
     word_similarity(sqlc.arg(query), normalized_name) desc,
+    edhrec_rank asc nulls last,
     similarity(sqlc.arg(query), normalized_name) desc,
     name asc
 limit 15;
@@ -122,6 +124,8 @@ from matches
 order by
     case when sqlc.narg(name)::text is not null
          then word_similarity(sqlc.narg(name), normalized_name) end desc nulls last,
+    case when sqlc.narg(name)::text is not null
+         then edhrec_rank end asc nulls last,
     case when sqlc.narg(name)::text is not null
          then similarity(sqlc.narg(name), normalized_name) end desc nulls last,
     name asc

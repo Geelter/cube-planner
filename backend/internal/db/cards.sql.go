@@ -25,6 +25,7 @@ from matches
 order by
     (normalized_name like $1 || '%') desc,
     word_similarity($2, normalized_name) desc,
+    edhrec_rank asc nulls last,
     similarity($2, normalized_name) desc,
     name asc
 limit 15
@@ -54,6 +55,7 @@ type AutocompleteCardsRow struct {
 // via pg_trgm.word_similarity_threshold (see migration 00003), not inlined
 // here, because the function-call form defeats the index. ORDER BY still
 // uses word_similarity()/similarity() for ranking — that's fine post-filter.
+// edhrec_rank (1 = most popular) breaks word-similarity ties toward popular cards (issue #9).
 func (q *Queries) AutocompleteCards(ctx context.Context, arg AutocompleteCardsParams) ([]AutocompleteCardsRow, error) {
 	rows, err := q.db.Query(ctx, autocompleteCards, arg.Prefix, arg.Query)
 	if err != nil {
@@ -258,6 +260,8 @@ from matches
 order by
     case when $1::text is not null
          then word_similarity($1, normalized_name) end desc nulls last,
+    case when $1::text is not null
+         then edhrec_rank end asc nulls last,
     case when $1::text is not null
          then similarity($1, normalized_name) end desc nulls last,
     name asc

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -27,6 +28,7 @@ type testCard struct {
 	typeLine      string
 	colorIdentity []string
 	promo         bool
+	edhrec        *int32
 }
 
 func seedCard(t *testing.T, pool *pgxpool.Pool, c testCard) {
@@ -50,11 +52,12 @@ func seedCard(t *testing.T, pool *pgxpool.Pool, c testCard) {
 	_, err := pool.Exec(context.Background(), `insert into cards (
 		scryfall_id, oracle_id, name, normalized_name, released_at, set_code,
 		set_name, collector_number, rarity, layout, mana_cost, cmc, type_line,
-		oracle_text, colors, color_identity, promo, image_small, image_normal
+		oracle_text, colors, color_identity, promo, image_small, image_normal,
+		edhrec_rank
 	) values ($1, $2, $3, $4, $5, $6, 'Test Set', '1', $7, 'normal', '{R}',
-		$8, $9, 'Test text.', $10, $10, $11, $12, $12)`,
+		$8, $9, 'Test text.', $10, $10, $11, $12, $12, $13)`,
 		c.scryfallID, c.oracleID, c.name, cards.NormalizeName(c.name), c.released,
-		c.setCode, c.rarity, c.cmc, c.typeLine, c.colorIdentity, c.promo, img)
+		c.setCode, c.rarity, c.cmc, c.typeLine, c.colorIdentity, c.promo, img, c.edhrec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,5 +189,68 @@ func TestPrintingsEndpoint(t *testing.T) {
 	}
 	if code := getJSON(t, srv, "/api/cards/not-a-uuid/printings", nil); code != http.StatusNotFound {
 		t.Fatalf("malformed oracle status = %d, want 404", code)
+	}
+}
+
+func rank(n int32) *int32 { return &n }
+
+func TestAutocompletePopularityOrdering(t *testing.T) {
+	srv, pool := newCardsServer(t)
+	// All three tie at word_similarity 1.0 for q=bolt; popularity must break
+	// the tie (low rank = popular), unranked last. None is a prefix match.
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Frost Bolt", edhrec: rank(5000)})
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Lightning Bolt", edhrec: rank(100)})
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Shadow Bolt"}) // unranked
+	// Prefix matches still outrank everything, popular or not.
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Boltwing Marauder"})
+
+	var body struct {
+		Cards []struct {
+			Name string `json:"name"`
+		} `json:"cards"`
+	}
+	if code := getJSON(t, srv, "/api/cards/autocomplete?q=bolt", &body); code != http.StatusOK {
+		t.Fatalf("status = %d", code)
+	}
+	got := make([]string, len(body.Cards))
+	for i, c := range body.Cards {
+		got[i] = c.Name
+	}
+	want := []string{"Boltwing Marauder", "Lightning Bolt", "Frost Bolt", "Shadow Bolt"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+}
+
+func TestSearchPopularityOrdering(t *testing.T) {
+	srv, pool := newCardsServer(t)
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Frost Bolt", edhrec: rank(5000)})
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Lightning Bolt", edhrec: rank(100)})
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Shadow Bolt"})
+
+	var body struct {
+		Cards []struct {
+			Name string `json:"name"`
+		} `json:"cards"`
+	}
+	if code := getJSON(t, srv, "/api/cards/search?name=bolt", &body); code != http.StatusOK {
+		t.Fatalf("status = %d", code)
+	}
+	got := make([]string, len(body.Cards))
+	for i, c := range body.Cards {
+		got[i] = c.Name
+	}
+	want := []string{"Lightning Bolt", "Frost Bolt", "Shadow Bolt"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+
+	// Without a name filter, browsing stays alphabetical — popularity must
+	// not reorder it.
+	if code := getJSON(t, srv, "/api/cards/search", &body); code != http.StatusOK {
+		t.Fatalf("status = %d", code)
+	}
+	if body.Cards[0].Name != "Frost Bolt" {
+		t.Fatalf("no-name first = %q, want alphabetical Frost Bolt", body.Cards[0].Name)
 	}
 }
