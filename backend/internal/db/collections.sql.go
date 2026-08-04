@@ -58,7 +58,7 @@ func (q *Queries) DeleteCollectionItem(ctx context.Context, arg DeleteCollection
 
 const getCardsByNormalizedNames = `-- name: GetCardsByNormalizedNames :many
 with matches as (
-    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at
+    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, edhrec_rank
     from cards
     where normalized_name = any($1::text[])
     order by oracle_id, promo, released_at desc, (image_small is null)
@@ -374,7 +374,7 @@ func (q *Queries) ListCollectionItems(ctx context.Context, arg ListCollectionIte
 
 const suggestCardsByName = `-- name: SuggestCardsByName :many
 with matches as (
-    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at
+    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, edhrec_rank
     from cards
     where $1::text <% normalized_name
     order by oracle_id, promo, released_at desc, (image_small is null)

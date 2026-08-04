@@ -31,12 +31,12 @@ insert into cards (
     scryfall_id, oracle_id, name, normalized_name, released_at, set_code,
     set_name, collector_number, rarity, layout, mana_cost, cmc, type_line,
     oracle_text, colors, color_identity, promo, image_small, image_normal,
-    back_image_small, back_image_normal, updated_at
+    back_image_small, back_image_normal, edhrec_rank, updated_at
 )
 select scryfall_id, oracle_id, name, normalized_name, released_at, set_code,
     set_name, collector_number, rarity, layout, mana_cost, cmc, type_line,
     oracle_text, colors, color_identity, promo, image_small, image_normal,
-    back_image_small, back_image_normal, now()
+    back_image_small, back_image_normal, edhrec_rank, now()
 from cards_staging
 on conflict (scryfall_id) do update set
     oracle_id = excluded.oracle_id,
@@ -59,6 +59,7 @@ on conflict (scryfall_id) do update set
     image_normal = excluded.image_normal,
     back_image_small = excluded.back_image_small,
     back_image_normal = excluded.back_image_normal,
+    edhrec_rank = excluded.edhrec_rank,
     updated_at = now();
 
 -- Cards referenced by cubes (current lists or changelog history) or by a
@@ -81,6 +82,7 @@ where scryfall_id not in (select scryfall_id from cards_staging)
 -- via pg_trgm.word_similarity_threshold (see migration 00003), not inlined
 -- here, because the function-call form defeats the index. ORDER BY still
 -- uses word_similarity()/similarity() for ranking — that's fine post-filter.
+-- edhrec_rank (1 = most popular) breaks word-similarity ties toward popular cards (issue #9).
 -- name: AutocompleteCards :many
 with matches as (
     select distinct on (oracle_id) *
@@ -94,6 +96,7 @@ from matches
 order by
     (normalized_name like sqlc.arg(prefix) || '%') desc,
     word_similarity(sqlc.arg(query), normalized_name) desc,
+    edhrec_rank asc nulls last,
     similarity(sqlc.arg(query), normalized_name) desc,
     name asc
 limit 15;
@@ -121,6 +124,8 @@ from matches
 order by
     case when sqlc.narg(name)::text is not null
          then word_similarity(sqlc.narg(name), normalized_name) end desc nulls last,
+    case when sqlc.narg(name)::text is not null
+         then edhrec_rank end asc nulls last,
     case when sqlc.narg(name)::text is not null
          then similarity(sqlc.narg(name), normalized_name) end desc nulls last,
     name asc

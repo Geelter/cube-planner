@@ -41,6 +41,7 @@ type scryfallCard struct {
 	Colors          []string           `json:"colors"`
 	ColorIdentity   []string           `json:"color_identity"`
 	Promo           bool               `json:"promo"`
+	EdhrecRank      *int32             `json:"edhrec_rank"`
 	Oversized       bool               `json:"oversized"`
 	Games           []string           `json:"games"`
 	ImageURIs       *scryfallImageURIs `json:"image_uris"`
@@ -66,6 +67,7 @@ type Card struct {
 	Colors          []string
 	ColorIdentity   []string
 	Promo           bool
+	EdhrecRank      *int32
 	ImageSmall      *string
 	ImageNormal     *string
 	BackImageSmall  *string
@@ -122,6 +124,7 @@ func transformCard(sc scryfallCard) (Card, bool) {
 		Colors:          sc.Colors,
 		ColorIdentity:   sc.ColorIdentity,
 		Promo:           sc.Promo,
+		EdhrecRank:      sc.EdhrecRank,
 	}
 	if sc.ImageURIs != nil {
 		c.ImageSmall = nonEmpty(sc.ImageURIs.Small)

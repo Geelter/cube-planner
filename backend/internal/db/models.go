@@ -42,6 +42,7 @@ type Card struct {
 	BackImageSmall  *string
 	BackImageNormal *string
 	UpdatedAt       time.Time
+	EdhrecRank      *int32
 }
 
 type CardSyncRun struct {
@@ -76,6 +77,7 @@ type CardsStaging struct {
 	ImageNormal     *string
 	BackImageSmall  *string
 	BackImageNormal *string
+	EdhrecRank      *int32
 }
 
 type CollectionItem struct {

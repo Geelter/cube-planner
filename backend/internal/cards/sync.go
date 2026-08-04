@@ -141,7 +141,7 @@ var stagingColumns = []string{
 	"set_code", "set_name", "collector_number", "rarity", "layout",
 	"mana_cost", "cmc", "type_line", "oracle_text", "colors",
 	"color_identity", "promo", "image_small", "image_normal",
-	"back_image_small", "back_image_normal",
+	"back_image_small", "back_image_normal", "edhrec_rank",
 }
 
 func (s *Syncer) copyBatch(ctx context.Context, cards []Card) error {
@@ -152,7 +152,7 @@ func (s *Syncer) copyBatch(ctx context.Context, cards []Card) error {
 			c.SetCode, c.SetName, c.CollectorNumber, c.Rarity, c.Layout,
 			c.ManaCost, c.CMC, c.TypeLine, c.OracleText, c.Colors,
 			c.ColorIdentity, c.Promo, c.ImageSmall, c.ImageNormal,
-			c.BackImageSmall, c.BackImageNormal,
+			c.BackImageSmall, c.BackImageNormal, c.EdhrecRank,
 		}
 	}
 	if _, err := s.pool.CopyFrom(ctx, pgx.Identifier{"cards_staging"}, stagingColumns, pgx.CopyFromRows(rows)); err != nil {
