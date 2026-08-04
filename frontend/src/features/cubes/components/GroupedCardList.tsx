@@ -8,9 +8,11 @@ import { ManaCost } from "@/shared/cards/ManaCost";
 export function GroupedCardList({
   cards,
   groupKind,
+  onCardActivate,
 }: {
   cards: CubeCardEntry[];
   groupKind: GroupKind;
+  onCardActivate: (card: CubeCardEntry) => void;
 }) {
   if (cards.length === 0) {
     return <p className="text-sm text-fg-muted">{m.cubes_empty_list()}</p>;
@@ -30,6 +32,7 @@ export function GroupedCardList({
                   <button
                     type="button"
                     className="flex w-full justify-between gap-2 rounded px-1 hover:bg-surface-raised focus:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    onClick={() => onCardActivate(card)}
                   >
                     <span className="truncate text-fg">
                       {card.quantity > 1 && (
