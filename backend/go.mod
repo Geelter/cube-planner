@@ -3,13 +3,13 @@ module github.com/mjabloniec/cube-planner/backend
 go 1.26.5
 
 require (
-	github.com/danielgtaylor/huma/v2 v2.39.0
+	github.com/danielgtaylor/huma/v2 v2.39.1
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/spf13/cobra v1.10.2
-	github.com/stripe/stripe-go/v86 v86.1.1
+	github.com/stripe/stripe-go/v86 v86.2.0
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	github.com/wneessen/go-mail v0.8.1
