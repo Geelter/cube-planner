@@ -43,7 +43,32 @@ var (
 	// ErrRoundOpen: finish refused while a tournament round is not
 	// completed (5b spec §3.2).
 	ErrRoundOpen = errors.New("a tournament round is still open")
+	// ErrInvalidSchedule: the requested times are not coherent (start in
+	// the past, refund deadline after the start, or a deadline on a free
+	// event). The frontend's datetime-local input constrains typing but
+	// cannot be trusted, and nothing else checked this before.
+	ErrInvalidSchedule = errors.New("invalid event schedule")
 )
+
+// validateSchedule enforces the three temporal rules shared by Create and
+// Update. checkStart is false for a PATCH that does not carry a start
+// time: re-validating a stored past start would make finished events
+// unpatchable.
+func validateSchedule(now, startsAt time.Time, refundDeadline *time.Time, feeCents int32, checkStart bool) error {
+	if checkStart && !startsAt.After(now) {
+		return fmt.Errorf("%w: start time must be in the future", ErrInvalidSchedule)
+	}
+	if refundDeadline == nil {
+		return nil
+	}
+	if feeCents == 0 {
+		return fmt.Errorf("%w: a free event has no refund deadline", ErrInvalidSchedule)
+	}
+	if refundDeadline.After(startsAt) {
+		return fmt.Errorf("%w: refund deadline must not be after the start time", ErrInvalidSchedule)
+	}
+	return nil
+}
 
 type Service struct {
 	queries *db.Queries
@@ -88,6 +113,9 @@ type CreateEventParams struct {
 func (s *Service) Create(ctx context.Context, organizerID uuid.UUID, p CreateEventParams) (*db.Event, error) {
 	if p.FeeCents > 0 && !s.stripe.Configured() {
 		return nil, ErrPaymentsUnconfigured
+	}
+	if err := validateSchedule(s.now(), p.StartsAt, p.RefundDeadline, p.FeeCents, true); err != nil {
+		return nil, err
 	}
 	if p.Currency == "" {
 		p.Currency = "pln"
@@ -136,6 +164,23 @@ func (s *Service) Update(ctx context.Context, eventID uuid.UUID, p UpdateEventPa
 		}
 		if p.FeeCents != nil && *p.FeeCents > 0 && !s.stripe.Configured() {
 			return ErrPaymentsUnconfigured
+		}
+		// A PATCH may carry any subset. Validate the schedule the event
+		// would have after the patch, reading the rest from the locked row.
+		startsAt := ev.StartsAt
+		if p.StartsAt != nil {
+			startsAt = *p.StartsAt
+		}
+		feeCents := ev.FeeCents
+		if p.FeeCents != nil {
+			feeCents = *p.FeeCents
+		}
+		refundDeadline := ev.RefundDeadline
+		if p.RefundDeadline != nil {
+			refundDeadline = p.RefundDeadline
+		}
+		if err := validateSchedule(s.now(), startsAt, refundDeadline, feeCents, p.StartsAt != nil); err != nil {
+			return err
 		}
 		out, err = qtx.UpdateEventMeta(ctx, db.UpdateEventMetaParams{
 			ID: eventID, Name: p.Name, Description: p.Description,

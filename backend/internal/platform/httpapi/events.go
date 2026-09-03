@@ -103,6 +103,8 @@ func mapEventErr(err error) error {
 		return eventProblem(http.StatusConflict, "round-open", err.Error())
 	case errors.Is(err, events.ErrInvalidEventCube):
 		return eventProblem(http.StatusUnprocessableEntity, "invalid-event-cube", err.Error())
+	case errors.Is(err, events.ErrInvalidSchedule):
+		return eventProblem(http.StatusUnprocessableEntity, "invalid-event-schedule", err.Error())
 	case errors.Is(err, events.ErrPaymentsUnconfigured):
 		return eventProblem(http.StatusServiceUnavailable, "payments-unconfigured", "payments are not configured")
 	default:

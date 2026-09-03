@@ -152,14 +152,14 @@ func TestCreatePaidEventRequiresStripe(t *testing.T) {
 	env.stripe.configured = false
 	org := env.seedUser(t, "org@test")
 	_, err := env.svc.Create(context.Background(), org, CreateEventParams{
-		Name: "Paid Night", StartsAt: env.clock.Now(), FeeCents: 5000, MaxParticipants: 8,
+		Name: "Paid Night", StartsAt: env.clock.Now().Add(24 * time.Hour), FeeCents: 5000, MaxParticipants: 8,
 	})
 	if !errors.Is(err, ErrPaymentsUnconfigured) {
 		t.Fatalf("want ErrPaymentsUnconfigured, got %v", err)
 	}
 	// Free events work without Stripe.
 	if _, err := env.svc.Create(context.Background(), org, CreateEventParams{
-		Name: "Free Night", StartsAt: env.clock.Now(), FeeCents: 0, MaxParticipants: 8,
+		Name: "Free Night", StartsAt: env.clock.Now().Add(24 * time.Hour), FeeCents: 0, MaxParticipants: 8,
 	}); err != nil {
 		t.Fatalf("free event should not need stripe: %v", err)
 	}
@@ -1404,5 +1404,91 @@ func TestEventCancelEmailsPaidUserEvenWhenRefundFails(t *testing.T) {
 	}
 	if strings.Contains(cancelled[0].body, "refunded") {
 		t.Fatalf("email must not claim a refund that didn't happen: %q", cancelled[0].body)
+	}
+}
+
+// ---- PR 3: schedule validation ----
+
+func TestCreateRejectsPastStart(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	_, err := e.svc.Create(context.Background(), org, CreateEventParams{
+		Name: "Cube Night", StartsAt: e.clock.Now().Add(-time.Hour), MaxParticipants: 8,
+	})
+	if !errors.Is(err, ErrInvalidSchedule) {
+		t.Fatalf("want ErrInvalidSchedule, got %v", err)
+	}
+}
+
+func TestCreateRejectsRefundDeadlineAfterStart(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	starts := e.clock.Now().Add(48 * time.Hour)
+	after := starts.Add(time.Hour)
+	_, err := e.svc.Create(context.Background(), org, CreateEventParams{
+		Name: "Cube Night", StartsAt: starts, FeeCents: 2000,
+		MaxParticipants: 8, RefundDeadline: &after,
+	})
+	if !errors.Is(err, ErrInvalidSchedule) {
+		t.Fatalf("want ErrInvalidSchedule, got %v", err)
+	}
+}
+
+func TestCreateRejectsRefundDeadlineOnFreeEvent(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	starts := e.clock.Now().Add(48 * time.Hour)
+	before := starts.Add(-time.Hour)
+	_, err := e.svc.Create(context.Background(), org, CreateEventParams{
+		Name: "Cube Night", StartsAt: starts, FeeCents: 0,
+		MaxParticipants: 8, RefundDeadline: &before,
+	})
+	if !errors.Is(err, ErrInvalidSchedule) {
+		t.Fatalf("want ErrInvalidSchedule, got %v", err)
+	}
+}
+
+func TestCreateAcceptsDeadlineAtStart(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	starts := e.clock.Now().Add(48 * time.Hour)
+	_, err := e.svc.Create(context.Background(), org, CreateEventParams{
+		Name: "Cube Night", StartsAt: starts, FeeCents: 2000,
+		MaxParticipants: 8, RefundDeadline: &starts,
+	})
+	if err != nil {
+		t.Fatalf("deadline exactly at start must be allowed: %v", err)
+	}
+}
+
+func TestUpdateValidatesDeadlineAgainstStoredStart(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	ev := e.createEvent(t, org, 2000, 8)
+	e.publish(t, ev.ID)
+
+	after := ev.StartsAt.Add(time.Hour)
+	_, err := e.svc.Update(context.Background(), ev.ID, UpdateEventParams{RefundDeadline: &after})
+	if !errors.Is(err, ErrInvalidSchedule) {
+		t.Fatalf("want ErrInvalidSchedule, got %v", err)
+	}
+
+	before := ev.StartsAt.Add(-2 * time.Hour)
+	if _, err := e.svc.Update(context.Background(), ev.ID, UpdateEventParams{RefundDeadline: &before}); err != nil {
+		t.Fatalf("deadline before the stored start must be allowed: %v", err)
+	}
+}
+
+func TestUpdatePastEventStaysPatchable(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	ev := e.createEvent(t, org, 0, 8)
+	e.publish(t, ev.ID)
+	// The event starts in 7 days; jump past it so the stored start is in
+	// the past, then patch a field that is still editable.
+	e.clock.Advance(8 * 24 * time.Hour)
+	loc := "New venue"
+	if _, err := e.svc.Update(context.Background(), ev.ID, UpdateEventParams{Location: &loc}); err != nil {
+		t.Fatalf("a past event must stay patchable: %v", err)
 	}
 }
