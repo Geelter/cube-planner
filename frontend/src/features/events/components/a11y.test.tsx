@@ -63,6 +63,26 @@ function eventDetailPayload() {
   };
 }
 
+function draftEventDetailPayload() {
+  return {
+    id: "e1",
+    name: "Draft Cube Night",
+    startsAt: "2026-09-01T18:00:00Z",
+    location: "LGS",
+    feeCents: 5000,
+    currency: "pln",
+    maxParticipants: 8,
+    paidCount: 0,
+    pendingCount: 0,
+    waitlistCount: 0,
+    status: "draft",
+    description: "",
+    organizerName: "Org",
+    cubes: [],
+    attendees: [],
+  };
+}
+
 function manageEventPayload() {
   return {
     id: "e1",
@@ -149,6 +169,25 @@ it("/events/$eventId has no axe violations", async () => {
   vi.stubEnv("DEV", false);
 
   expect(await axe(await renderRoute("/events/e1"))).toHaveNoViolations();
+});
+
+it("/events/$eventId has no axe violations at draft status", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: Request | string) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.includes("/api/me/cubes")) return jsonResponse({ cubes: [] });
+      if (url.includes("/api/me")) return meResponse("admin");
+      if (url.includes("/api/events/e1")) return jsonResponse(draftEventDetailPayload());
+      if (url.includes("/api/events")) return jsonResponse(eventsListPayload);
+      return new Response("{}", { status: 401 });
+    }),
+  );
+  vi.stubEnv("DEV", false);
+
+  const container = await renderRoute("/events/e1");
+  await waitFor(() => expect(container.textContent).toContain("Draft Cube Night"));
+  expect(await axe(container)).toHaveNoViolations();
 });
 
 it("/events/$eventId/manage has no axe violations", async () => {

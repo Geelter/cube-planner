@@ -120,7 +120,7 @@ export function ManageEventPage() {
 
       <EventCubesEditor event={e} />
 
-      <RegistrationsTable eventId={eventId} />
+      <RegistrationsTable eventId={eventId} status={e.status} />
 
       <Dialog
         open={confirmAction != null}

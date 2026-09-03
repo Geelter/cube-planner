@@ -169,27 +169,31 @@ export function EventDetailPage() {
         </section>
       )}
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium text-fg">{m.event_attendees({ count: e.paidCount })}</h2>
-        <p className="text-sm text-fg-muted">
-          {m.events_spots({ taken, total: e.maxParticipants })}
-          {e.waitlistCount > 0 && ` · ${m.events_waitlist_count({ count: e.waitlistCount })}`}
-        </p>
-        {attendees.length === 0 ? (
-          <p className="text-sm text-fg-muted">{m.event_attendees_empty()}</p>
-        ) : (
-          <ul className="flex flex-wrap gap-2">
-            {attendeeChips.map((a) => (
-              <li
-                key={a.key}
-                className="rounded-full border border-border px-3 py-1 text-sm text-fg"
-              >
-                {a.name}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {(e.status === "published" || e.status === "started" || e.status === "cancelled") && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-medium text-fg">
+            {m.event_attendees({ count: e.paidCount })}
+          </h2>
+          <p className="text-sm text-fg-muted">
+            {m.events_spots({ taken, total: e.maxParticipants })}
+            {e.waitlistCount > 0 && ` · ${m.events_waitlist_count({ count: e.waitlistCount })}`}
+          </p>
+          {attendees.length === 0 ? (
+            <p className="text-sm text-fg-muted">{m.event_attendees_empty()}</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {attendeeChips.map((a) => (
+                <li
+                  key={a.key}
+                  className="rounded-full border border-border px-3 py-1 text-sm text-fg"
+                >
+                  {a.name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }
