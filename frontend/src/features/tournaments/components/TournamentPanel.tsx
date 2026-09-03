@@ -294,33 +294,35 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
           <h3 className="text-base font-medium text-fg">{m.tournament_standings()}</h3>
           <StandingsTable standings={t.standings ?? []} />
 
-          <h3 className="text-base font-medium text-fg">{m.tournament_players_heading()}</h3>
-          <ul className="flex flex-col gap-1">
-            {players.map((p) => (
-              <li key={p.id} className="flex items-center gap-2 text-sm">
-                <span className="text-fg">{p.displayName}</span>
-                {p.dropped && (
-                  <span className="text-xs text-fg-muted">({m.tournament_dropped_flag()})</span>
-                )}
-                {status === "started" && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    loading={playerAction.isPending && playerAction.variables?.playerId === p.id}
-                    onClick={() =>
-                      playerAction.mutate({
-                        playerId: p.id,
-                        action: p.dropped ? "undrop" : "drop",
-                      })
-                    }
-                  >
-                    {p.dropped ? m.tournament_undrop() : m.tournament_drop()}
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
+          {status === "started" && (
+            <>
+              <h3 className="text-base font-medium text-fg">{m.tournament_players_heading()}</h3>
+              <ul className="flex flex-col gap-1">
+                {players.map((p) => (
+                  <li key={p.id} className="flex items-center gap-2 text-sm">
+                    <span className="text-fg">{p.displayName}</span>
+                    {p.dropped && (
+                      <span className="text-xs text-fg-muted">({m.tournament_dropped_flag()})</span>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      loading={playerAction.isPending && playerAction.variables?.playerId === p.id}
+                      onClick={() =>
+                        playerAction.mutate({
+                          playerId: p.id,
+                          action: p.dropped ? "undrop" : "drop",
+                        })
+                      }
+                    >
+                      {p.dropped ? m.tournament_undrop() : m.tournament_drop()}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </>
       )}
     </section>

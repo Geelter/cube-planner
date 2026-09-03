@@ -8,7 +8,7 @@ const refundMutate = vi.fn();
 const denyMutate = vi.fn();
 const refundState: { isPending: boolean; variables?: string } = { isPending: false };
 const denyState: { isPending: boolean; variables?: string } = { isPending: false };
-const rows = [
+const defaultRows = [
   {
     id: "r1",
     status: "paid",
@@ -40,13 +40,18 @@ const rows = [
     createdAt: "2026-07-13T10:03:00Z",
   },
 ];
+// Reassigned per-test so the status-gating tests can control which rows the
+// mocked query returns without a second `vi.mock` module.
+let regsData: typeof defaultRows = defaultRows;
+
 vi.mock("../api", async (orig) => ({
   ...(await orig()),
-  useEventRegistrations: () => ({ data: rows, isPending: false, error: null }),
+  useEventRegistrations: () => ({ data: regsData, isPending: false, error: null }),
   useRefundRegistration: () => ({ mutate: refundMutate, error: null, ...refundState }),
   useDenyRefund: () => ({ mutate: denyMutate, error: null, ...denyState }),
 }));
 
+import type { EventSummary } from "../api";
 import { RegistrationsTable } from "./RegistrationsTable";
 
 afterEach(() => {
@@ -55,13 +60,14 @@ afterEach(() => {
   delete refundState.variables;
   denyState.isPending = false;
   delete denyState.variables;
+  regsData = defaultRows;
 });
 
-function renderTable() {
+function renderTable(status: EventSummary["status"] = "published") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <RegistrationsTable eventId="e1" />
+      <RegistrationsTable eventId="e1" status={status} />
     </QueryClientProvider>,
   );
 }
@@ -103,4 +109,31 @@ test("only the acted-on row's refund button spins; other rows stay enabled", () 
   expect(busy).toHaveLength(1);
   const idle = refundButtons.find((b) => b.getAttribute("aria-busy") !== "true");
   expect(idle).toBeEnabled();
+});
+
+test("published shows every group", () => {
+  renderTable("published");
+  expect(screen.getByRole("heading", { name: m.regs_title() })).toBeInTheDocument();
+  expect(screen.getByText("Ala")).toBeInTheDocument();
+});
+
+test("draft renders nothing when the refund queue is empty", () => {
+  regsData = [defaultRows[0]!]; // paid only, no refund_requested row
+  renderTable("draft");
+  expect(screen.queryByRole("heading", { name: m.regs_title() })).not.toBeInTheDocument();
+  expect(screen.queryByText("Ala")).not.toBeInTheDocument();
+});
+
+test("started shows only the refund queue", () => {
+  regsData = [defaultRows[0]!, defaultRows[2]!]; // paid (Ala) + refund_requested (Cez)
+  renderTable("started");
+  expect(screen.getByText("Cez")).toBeInTheDocument();
+  expect(screen.queryByText("Ala")).not.toBeInTheDocument();
+});
+
+test("finished with an empty queue renders nothing", () => {
+  regsData = [defaultRows[0]!]; // paid only
+  renderTable("finished");
+  expect(screen.queryByRole("heading", { name: m.regs_title() })).not.toBeInTheDocument();
+  expect(screen.queryByText("Ala")).not.toBeInTheDocument();
 });

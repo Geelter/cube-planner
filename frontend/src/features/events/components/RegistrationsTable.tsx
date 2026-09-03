@@ -3,24 +3,49 @@ import { getLocale } from "@/paraglide/runtime";
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui/button";
 import { Dialog } from "@/shared/ui/dialog";
-import type { EventRegistrationRow } from "../api";
+import type { EventRegistrationRow, EventSummary } from "../api";
 import { useDenyRefund, useEventRegistrations, useRefundRegistration } from "../api";
 
-const GROUPS: { key: string; title: () => string; statuses: string[] }[] = [
-  { key: "paid", title: () => m.regs_group_paid(), statuses: ["paid"] },
-  { key: "pending", title: () => m.regs_group_pending(), statuses: ["pending_payment"] },
-  { key: "waitlist", title: () => m.regs_group_waitlist(), statuses: ["waitlisted"] },
-  { key: "queue", title: () => m.regs_group_refund_queue(), statuses: ["refund_requested"] },
+// `queue` is the only group that outlives `published`: a player who
+// self-cancels past the refund deadline lands in refund_requested, and the
+// organizer still needs a screen to resolve it after the event starts.
+const GROUPS: { key: string; title: () => string; statuses: string[]; publishedOnly: boolean }[] = [
+  { key: "paid", title: () => m.regs_group_paid(), statuses: ["paid"], publishedOnly: true },
+  {
+    key: "pending",
+    title: () => m.regs_group_pending(),
+    statuses: ["pending_payment"],
+    publishedOnly: true,
+  },
+  {
+    key: "waitlist",
+    title: () => m.regs_group_waitlist(),
+    statuses: ["waitlisted"],
+    publishedOnly: true,
+  },
+  {
+    key: "queue",
+    title: () => m.regs_group_refund_queue(),
+    statuses: ["refund_requested"],
+    publishedOnly: false,
+  },
   {
     key: "history",
     title: () => m.regs_group_history(),
-    statuses: ["cancelled", "refunded", "expired"],
+    statuses: ["cancelled", "refunded", "expired", "removed"],
+    publishedOnly: true,
   },
 ];
 
 type Confirm = { kind: "refund" | "deny"; row: EventRegistrationRow };
 
-export function RegistrationsTable({ eventId }: { eventId: string }) {
+export function RegistrationsTable({
+  eventId,
+  status,
+}: {
+  eventId: string;
+  status: EventSummary["status"];
+}) {
   const regs = useEventRegistrations(eventId);
   const refund = useRefundRegistration(eventId);
   const deny = useDenyRefund(eventId);
@@ -33,6 +58,17 @@ export function RegistrationsTable({ eventId }: { eventId: string }) {
         {regs.error.message}
       </p>
     );
+
+  const rowsFor = (statuses: string[]) =>
+    (regs.data ?? [])
+      .filter((r) => statuses.includes(r.status))
+      .sort((a, b) => (a.waitlistPos ?? 0) - (b.waitlistPos ?? 0));
+
+  const published = status === "published";
+  const visible = GROUPS.filter((g) =>
+    published ? true : !g.publishedOnly && rowsFor(g.statuses).length > 0,
+  );
+  if (visible.length === 0) return null;
 
   const err = refund.error ?? deny.error;
   const locale = getLocale();
@@ -63,10 +99,8 @@ export function RegistrationsTable({ eventId }: { eventId: string }) {
           {err.message}
         </p>
       )}
-      {GROUPS.map((g) => {
-        const rows = (regs.data ?? [])
-          .filter((r) => g.statuses.includes(r.status))
-          .sort((a, b) => (a.waitlistPos ?? 0) - (b.waitlistPos ?? 0));
+      {visible.map((g) => {
+        const rows = rowsFor(g.statuses);
         return (
           <div key={g.key} className="flex flex-col gap-1">
             <h3 className="text-sm font-medium text-fg-muted">{g.title()}</h3>
