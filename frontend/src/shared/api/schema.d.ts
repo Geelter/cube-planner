@@ -1128,7 +1128,8 @@ export interface components {
         | "cancelled"
         | "refund_requested"
         | "refunded"
-        | "expired";
+        | "expired"
+        | "removed";
       /** Format: int64 */
       waitlistPos?: number;
     };
@@ -1356,7 +1357,8 @@ export interface components {
         | "cancelled"
         | "refund_requested"
         | "refunded"
-        | "expired";
+        | "expired"
+        | "removed";
       /** Format: int64 */
       waitlistPos?: number;
     };

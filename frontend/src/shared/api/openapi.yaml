@@ -773,6 +773,7 @@ components:
             - refund_requested
             - refunded
             - expired
+            - removed
           type: string
         waitlistPos:
           format: int64
@@ -1245,6 +1246,7 @@ components:
             - refund_requested
             - refunded
             - expired
+            - removed
           type: string
         waitlistPos:
           format: int64
