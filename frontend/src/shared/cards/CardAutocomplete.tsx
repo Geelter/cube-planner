@@ -43,7 +43,10 @@ export function CardAutocomplete({ id, onSelect }: CardAutocompleteProps) {
       )}
       onSelect={(c) => {
         onSelect(c);
-        setQuery(c.name);
+        // Clear rather than echo the name: these inputs are used to enter a
+        // list of cards in sequence, so the next name should be typeable
+        // immediately.
+        setQuery("");
       }}
       loading={results.isFetching}
       minChars={2}
