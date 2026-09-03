@@ -2,6 +2,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { m } from "@/paraglide/messages";
+import { closeDialog } from "@/shared/lib/closeDialog";
 import { useScrollLock } from "@/shared/lib/useScrollLock";
 import { Button } from "@/shared/ui/button";
 
@@ -21,13 +22,6 @@ const drawerVariants = cva(
     defaultVariants: { side: "right" },
   },
 );
-
-// Test environments (jsdom, happy-dom) may lack close() as well as
-// showModal() — fall back to clearing the open attribute directly.
-function closeDialog(el: HTMLDialogElement) {
-  if (typeof el.close === "function") el.close();
-  else el.removeAttribute("open");
-}
 
 // Sheet on the native <dialog> element (same foundation as Dialog):
 // showModal() provides the focus trap, Esc-to-close (fires the close

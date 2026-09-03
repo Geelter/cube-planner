@@ -1,15 +1,9 @@
 import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 import { m } from "@/paraglide/messages";
+import { closeDialog } from "@/shared/lib/closeDialog";
 import { useScrollLock } from "@/shared/lib/useScrollLock";
 import { Button } from "@/shared/ui/button";
-
-// Test environments (jsdom, happy-dom) may lack close() as well as
-// showModal() — fall back to clearing the open attribute directly.
-function closeDialog(el: HTMLDialogElement) {
-  if (typeof el.close === "function") el.close();
-  else el.removeAttribute("open");
-}
 
 // Modal on top of the native <dialog> element: showModal() provides the
 // focus trap, Esc-to-close (fires the close event), and ::backdrop.
