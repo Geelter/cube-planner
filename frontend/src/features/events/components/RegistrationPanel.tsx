@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getLocale } from "@/paraglide/runtime";
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui/button";
-import { Dialog } from "@/shared/ui/dialog";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { EventDetail } from "../api";
 import { useCancelRegistration, usePay, useRegister } from "../api";
 import { remainingLabel } from "../lib/countdown";
@@ -106,30 +106,20 @@ export function RegistrationPanel({
               {m.event_cancel_registration()}
             </Button>
           )}
-          <Dialog
+          <ConfirmDialog
             open={confirmOpen}
             onClose={() => setConfirmOpen(false)}
             title={m.event_cancel_registration()}
-          >
-            <p className="text-sm text-fg">
-              {pastDeadline && !isFree
+            message={
+              pastDeadline && !isFree
                 ? m.event_cancel_confirm_late()
-                : m.event_cancel_confirm({ name: event.name })}
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setConfirmOpen(false)}>
-                {m.dialog_close()}
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                loading={cancel.isPending}
-                onClick={confirmCancel}
-              >
-                {m.event_cancel_registration()}
-              </Button>
-            </div>
-          </Dialog>
+                : m.event_cancel_confirm({ name: event.name })
+            }
+            confirmLabel={m.event_cancel_registration()}
+            pending={cancel.isPending}
+            danger
+            onConfirm={confirmCancel}
+          />
         </>
       )}
       {reg?.status === "refund_requested" && (

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getLocale } from "@/paraglide/runtime";
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui/button";
-import { Dialog } from "@/shared/ui/dialog";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { EventRegistrationRow, EventSummary } from "../api";
 import { useDenyRefund, useEventRegistrations, useRefundRegistration } from "../api";
 
@@ -148,34 +148,25 @@ export function RegistrationsTable({
           </div>
         );
       })}
-      <Dialog
+      <ConfirmDialog
         open={confirm != null}
         onClose={() => setConfirm(null)}
         title={confirm?.kind === "deny" ? m.regs_deny() : m.regs_refund()}
-      >
-        <p className="text-sm text-fg">
-          {confirm?.kind === "deny"
-            ? m.regs_deny_confirm({ name: confirm.row.displayName })
-            : confirm
-              ? m.regs_refund_confirm({ name: confirm.row.displayName })
-              : ""}
-        </p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => setConfirm(null)}>
-            {m.dialog_close()}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              if (confirm?.kind === "refund") refund.mutate(confirm.row.id);
-              if (confirm?.kind === "deny") deny.mutate(confirm.row.id);
-              setConfirm(null);
-            }}
-          >
-            {confirm?.kind === "deny" ? m.regs_deny() : m.regs_refund()}
-          </Button>
-        </div>
-      </Dialog>
+        message={
+          confirm == null
+            ? ""
+            : confirm.kind === "deny"
+              ? m.regs_deny_confirm({ name: confirm.row.displayName })
+              : m.regs_refund_confirm({ name: confirm.row.displayName })
+        }
+        confirmLabel={confirm?.kind === "deny" ? m.regs_deny() : m.regs_refund()}
+        pending={refund.isPending || deny.isPending}
+        onConfirm={() => {
+          if (confirm == null) return;
+          const mut = confirm.kind === "deny" ? deny : refund;
+          mut.mutate(confirm.row.id, { onSettled: () => setConfirm(null) });
+        }}
+      />
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { m } from "@/paraglide/messages";
@@ -87,14 +87,24 @@ test("groups rows and gates actions by status", () => {
   expect(screen.queryByText("expired")).not.toBeInTheDocument();
 });
 
-test("refund flows through the confirm dialog", async () => {
+test("refund flows through the confirm dialog and closes once the mutation settles", async () => {
   renderTable();
   await userEvent.click(screen.getAllByRole("button", { name: "Refund" })[1]!);
   expect(await screen.findByText(/Refund Cez's entry fee\?/)).toBeInTheDocument();
   // The dialog's action button is the last "Refund" in the DOM.
   const buttons = screen.getAllByRole("button", { name: "Refund" });
   await userEvent.click(buttons[buttons.length - 1]!);
-  expect(refundMutate).toHaveBeenCalledWith("r3");
+  expect(refundMutate).toHaveBeenCalledWith(
+    "r3",
+    expect.objectContaining({ onSettled: expect.any(Function) }),
+  );
+  // The dialog must stay open right after mutate() — closing only once the
+  // mutation settles is what keeps the confirm button's spinner visible.
+  expect(screen.getByText(/Refund Cez's entry fee\?/)).toBeInTheDocument();
+  act(() => {
+    refundMutate.mock.calls[0]![1].onSettled();
+  });
+  expect(screen.queryByText(/Refund Cez's entry fee\?/)).not.toBeInTheDocument();
 });
 
 test("only the acted-on row's refund button spins; other rows stay enabled", () => {

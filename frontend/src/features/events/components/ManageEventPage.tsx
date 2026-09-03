@@ -3,7 +3,7 @@ import { useState } from "react";
 import { m } from "@/paraglide/messages";
 import { useMe } from "@/features/auth/api";
 import { Button } from "@/shared/ui/button";
-import { Dialog } from "@/shared/ui/dialog";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { EventAction } from "../api";
 import { UnauthorizedError, useEvent, useEventAction, useUpdateEvent } from "../api";
 import { EventStatusBadge } from "./EventsListPage";
@@ -122,31 +122,21 @@ export function ManageEventPage() {
 
       <RegistrationsTable eventId={eventId} status={e.status} />
 
-      <Dialog
+      <ConfirmDialog
         open={confirmAction != null}
         onClose={() => setConfirmAction(null)}
         title={pendingConfirm?.label() ?? ""}
-      >
-        <p className="text-sm text-fg">{pendingConfirm?.confirm(e.name)}</p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => setConfirmAction(null)}>
-            {m.dialog_close()}
-          </Button>
-          <Button
-            type="button"
-            loading={act.isPending}
-            onClick={() => {
-              // Keep the dialog open while the action is in flight so the
-              // spinner is visible; close once the mutation settles.
-              if (confirmAction) {
-                act.mutate(confirmAction, { onSettled: () => setConfirmAction(null) });
-              }
-            }}
-          >
-            {pendingConfirm?.label()}
-          </Button>
-        </div>
-      </Dialog>
+        message={pendingConfirm?.confirm(e.name) ?? ""}
+        confirmLabel={pendingConfirm?.label() ?? ""}
+        pending={act.isPending}
+        onConfirm={() => {
+          // Keep the dialog open while the action is in flight so the
+          // spinner is visible; close once the mutation settles.
+          if (confirmAction) {
+            act.mutate(confirmAction, { onSettled: () => setConfirmAction(null) });
+          }
+        }}
+      />
     </div>
   );
 }
