@@ -35,6 +35,9 @@ type StripeClient interface {
 	Configured() bool
 	CreateCheckoutSession(ctx context.Context, p CheckoutParams) (*CheckoutSession, error)
 	RefundPaymentIntent(ctx context.Context, paymentIntentID string) error
+	// ExpireCheckoutSession kills a live Checkout session so a removed
+	// participant cannot complete it. Best-effort: callers log and continue.
+	ExpireCheckoutSession(ctx context.Context, sessionID string) error
 }
 
 type unconfiguredStripe struct{}
@@ -46,5 +49,9 @@ func (unconfiguredStripe) CreateCheckoutSession(context.Context, CheckoutParams)
 }
 
 func (unconfiguredStripe) RefundPaymentIntent(context.Context, string) error {
+	return ErrPaymentsUnconfigured
+}
+
+func (unconfiguredStripe) ExpireCheckoutSession(context.Context, string) error {
 	return ErrPaymentsUnconfigured
 }

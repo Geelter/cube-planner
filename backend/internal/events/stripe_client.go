@@ -52,3 +52,9 @@ func (c *stripeClient) RefundPaymentIntent(ctx context.Context, paymentIntentID 
 	})
 	return err
 }
+
+func (c *stripeClient) ExpireCheckoutSession(ctx context.Context, sessionID string) error {
+	_, err := c.sc.V1CheckoutSessions.Expire(ctx, sessionID,
+		&stripe.CheckoutSessionExpireParams{})
+	return err
+}

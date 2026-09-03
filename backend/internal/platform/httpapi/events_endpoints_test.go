@@ -25,6 +25,7 @@ type endpointFakeStripe struct {
 	mu       sync.Mutex
 	sessions []events.CheckoutParams
 	refunds  []string
+	expired  []string
 }
 
 func (f *endpointFakeStripe) Configured() bool { return true }
@@ -44,6 +45,13 @@ func (f *endpointFakeStripe) RefundPaymentIntent(_ context.Context, id string) e
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.refunds = append(f.refunds, id)
+	return nil
+}
+
+func (f *endpointFakeStripe) ExpireCheckoutSession(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.expired = append(f.expired, id)
 	return nil
 }
 
