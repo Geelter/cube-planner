@@ -18,7 +18,7 @@ import (
 
 type RegistrationInfo struct {
 	ID          uuid.UUID  `json:"id"`
-	Status      string     `json:"status" enum:"pending_payment,paid,waitlisted,cancelled,refund_requested,refunded,expired"`
+	Status      string     `json:"status" enum:"pending_payment,paid,waitlisted,cancelled,refund_requested,refunded,expired,removed"`
 	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
 	WaitlistPos *int64     `json:"waitlistPos,omitempty"`
 	PaidAt      *time.Time `json:"paidAt,omitempty"`

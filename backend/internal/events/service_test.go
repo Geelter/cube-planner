@@ -1492,3 +1492,81 @@ func TestUpdatePastEventStaysPatchable(t *testing.T) {
 		t.Fatalf("a past event must stay patchable: %v", err)
 	}
 }
+
+// ---- PR 5: removed status ----
+
+func TestLatePaymentOnRemovedRowRefundsInsteadOfReclaiming(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 2000, 8)
+	e.publish(t, ev.ID)
+
+	reg, err := e.svc.Register(context.Background(), ev.ID, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Organizer removes the player while their checkout is still open.
+	if _, err := e.q.SetRegistrationTerminal(context.Background(), db.SetRegistrationTerminalParams{
+		ID: reg.ID, Status: "removed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The checkout completes anyway.
+	err = e.svc.HandleWebhookEvent(context.Background(), WebhookEvent{
+		ID:                "evt_late_1",
+		Type:              "checkout.session.completed",
+		ClientReferenceID: reg.ID.String(),
+		PaymentIntentID:   "pi_late_1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := e.q.GetRegistration(context.Background(), reg.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Status == "paid" {
+		t.Fatal("a removed registration must never be reclaimed by a late payment")
+	}
+	if len(e.stripe.refunds) != 1 || e.stripe.refunds[0] != "pi_late_1" {
+		t.Fatalf("want the late charge auto-refunded, got refunds=%v", e.stripe.refunds)
+	}
+}
+
+func TestLatePaymentOnCancelledRowStillReclaims(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 2000, 8)
+	e.publish(t, ev.ID)
+
+	reg, err := e.svc.Register(context.Background(), ev.ID, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.q.SetRegistrationTerminal(context.Background(), db.SetRegistrationTerminalParams{
+		ID: reg.ID, Status: "cancelled",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err = e.svc.HandleWebhookEvent(context.Background(), WebhookEvent{
+		ID:                "evt_late_2",
+		Type:              "checkout.session.completed",
+		ClientReferenceID: reg.ID.String(),
+		PaymentIntentID:   "pi_late_2",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := e.q.GetRegistration(context.Background(), reg.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Regression guard: self-cancellation stays reclaimable — they wanted in.
+	if after.Status != "paid" {
+		t.Fatalf("want cancelled row reclaimed to paid, got %s", after.Status)
+	}
+}

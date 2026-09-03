@@ -1129,7 +1129,11 @@ func (s *Service) handleCheckoutCompleted(ctx context.Context, we WebhookEvent) 
 				return activeErr
 			}
 			hasOtherActive := activeErr == nil
-			if ev.Status == "published" && occupied < int64(ev.MaxParticipants) && !hasOtherActive {
+			// A removed row is never reclaimable: the organizer ejected this
+			// player, so a payment that lands afterwards is refunded rather
+			// than silently reinstating them.
+			if ev.Status == "published" && occupied < int64(ev.MaxParticipants) &&
+				!hasOtherActive && reg.Status != "removed" {
 				pi := we.PaymentIntentID
 				paidAt := s.now()
 				if _, err := qtx.MarkRegistrationPaid(ctx, db.MarkRegistrationPaidParams{
