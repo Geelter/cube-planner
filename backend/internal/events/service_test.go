@@ -157,6 +157,34 @@ func (e *testEnv) publish(t *testing.T, eventID uuid.UUID) {
 	}
 }
 
+func (e *testEnv) registerAndPay(t *testing.T, eventID, userID uuid.UUID, intentID string) *db.Registration {
+	t.Helper()
+	reg, err := e.svc.Register(context.Background(), eventID, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paidAt := e.clock.Now()
+	pi := intentID
+	out, err := e.q.MarkRegistrationPaid(context.Background(), db.MarkRegistrationPaidParams{
+		ID: reg.ID, PaidAt: &paidAt, PaymentIntentID: &pi,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &out
+}
+
+func hasMailSubject(m *recordMailer, substr string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, s := range m.sent {
+		if strings.Contains(s.subject, substr) {
+			return true
+		}
+	}
+	return false
+}
+
 // ---- Task 3 tests ----
 
 func TestCreatePaidEventRequiresStripe(t *testing.T) {
@@ -1580,5 +1608,188 @@ func TestLatePaymentOnCancelledRowStillReclaims(t *testing.T) {
 	// Regression guard: self-cancellation stays reclaimable — they wanted in.
 	if after.Status != "paid" {
 		t.Fatalf("want cancelled row reclaimed to paid, got %s", after.Status)
+	}
+}
+
+// ---- PR 5: RemoveRegistration ----
+
+func TestRemoveFreeEventParticipant(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 0, 8)
+	e.publish(t, ev.ID)
+	reg, err := e.svc.Register(context.Background(), ev.ID, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reg.Status != "paid" {
+		t.Fatalf("free registration should be paid, got %s", reg.Status)
+	}
+
+	out, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, false)
+	if err != nil {
+		t.Fatalf("removing a free participant must succeed: %v", err)
+	}
+	if out.Status != "removed" {
+		t.Fatalf("want removed, got %s", out.Status)
+	}
+	if len(e.stripe.refunds) != 0 {
+		t.Fatalf("no refund may be attempted for a free event, got %v", e.stripe.refunds)
+	}
+	if !hasMailSubject(e.mailer, "Removed") {
+		t.Fatal("the removed player must be notified")
+	}
+}
+
+func TestRemovePaidRequiresExplicitKeepPayment(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 2000, 8)
+	e.publish(t, ev.ID)
+	reg := e.registerAndPay(t, ev.ID, user, "pi_keep_1")
+
+	_, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, false)
+	if !errors.Is(err, ErrRemovePaidNeedsDecision) {
+		t.Fatalf("want ErrRemovePaidNeedsDecision, got %v", err)
+	}
+
+	out, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, true)
+	if err != nil {
+		t.Fatalf("keepPayment removal must succeed: %v", err)
+	}
+	if out.Status != "removed" {
+		t.Fatalf("want removed, got %s", out.Status)
+	}
+	if len(e.stripe.refunds) != 0 {
+		t.Fatalf("keepPayment must not refund, got %v", e.stripe.refunds)
+	}
+	if out.StripePaymentIntentID == nil || *out.StripePaymentIntentID != "pi_keep_1" {
+		t.Fatal("the payment intent must be preserved so a dashboard refund still resolves")
+	}
+}
+
+func TestRemoveFreesTheSpotAndPromotes(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	first := e.seedUser(t, "first@example.com")
+	second := e.seedUser(t, "second@example.com")
+	ev := e.createEvent(t, org, 0, 1)
+	e.publish(t, ev.ID)
+
+	held, err := e.svc.Register(context.Background(), ev.ID, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waiting, err := e.svc.Register(context.Background(), ev.ID, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waiting.Status != "waitlisted" {
+		t.Fatalf("second registrant should be waitlisted, got %s", waiting.Status)
+	}
+
+	if _, err := e.svc.RemoveRegistration(context.Background(), ev.ID, held.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	after, err := e.q.GetRegistration(context.Background(), waiting.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Status == "waitlisted" {
+		t.Fatal("removing the spot-holder must promote the waitlist")
+	}
+}
+
+func TestRemoveExpiresLiveCheckoutSession(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 2000, 8)
+	e.publish(t, ev.ID)
+	reg, err := e.svc.Register(context.Background(), ev.ID, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Pay(context.Background(), ev.ID, user); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.stripe.expired) != 1 {
+		t.Fatalf("the live checkout session must be expired, got %v", e.stripe.expired)
+	}
+}
+
+func TestRemoveRejectsRefundQueueAndTerminalRows(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 2000, 8)
+	e.publish(t, ev.ID)
+	reg := e.registerAndPay(t, ev.ID, user, "pi_queue_1")
+
+	if _, err := e.q.SetRegistrationTerminal(context.Background(), db.SetRegistrationTerminalParams{
+		ID: reg.ID, Status: "refund_requested",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, true); !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("refund_requested must be refused, got %v", err)
+	}
+
+	if _, err := e.q.SetRegistrationTerminal(context.Background(), db.SetRegistrationTerminalParams{
+		ID: reg.ID, Status: "removed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, true); !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("an already-removed row must be refused, got %v", err)
+	}
+}
+
+func TestRemoveWrongEventIsNotFound(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 0, 8)
+	other := e.createEvent(t, org, 0, 8)
+	e.publish(t, ev.ID)
+	reg, err := e.svc.Register(context.Background(), ev.ID, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.RemoveRegistration(context.Background(), other.ID, reg.ID, false); !errors.Is(err, ErrRegistrationNotFound) {
+		t.Fatalf("cross-event id must 404, got %v", err)
+	}
+}
+
+func TestRemoveFailedSessionExpiryStillRemoves(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 2000, 8)
+	e.publish(t, ev.ID)
+	reg, err := e.svc.Register(context.Background(), ev.ID, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Pay(context.Background(), ev.ID, user); err != nil {
+		t.Fatal(err)
+	}
+	e.stripe.expireErr = errors.New("stripe unreachable")
+
+	out, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, false)
+	if err != nil {
+		t.Fatalf("a failed session expiry must not fail the removal: %v", err)
+	}
+	if out.Status != "removed" {
+		t.Fatalf("want removed, got %s", out.Status)
+	}
+	if len(e.stripe.expired) != 0 {
+		t.Fatalf("want no successful expiry recorded, got %v", e.stripe.expired)
 	}
 }

@@ -48,6 +48,11 @@ var (
 	// event). The frontend's datetime-local input constrains typing but
 	// cannot be trusted, and nothing else checked this before.
 	ErrInvalidSchedule = errors.New("invalid event schedule")
+	// ErrRemovePaidNeedsDecision: removing a paid registration that has a
+	// Stripe charge is ambiguous — refund it (/refund) or state explicitly
+	// that the fee is kept. Never inferred, so a stale client cannot pocket
+	// someone's money by omission.
+	ErrRemovePaidNeedsDecision = errors.New("paid registration needs a refund decision")
 )
 
 // validateSchedule enforces the three temporal rules shared by Create and
@@ -843,6 +848,82 @@ func (s *Service) OrganizerRefund(ctx context.Context, eventID, registrationID u
 		return nil, fmt.Errorf("%w: nothing was paid", ErrInvalidTransition)
 	}
 	return s.refundRegistration(ctx, registrationID, *reg.StripePaymentIntentID, false)
+}
+
+// RemoveRegistration ejects a participant without touching money.
+// Distinct from OrganizerRefund: free events have no payment intent at
+// all, and a paid participant may be removed without a refund (a no-show
+// or DQ) provided the caller says so explicitly.
+func (s *Service) RemoveRegistration(
+	ctx context.Context, eventID, registrationID uuid.UUID, keepPayment bool,
+) (*db.Registration, error) {
+	var out db.Registration
+	var emails []pendingEmail
+	sessionToExpire := ""
+	err := s.withTx(ctx, func(qtx *db.Queries) error {
+		reg, err := qtx.GetRegistration(ctx, registrationID)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && reg.EventID != eventID) {
+			return ErrRegistrationNotFound
+		}
+		if err != nil {
+			return err
+		}
+		ev, err := qtx.GetEventForUpdate(ctx, reg.EventID)
+		if err != nil {
+			return err
+		}
+		// Re-read under the lock: a paid webhook may have landed between the
+		// organizer's page load and this call.
+		reg, err = qtx.GetRegistration(ctx, registrationID)
+		if err != nil {
+			return err
+		}
+		switch reg.Status {
+		case "pending_payment", "waitlisted":
+			// Nothing captured yet; the session (if any) is killed below.
+		case "paid":
+			if reg.StripePaymentIntentID != nil && !keepPayment {
+				return ErrRemovePaidNeedsDecision
+			}
+		default:
+			// refund_requested belongs to the refund queue (money in limbo),
+			// and terminal rows are already gone.
+			return fmt.Errorf("%w: remove on %s registration", ErrInvalidTransition, reg.Status)
+		}
+		if reg.StripeCheckoutSessionID != nil {
+			sessionToExpire = *reg.StripeCheckoutSessionID
+		}
+		// Status only — the payment intent is deliberately preserved so a
+		// later dashboard refund still resolves to this row.
+		out, err = qtx.SetRegistrationTerminal(ctx, db.SetRegistrationTerminalParams{
+			ID: reg.ID, Status: "removed",
+		})
+		if err != nil {
+			return err
+		}
+		u, err := qtx.GetUserByID(ctx, reg.UserID)
+		if err != nil {
+			return err
+		}
+		emails = append(emails, participantRemovedEmail(u, ev, reg.StripePaymentIntentID != nil, s.baseURL))
+		more, err := s.promoteLocked(ctx, qtx, ev)
+		emails = append(emails, more...)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.sendEmails(ctx, emails)
+	if sessionToExpire != "" {
+		// Best-effort: shrinks the window for a late completion. The
+		// authoritative protection is the reclaim guard in
+		// handleCheckoutCompleted, which refuses to reinstate a removed row.
+		if err := s.stripe.ExpireCheckoutSession(ctx, sessionToExpire); err != nil {
+			s.log.Warn("events: expiring checkout session on removal failed",
+				"registration", out.ID, "error", err)
+		}
+	}
+	return &out, nil
 }
 
 // DenyRefund resolves a refund_requested entry as denied: the row is
