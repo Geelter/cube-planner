@@ -880,18 +880,22 @@ func (s *Service) RemoveRegistration(
 		}
 		switch reg.Status {
 		case "pending_payment", "waitlisted":
-			// Nothing captured yet; the session (if any) is killed below.
+			// The checkout session, if any, is still live — kill it below.
+			if reg.StripeCheckoutSessionID != nil {
+				sessionToExpire = *reg.StripeCheckoutSessionID
+			}
 		case "paid":
 			if reg.StripePaymentIntentID != nil && !keepPayment {
 				return ErrRemovePaidNeedsDecision
 			}
+			// A paid row's checkout session is already complete —
+			// MarkRegistrationPaid never clears stripe_checkout_session_id,
+			// so calling ExpireCheckoutSession here would hit an
+			// already-completed session and always fail against real Stripe.
 		default:
 			// refund_requested belongs to the refund queue (money in limbo),
 			// and terminal rows are already gone.
 			return fmt.Errorf("%w: remove on %s registration", ErrInvalidTransition, reg.Status)
-		}
-		if reg.StripeCheckoutSessionID != nil {
-			sessionToExpire = *reg.StripeCheckoutSessionID
 		}
 		// Status only — the payment intent is deliberately preserved so a
 		// later dashboard refund still resolves to this row.

@@ -1716,11 +1716,66 @@ func TestRemoveExpiresLiveCheckoutSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, false); err != nil {
+	out, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, false)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if out.Status != "removed" {
+		t.Fatalf("want removed, got %s", out.Status)
 	}
 	if len(e.stripe.expired) != 1 {
 		t.Fatalf("the live checkout session must be expired, got %v", e.stripe.expired)
+	}
+}
+
+// TestRemoveKeepPaymentDoesNotExpireCompletedSession covers the realistic
+// paid state: a registration that paid through real Stripe Checkout still
+// carries its (now-completed) stripe_checkout_session_id, because
+// MarkRegistrationPaid never clears it. Removing that row must not call
+// ExpireCheckoutSession — Stripe rejects expiring an already-completed
+// session — even though the column is non-nil.
+func TestRemoveKeepPaymentDoesNotExpireCompletedSession(t *testing.T) {
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 2000, 8)
+	e.publish(t, ev.ID)
+	reg, err := e.svc.Register(context.Background(), ev.ID, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Pay(context.Background(), ev.ID, user); err != nil {
+		t.Fatal(err)
+	}
+	paidAt := e.clock.Now()
+	pi := "pi_completed_1"
+	if _, err := e.q.MarkRegistrationPaid(context.Background(), db.MarkRegistrationPaidParams{
+		ID: reg.ID, PaidAt: &paidAt, PaymentIntentID: &pi,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Sanity: the completed session id survived the paid transition, so
+	// this fixture actually exercises the realistic state.
+	stored, err := e.q.GetRegistration(context.Background(), reg.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.StripeCheckoutSessionID == nil {
+		t.Fatal("fixture setup: paid row should still carry its completed checkout session id")
+	}
+
+	out, err := e.svc.RemoveRegistration(context.Background(), ev.ID, reg.ID, true)
+	if err != nil {
+		t.Fatalf("keepPayment removal must succeed: %v", err)
+	}
+	if out.Status != "removed" {
+		t.Fatalf("want removed, got %s", out.Status)
+	}
+	if out.StripePaymentIntentID == nil || *out.StripePaymentIntentID != "pi_completed_1" {
+		t.Fatal("the payment intent must be preserved")
+	}
+	if len(e.stripe.expired) != 0 {
+		t.Fatalf("a completed checkout session must never be expired, got %v", e.stripe.expired)
 	}
 }
 
