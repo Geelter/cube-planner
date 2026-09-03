@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 import { m } from "@/paraglide/messages";
+import { closeDialog } from "@/shared/lib/closeDialog";
+import { useScrollLock } from "@/shared/lib/useScrollLock";
 import { Button } from "@/shared/ui/button";
 
 // Modal on top of the native <dialog> element: showModal() provides the
@@ -18,6 +20,7 @@ export function Dialog({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  useScrollLock(open);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -26,15 +29,21 @@ export function Dialog({
       if (typeof el.showModal === "function") el.showModal();
       else el.setAttribute("open", "");
     } else if (!open && el.open) {
-      el.close();
+      closeDialog(el);
     }
+    // Consumers that hardcode `open` and conditionally mount (CardPreviewSheet,
+    // PrintingPickerDialog) would otherwise be removed from the DOM while still
+    // open, and a removed top-layer element does not restore focus to its opener.
+    return () => {
+      if (el.open) closeDialog(el);
+    };
   }, [open]);
   return (
     <dialog
       ref={ref}
       aria-labelledby={titleId}
       onClose={onClose}
-      className="m-auto max-h-[85svh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-xl border border-border bg-surface p-6 text-fg shadow-lg backdrop:bg-overlay"
+      className="m-auto max-h-[85svh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-border bg-surface p-6 text-fg shadow-lg backdrop:bg-overlay"
     >
       {open && (
         <div className="flex flex-col gap-4">

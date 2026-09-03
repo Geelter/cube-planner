@@ -2,6 +2,8 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { m } from "@/paraglide/messages";
+import { closeDialog } from "@/shared/lib/closeDialog";
+import { useScrollLock } from "@/shared/lib/useScrollLock";
 import { Button } from "@/shared/ui/button";
 
 // Positioning trick on both sides: the UA gives a modal <dialog> inset:0
@@ -13,7 +15,8 @@ const drawerVariants = cva(
     variants: {
       side: {
         right: "mr-0 ml-auto h-dvh max-h-none w-72 max-w-[80vw] border-l",
-        bottom: "mt-auto max-h-[85svh] w-full max-w-none overflow-y-auto rounded-t-xl border-t",
+        bottom:
+          "mt-auto max-h-[85svh] w-full max-w-none overflow-y-auto overscroll-contain rounded-t-xl border-t",
       },
     },
     defaultVariants: { side: "right" },
@@ -39,6 +42,7 @@ export function Drawer({
   side?: VariantProps<typeof drawerVariants>["side"];
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  useScrollLock(open);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -47,8 +51,14 @@ export function Drawer({
       if (typeof el.showModal === "function") el.showModal();
       else el.setAttribute("open", "");
     } else if (!open && el.open) {
-      el.close();
+      closeDialog(el);
     }
+    // Consumers that hardcode `open` and conditionally mount (CardPreviewSheet,
+    // PrintingPickerDialog) would otherwise be removed from the DOM while still
+    // open, and a removed top-layer element does not restore focus to its opener.
+    return () => {
+      if (el.open) closeDialog(el);
+    };
   }, [open]);
   return (
     // Native <dialog> backdrop: clicking the dialog element itself (not a
@@ -67,7 +77,7 @@ export function Drawer({
       className={drawerVariants({ side })}
     >
       {open && (
-        <div className="flex h-full flex-col gap-2 overflow-y-auto">
+        <div className="flex h-full flex-col gap-2 overflow-y-auto overscroll-contain">
           <div className="flex justify-end">
             <Button
               type="button"

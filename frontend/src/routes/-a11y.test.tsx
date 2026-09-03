@@ -14,11 +14,15 @@ beforeEach(() => {
   );
   // See features/auth/components/a11y.test.tsx for why devtools are off.
   vi.stubEnv("DEV", false);
+  // jsdom doesn't implement scrollTo; useScrollLock's release() calls it on
+  // unmount-while-open, which would otherwise log "Not implemented" noise.
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
 });
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 it("root layout with open nav drawer has no axe violations", async () => {

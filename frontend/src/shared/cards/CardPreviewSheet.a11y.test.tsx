@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { axe } from "vitest-axe";
 import { CardPreviewSheet } from "./CardPreviewSheet";
 
@@ -11,9 +11,16 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
+beforeEach(() => {
+  // jsdom doesn't implement scrollTo; useScrollLock's release() calls it on
+  // unmount-while-open, which would otherwise log "Not implemented" noise.
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+});
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function stubEnv(desktop: boolean) {

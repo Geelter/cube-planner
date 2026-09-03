@@ -72,3 +72,37 @@ test("side=bottom pins to the viewport bottom and dismisses like the right drawe
   await userEvent.click(dialog); // dialog element itself = backdrop area
   expect(onClose).toHaveBeenCalledTimes(2);
 });
+
+test("locks body scroll while open and releases when closed", () => {
+  const { rerender } = render(
+    <Drawer open={false} onClose={() => {}} label="Menu">
+      <p>Body</p>
+    </Drawer>,
+  );
+  expect(document.body.style.overflow).toBe("");
+  rerender(
+    <Drawer open onClose={() => {}} label="Menu">
+      <p>Body</p>
+    </Drawer>,
+  );
+  expect(document.body.style.overflow).toBe("hidden");
+  rerender(
+    <Drawer open={false} onClose={() => {}} label="Menu">
+      <p>Body</p>
+    </Drawer>,
+  );
+  expect(document.body.style.overflow).toBe("");
+});
+
+test("closes the dialog element when unmounted while still open", () => {
+  const { unmount } = render(
+    <Drawer open onClose={() => {}} label="Menu">
+      <p>Body</p>
+    </Drawer>,
+  );
+  const el = screen.getByRole("dialog") as HTMLDialogElement;
+  const close = vi.spyOn(el, "close");
+  unmount();
+  expect(close).toHaveBeenCalled();
+  expect(document.body.style.overflow).toBe("");
+});
