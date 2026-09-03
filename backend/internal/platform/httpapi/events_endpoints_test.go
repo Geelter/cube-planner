@@ -244,8 +244,11 @@ func TestOrganizerLifecycleOverHTTP(t *testing.T) {
 	makeAdmin(t, pool, "boss@test")
 
 	// Create draft.
+	startsAt := time.Now().Add(7 * 24 * time.Hour)
+	refundDeadline := startsAt.Add(-2 * 24 * time.Hour)
 	resp := admin.do(t, "POST", "/api/events",
-		`{"name":"Vintage Cube Night","startsAt":"2026-08-01T18:00:00Z","feeCents":5000,"maxParticipants":1,"refundDeadline":"2026-07-30T18:00:00Z"}`)
+		fmt.Sprintf(`{"name":"Vintage Cube Night","startsAt":%q,"feeCents":5000,"maxParticipants":1,"refundDeadline":%q}`,
+			startsAt.Format(time.RFC3339), refundDeadline.Format(time.RFC3339)))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("create: %d", resp.StatusCode)
 	}
