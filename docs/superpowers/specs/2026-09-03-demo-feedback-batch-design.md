@@ -6,8 +6,8 @@ Status: approved (brainstorm 2026-09-03)
 ## Goal
 
 Close the 12 findings from the first production demo with a real tester
-on cubeplanner.pl, plus one gap surfaced while brainstorming them. They
-fall into four waves, delivered as **10 PRs**, smallest-first, each
+on cubeplanner.pl, plus two gaps surfaced while brainstorming them. They
+fall into four waves, delivered as **11 PRs**, smallest-first, each
 independently shippable behind the PR flow (master is protected).
 
 | # | Finding | PR |
@@ -25,9 +25,12 @@ independently shippable behind the PR flow (master is protected).
 | 11 | Wantlists should be set-aware, and carry set codes | 10 |
 | 12 | Backdrops don't block scrolling behind the overlay | 1 |
 | 13 | Organizer DQ-without-refund (surfaced in brainstorm) | 5 |
+| 14 | Imports can't specify a set or an exact printing | 11 |
 
 Sequencing: PRs 1–4 and 6 are independent. 5 → 8 (shared confirm
-dialog), 7 → 8 (both touch `ResultForm`), 9 → 10 by convention only.
+dialog), 7 → 8 (both touch `ResultForm`), 9 → 11 (11 extends the parser
+that 9 moves). PR 10's set-annotated export only round-trips back into
+the app once 11 lands, but the two are otherwise independent.
 
 ## Wave 1 — shared polish
 
@@ -445,15 +448,120 @@ Two download buttons, because the existing one must not break:
 - **"Download with sets"** — new, `<qty> <name> (SET)`, the format
   Moxfield and Archidekt accept.
 
-Note that our own list importer (PR 9) parses quantity + name only, so
-the set-annotated export does not round-trip back into the app. Teaching
-the parser `(SET)` is deliberately out of scope for this batch.
+Until PR 11 lands, our own list importer parses quantity + name only, so
+the set-annotated export does not round-trip back into the app. PR 11
+closes that loop.
+
+### PR 11 — Set and printing selectors in the import grammar (#14)
+
+Today an import line is quantity + name, and resolution picks a
+*representative* printing per oracle card
+(`distinct on (oracle_id) … order by oracle_id, promo, released_at desc`).
+A user who wants Urza's Mine (ATQ) 83a specifically — one of four
+variants in Antiquities — must import the list and then click through
+each card in the printing picker afterwards. For a bulk import that is
+exactly the manual work bulk import is supposed to remove.
+
+#### Grammar
+
+```
+[<qty>[x]] <name> [(<set>)] [<collector-number>]
+```
+
+Both new selectors are optional and independent of quantity, so every
+list that parses today keeps parsing identically.
+
+- **Set:** parenthesized, 2–5 characters of `[a-z0-9]`, matched
+  case-insensitively. Our mirror stores Scryfall's `set` verbatim, which
+  is lowercase, so both sides are lowered before comparison.
+- **Collector number:** accepted **only** when a set was given (a bare
+  trailing number is far more likely to be part of a name). Charset
+  `[a-z0-9★†-]`, case-insensitive, covering `83a`, `123`, `★12` and
+  hyphenated promo numbers.
+
+This is deliberately the Moxfield / Archidekt convention
+(`1 Lightning Bolt (LEB) 123`), which buys two things beyond the
+feature itself: lists exported from those tools paste in directly, and
+PR 10's "Download with sets" export round-trips back into the app.
+
+**Names that contain parentheses** are the one real hazard — they exist
+(`B.F.M. (Big Furry Monster)`, `Erase (Not the Urza's Legacy One)`). Two
+guards, in order:
+
+1. The parenthesized token must satisfy the set-code charset and length
+   above. Both examples fail it on length alone, so the parenthesis stays
+   part of the name.
+2. Belt and braces: if a set-aware interpretation resolves to nothing,
+   the line is retried with the **entire raw line as a bare name** before
+   being reported unresolved. So no pathological name can be made
+   unimportable by the new syntax.
+
+#### Resolution ladder
+
+Per line, first match wins:
+
+| Input | Resolution | Miss |
+|---|---|---|
+| set + collector number | exact printing | `printing_not_found`, suggesting every printing of that name |
+| set only | printings of that name in that set — one → matched; several (the Urza's Mine case) → `ambiguous` with those variants as the suggestions | `printing_not_found` |
+| neither | today's behaviour: oracle representative → `ambiguous` → per-line fuzzy → `unmatched` | unchanged |
+
+New line status **`printing_not_found`**: the name is real but the
+requested printing is not. Distinguishing it from `unmatched` matters —
+the fix is picking a different printing, not correcting a typo, and the
+suggestions list already gives the user that choice inside the review
+dialog. `ambiguous` reuses the existing per-line `<select>` UI
+unchanged, so variant disambiguation needs no new component.
+
+**Determinism does not depend on `(set_code, collector_number)` being
+unique.** Scryfall's `default-cards` bulk file is one object per
+printing, so in practice it is, and there is no unique index backing it.
+Rather than assume, every new lookup carries the same
+`order by promo, released_at desc, (image_small is null)` tie-break the
+existing queries use, so a duplicate pair resolves stably instead of
+arbitrarily.
+
+#### Query shape
+
+Resolution must stay batched — 500 lines cannot become 500 round trips.
+Three constant-count batch queries replace the current one, plus the
+existing per-line fuzzy fallback for lines that reach it:
+
+1. `GetCardsByNormalizedNames` — existing, for lines with no set.
+2. New: batch lookup over `(set_code, collector_number)` pairs, via
+   `unnest` of two arrays.
+3. New: batch lookup over `(normalized_name, set_code)` pairs, returning
+   **all** matching printings so variants can surface as `ambiguous`.
+
+`GetPrintingsByOracleID` is reused as-is for `printing_not_found`
+suggestions.
+
+#### Wire and consumers
+
+`ResolvedLine` gains the parsed `setCode` and `collectorNumber` echoes
+(so the review dialog can show what it understood) and the new status.
+When a selector was given, `match` is the **exact** printing rather than
+the oracle representative.
+
+No consumer-side commit changes are needed, which is what makes this
+cheap: collection items are already keyed per printing
+(`(user_id, scryfall_id)`), and `POST /cubes/{cubeId}/changes` already
+takes `{scryfallId, quantity}` per add. So importing
+`1 Urza's Mine (ATQ) 83a` into a cube sets 83a as that cube card's
+chosen printing at import time — the manual pass through the printing
+picker disappears for both features at once, because PR 9 already made
+resolution shared.
+
+Tests: table-driven parser cases for every grammar branch and both
+paren-name guards; integration tests per ladder row, including the
+four-variant Antiquities case and a `printing_not_found` with
+suggestions.
 
 ## Cross-cutting
 
 - New message keys in `messages/en.json` **and** `pl.json` for every new
   string; the Paraglide compiler enforces parity.
-- `make api-generate` on PRs 5, 6, 8, 9, 10.
+- `make api-generate` on PRs 5, 6, 8, 9, 10, 11.
 - Frontend: vitest + RTL, an axe smoke test per changed screen
   (`// @vitest-environment jsdom`), and 360px verification per rule 9.
 - Backend: table-driven service tests plus testcontainers integration
