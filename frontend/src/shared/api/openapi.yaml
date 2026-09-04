@@ -1786,6 +1786,8 @@ components:
     WantlistEntry:
       additionalProperties: false
       properties:
+        collectorNumber:
+          type: string
         cubeQuantity:
           format: int32
           type: integer
@@ -1812,6 +1814,10 @@ components:
         scryfallId:
           description: The cube's chosen printing
           type: string
+        setCode:
+          type: string
+        setName:
+          type: string
       required:
         - oracleId
         - scryfallId
@@ -1822,6 +1828,9 @@ components:
         - missingQuantity
         - cubeQuantity
         - ownedQuantity
+        - setCode
+        - setName
+        - collectorNumber
       type: object
 info:
   title: Cube Planner API
@@ -2580,6 +2589,15 @@ paths:
           name: cubeId
           required: true
           schema:
+            type: string
+        - explode: false
+          in: query
+          name: match
+          schema:
+            default: oracle
+            enum:
+              - oracle
+              - printing
             type: string
       responses:
         "200":

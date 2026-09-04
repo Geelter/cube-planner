@@ -3,17 +3,24 @@ import { useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardHoverPreview } from "@/shared/cards/CardHoverPreview";
 import { CardPreviewSheet, type PreviewCard } from "@/shared/cards/CardPreviewSheet";
+import { downloadTextFile } from "@/shared/lib/download";
 import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
+import { Label } from "@/shared/ui/label";
 import { UnauthorizedError, useWantlist } from "../api";
-import { downloadTextFile } from "@/shared/lib/download";
-import { wantlistFilename, wantlistToCardmarketText } from "../lib/cardmarket";
+import {
+  wantlistFilename,
+  wantlistToCardmarketText,
+  wantlistToSetAnnotatedText,
+} from "../lib/cardmarket";
 
 const route = getRouteApi("/cubes/$cubeId/wantlist");
 
 export function WantlistPage() {
   const { cubeId } = route.useParams();
-  const wantlist = useWantlist(cubeId);
+  const { match } = route.useSearch();
+  const navigate = route.useNavigate();
+  const wantlist = useWantlist(cubeId, match);
   const [previewItem, setPreviewItem] = useState<PreviewCard | null>(null);
 
   if (wantlist.isPending) return <p className="text-sm text-fg-muted">{m.loading()}</p>;
@@ -41,74 +48,131 @@ export function WantlistPage() {
           <p className="text-sm text-fg-muted">{m.wantlist_total({ count: totalMissing })}</p>
         </div>
         {items.length > 0 && (
-          <Button
-            type="button"
-            onClick={() =>
-              downloadTextFile(wantlistFilename(cubeName), wantlistToCardmarketText(items))
-            }
-          >
-            {m.wantlist_download()}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() =>
+                downloadTextFile(wantlistFilename(cubeName), wantlistToCardmarketText(items))
+              }
+            >
+              {m.wantlist_download()}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                downloadTextFile(
+                  wantlistFilename(cubeName).replace(/\.txt$/, "-with-sets.txt"),
+                  wantlistToSetAnnotatedText(items),
+                )
+              }
+            >
+              {m.wantlist_download_sets()}
+            </Button>
+          </div>
         )}
       </div>
+
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="text-sm font-medium text-fg">{m.wantlist_match_label()}</legend>
+        <div className="flex flex-wrap gap-4">
+          <div className="flex min-h-11 items-center gap-2">
+            <input
+              type="radio"
+              id="wantlist-match-oracle"
+              name="wantlist-match"
+              value="oracle"
+              checked={match === "oracle"}
+              onChange={() => navigate({ search: { match: "oracle" } })}
+              className="size-4"
+            />
+            <Label htmlFor="wantlist-match-oracle" className="font-normal">
+              {m.wantlist_match_oracle()}
+            </Label>
+          </div>
+          <div className="flex min-h-11 items-center gap-2">
+            <input
+              type="radio"
+              id="wantlist-match-printing"
+              name="wantlist-match"
+              value="printing"
+              checked={match === "printing"}
+              onChange={() => navigate({ search: { match: "printing" } })}
+              className="size-4"
+            />
+            <Label htmlFor="wantlist-match-printing" className="font-normal">
+              {m.wantlist_match_printing()}
+            </Label>
+          </div>
+        </div>
+      </fieldset>
 
       {items.length === 0 ? (
         <p className="text-sm text-fg-muted">{m.wantlist_empty()}</p>
       ) : (
-        <table className="w-full max-w-2xl text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-fg-muted">
-              <th scope="col" className="py-1.5 font-medium">
-                {m.wantlist_col_card()}
-              </th>
-              <th scope="col" className="py-1.5 text-right font-medium">
-                {m.wantlist_col_missing()}
-              </th>
-              <th scope="col" className="py-1.5 text-right font-medium">
-                {m.wantlist_col_in_cube()}
-              </th>
-              <th scope="col" className="py-1.5 text-right font-medium">
-                {m.wantlist_col_owned()}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.oracleId} className="border-b border-border">
-                {/* CardHoverPreview's hover/focus handlers make the linter treat this
-                    cell as a control needing a label; the visible card name is the
-                    label, the rule just can't see through the custom component. */}
-                {/* eslint-disable-next-line jsx-a11y/control-has-associated-label */}
-                <td className="py-1.5">
-                  <CardHoverPreview card={item}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPreviewItem({
-                          oracleId: item.oracleId,
-                          scryfallId: item.scryfallId,
-                          name: item.name,
-                        })
-                      }
-                      className="rounded text-left text-fg hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                    >
-                      {item.name}
-                    </button>
-                  </CardHoverPreview>
-                </td>
-                <td className="py-1.5 text-right font-semibold text-accent tabular-nums">
-                  {item.missingQuantity}
-                </td>
-                <td className="py-1.5 text-right text-fg-muted tabular-nums">
-                  {item.cubeQuantity}
-                </td>
-                <td className="py-1.5 text-right text-fg-muted tabular-nums">
-                  {item.ownedQuantity}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-2xl text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-fg-muted">
+                <th scope="col" className="py-1.5 font-medium">
+                  {m.wantlist_col_card()}
+                </th>
+                <th scope="col" className="py-1.5 font-medium">
+                  {m.wantlist_set()}
+                </th>
+                <th scope="col" className="py-1.5 text-right font-medium">
+                  {m.wantlist_col_missing()}
+                </th>
+                <th scope="col" className="py-1.5 text-right font-medium">
+                  {m.wantlist_col_in_cube()}
+                </th>
+                <th scope="col" className="py-1.5 text-right font-medium">
+                  {m.wantlist_col_owned()}
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.oracleId} className="border-b border-border">
+                  {/* CardHoverPreview's hover/focus handlers make the linter treat this
+                      cell as a control needing a label; the visible card name is the
+                      label, the rule just can't see through the custom component. */}
+                  {/* eslint-disable-next-line jsx-a11y/control-has-associated-label */}
+                  <td className="py-1.5">
+                    <CardHoverPreview card={item}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewItem({
+                            oracleId: item.oracleId,
+                            scryfallId: item.scryfallId,
+                            name: item.name,
+                          })
+                        }
+                        className="rounded text-left text-fg hover:bg-surface-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      >
+                        {item.name}
+                      </button>
+                    </CardHoverPreview>
+                  </td>
+                  <td className="py-1.5 text-fg-muted">
+                    <span className="text-fg">{item.setCode.toUpperCase()}</span>{" "}
+                    <span className="text-xs">#{item.collectorNumber}</span>
+                  </td>
+                  <td className="py-1.5 text-right font-semibold text-accent tabular-nums">
+                    {item.missingQuantity}
+                  </td>
+                  <td className="py-1.5 text-right text-fg-muted tabular-nums">
+                    {item.cubeQuantity}
+                  </td>
+                  <td className="py-1.5 text-right text-fg-muted tabular-nums">
+                    {item.ownedQuantity}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {previewItem && <CardPreviewSheet card={previewItem} onClose={() => setPreviewItem(null)} />}

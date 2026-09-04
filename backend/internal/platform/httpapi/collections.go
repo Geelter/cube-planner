@@ -126,10 +126,14 @@ type WantlistEntry struct {
 	MissingQuantity int32     `json:"missingQuantity"`
 	CubeQuantity    int32     `json:"cubeQuantity"`
 	OwnedQuantity   int32     `json:"ownedQuantity"`
+	SetCode         string    `json:"setCode"`
+	SetName         string    `json:"setName"`
+	CollectorNumber string    `json:"collectorNumber"`
 }
 
 type getWantlistInput struct {
 	CubeID string `path:"cubeId"`
+	Match  string `query:"match" enum:"oracle,printing" default:"oracle"`
 }
 
 type getWantlistOutput struct {
@@ -258,7 +262,7 @@ func registerCollections(api huma.API, deps Deps) {
 		if err != nil {
 			return nil, err
 		}
-		name, items, totalMissing, err := deps.Collections.Wantlist(ctx, id, uid)
+		name, items, totalMissing, err := deps.Collections.Wantlist(ctx, id, uid, in.Match == "printing")
 		if err != nil {
 			return nil, mapCollectionErr(err)
 		}
@@ -271,7 +275,8 @@ func registerCollections(api huma.API, deps Deps) {
 				OracleID: it.OracleID, ScryfallID: it.ScryfallID, Name: it.Name,
 				ManaCost: it.ManaCost, ImageSmall: it.ImageSmall, ImageNormal: it.ImageNormal,
 				MissingQuantity: it.MissingQuantity, CubeQuantity: it.CubeQuantity,
-				OwnedQuantity: it.OwnedQuantity,
+				OwnedQuantity: it.OwnedQuantity, SetCode: it.SetCode, SetName: it.SetName,
+				CollectorNumber: it.CollectorNumber,
 			}
 		}
 		return out, nil

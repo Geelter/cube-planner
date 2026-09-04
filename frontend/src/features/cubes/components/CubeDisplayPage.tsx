@@ -56,7 +56,7 @@ export function CubeDisplayPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link to="/cubes/$cubeId/wantlist" params={{ cubeId }}>
+            <Link to="/cubes/$cubeId/wantlist" params={{ cubeId }} search={{ match: "oracle" }}>
               {m.wantlist_compare_button()}
             </Link>
           </Button>

@@ -171,6 +171,10 @@
   "wantlist_col_missing": "Missing",
   "wantlist_col_in_cube": "In cube",
   "wantlist_col_owned": "Owned",
+  "wantlist_set": "Set",
+  "wantlist_match_label": "Match printings",
+  "wantlist_match_oracle": "Any printing",
+  "wantlist_match_printing": "Exact printing",
   "wantlist_total": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],
@@ -183,6 +187,7 @@
   ],
   "wantlist_empty": "You own everything in this cube.",
   "wantlist_download": "Download for Cardmarket",
+  "wantlist_download_sets": "Download with sets",
   "nav_events": "Events",
   "events_title": "Events",
   "events_upcoming": "Upcoming",

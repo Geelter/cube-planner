@@ -1623,6 +1623,7 @@ export interface components {
       token: string;
     };
     WantlistEntry: {
+      collectorNumber: string;
       /** Format: int32 */
       cubeQuantity: number;
       imageNormal: string | null;
@@ -1636,6 +1637,8 @@ export interface components {
       ownedQuantity: number;
       /** @description The cube's chosen printing */
       scryfallId: string;
+      setCode: string;
+      setName: string;
     };
   };
   responses: never;
@@ -2413,7 +2416,9 @@ export interface operations {
   };
   getCubeWantlist: {
     parameters: {
-      query?: never;
+      query?: {
+        match?: "oracle" | "printing";
+      };
       header?: never;
       path: {
         cubeId: string;

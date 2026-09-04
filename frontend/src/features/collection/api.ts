@@ -88,13 +88,13 @@ export function useImportItems() {
   });
 }
 
-export function useWantlist(cubeId: string) {
+export function useWantlist(cubeId: string, match: "oracle" | "printing") {
   return useQuery({
-    queryKey: ["collection", "wantlist", cubeId],
+    queryKey: ["collection", "wantlist", cubeId, match],
     retry: false,
     queryFn: async () => {
       const { data, error, response } = await client.GET("/api/cubes/{cubeId}/wantlist", {
-        params: { path: { cubeId } },
+        params: { path: { cubeId }, query: { match } },
       });
       if (response.status === 401) throw new UnauthorizedError(m.wantlist_login_required());
       const body = unwrap(data, error);

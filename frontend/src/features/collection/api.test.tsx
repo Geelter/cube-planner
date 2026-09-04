@@ -78,7 +78,7 @@ test("useWantlist throws UnauthorizedError on 401", async () => {
     "fetch",
     vi.fn().mockResolvedValue(jsonResponse({ title: "Unauthorized", status: 401 }, 401)),
   );
-  const { result } = renderHook(() => useWantlist("cube-1"), { wrapper });
+  const { result } = renderHook(() => useWantlist("cube-1", "oracle"), { wrapper });
   await waitFor(() => expect(result.current.isError).toBe(true));
   expect(result.current.error).toBeInstanceOf(UnauthorizedError);
 });

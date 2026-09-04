@@ -16,11 +16,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderPage() {
+function renderPage(initialEntry = "/cubes/c1/wantlist") {
   const rootRoute = createRootRoute();
   const wantlist = createRoute({
     getParentRoute: () => rootRoute,
     path: "/cubes/$cubeId/wantlist",
+    validateSearch: (search: Record<string, unknown>): { match: "oracle" | "printing" } => ({
+      match: search.match === "printing" ? "printing" : "oracle",
+    }),
     component: WantlistPage,
   });
   const login = createRoute({
@@ -30,7 +33,7 @@ function renderPage() {
   });
   const router = createRouter({
     routeTree: rootRoute.addChildren([wantlist, login]),
-    history: createMemoryHistory({ initialEntries: ["/cubes/c1/wantlist"] }),
+    history: createMemoryHistory({ initialEntries: [initialEntry] }),
   });
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -58,6 +61,9 @@ const wantlistItem = {
   missingQuantity: 1,
   cubeQuantity: 4,
   ownedQuantity: 3,
+  setCode: "leb",
+  setName: "Limited Edition Beta",
+  collectorNumber: "162",
 };
 
 const printings = [
@@ -83,36 +89,27 @@ const printings = [
   },
 ];
 
-test("renders missing cards with quantities and the download button", async () => {
+test("renders missing cards with quantities, set, and both download buttons", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(
       jsonResponse({
         cubeName: "Vintage Cube",
         totalMissing: 2,
-        items: [
-          {
-            oracleId: "o1",
-            scryfallId: "s1",
-            name: "Lightning Bolt",
-            manaCost: "{R}",
-            imageSmall: null,
-            imageNormal: null,
-            missingQuantity: 1,
-            cubeQuantity: 4,
-            ownedQuantity: 3,
-          },
-        ],
+        items: [wantlistItem],
       }),
     ),
   );
   renderPage();
   expect(await screen.findByText("Lightning Bolt")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Download for Cardmarket" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Download with sets" })).toBeInTheDocument();
   const row = screen.getByText("Lightning Bolt").closest("tr");
   expect(row).toHaveTextContent("1");
   expect(row).toHaveTextContent("4");
   expect(row).toHaveTextContent("3");
+  expect(row).toHaveTextContent("LEB");
+  expect(row).toHaveTextContent("#162");
 });
 
 test("empty wantlist shows the own-everything state, no download", async () => {
@@ -150,4 +147,25 @@ test("clicking a card name opens the info-only preview sheet", async () => {
   const dialog = await screen.findByRole("dialog");
   expect(await within(dialog).findByText("Add {C}{C}.")).toBeInTheDocument();
   expect(within(dialog).queryByRole("button", { name: "Change printing" })).not.toBeInTheDocument();
+});
+
+test("switching to exact-printing mode refetches and shows the set column", async () => {
+  const requestedMatches: (string | null)[] = [];
+  const fetchMock = vi.fn(async (input: Request | string) => {
+    const url = typeof input === "string" ? input : input.url;
+    requestedMatches.push(new URL(url).searchParams.get("match"));
+    return jsonResponse({ cubeName: "Vintage Cube", totalMissing: 1, items: [wantlistItem] });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  renderPage();
+
+  expect(await screen.findByText("Lightning Bolt")).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: "Set" })).toBeInTheDocument();
+  expect(screen.getByText("LEB")).toBeInTheDocument();
+  expect(requestedMatches).toEqual(["oracle"]);
+
+  await userEvent.click(screen.getByRole("radio", { name: "Exact printing" }));
+
+  await screen.findByText("Lightning Bolt");
+  expect(requestedMatches).toContain("printing");
 });
