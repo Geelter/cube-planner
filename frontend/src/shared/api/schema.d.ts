@@ -1500,8 +1500,10 @@ export interface components {
       standings: components["schemas"]["TournamentStandingInfo"][] | null;
     };
     TournamentMatchInfo: {
+      disputed: boolean;
       /** Format: int32 */
       draws?: number;
+      hadDispute: boolean;
       id: string;
       /** Format: int32 */
       p1Games?: number;
@@ -1511,6 +1513,8 @@ export interface components {
       player2Id?: string;
       /** Format: date-time */
       reportedAt?: string;
+      reports: components["schemas"]["TournamentResultReportInfo"][] | null;
+      resultLocked: boolean;
       /** Format: int32 */
       tableNumber: number;
     };
@@ -1519,6 +1523,16 @@ export interface components {
       dropped: boolean;
       id: string;
       userId: string;
+    };
+    TournamentResultReportInfo: {
+      isOrganizer: boolean;
+      /** Format: int32 */
+      p1Games: number;
+      /** Format: int32 */
+      p2Games: number;
+      /** Format: date-time */
+      reportedAt: string;
+      reporterName: string;
     };
     TournamentRoundInfo: {
       matches: components["schemas"]["TournamentMatchInfo"][] | null;
