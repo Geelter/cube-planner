@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -114,6 +115,79 @@ type cardPrintingsOutput struct {
 	}
 }
 
+// ImportCardMatch is a resolved card for import review (match or
+// suggestion) — CardSummary-shaped, plus Colors so a card staged into a
+// cube's pending diff groups correctly by color before it is committed
+// and refetched from the server.
+type ImportCardMatch struct {
+	ScryfallID      uuid.UUID `json:"scryfallId"`
+	OracleID        uuid.UUID `json:"oracleId"`
+	Name            string    `json:"name"`
+	ManaCost        string    `json:"manaCost"`
+	TypeLine        string    `json:"typeLine"`
+	SetCode         string    `json:"setCode"`
+	SetName         string    `json:"setName"`
+	CollectorNumber string    `json:"collectorNumber"`
+	Colors          []string  `json:"colors"`
+	ImageSmall      *string   `json:"imageSmall"`
+	ImageNormal     *string   `json:"imageNormal"`
+}
+
+type ImportResolveLine struct {
+	LineNumber  int32             `json:"lineNumber"`
+	Raw         string            `json:"raw"`
+	Quantity    int32             `json:"quantity"`
+	Status      string            `json:"status" enum:"matched,ambiguous,unmatched"`
+	Match       *ImportCardMatch  `json:"match,omitempty"`
+	Suggestions []ImportCardMatch `json:"suggestions,omitempty"`
+}
+
+func importCardMatchFrom(r cards.CardRef) ImportCardMatch {
+	return ImportCardMatch{
+		ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
+		ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
+		SetName: r.SetName, CollectorNumber: r.CollectorNumber,
+		Colors:     r.Colors,
+		ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
+	}
+}
+
+func resolveLinesFrom(lines []cards.ResolvedLine) []ImportResolveLine {
+	out := make([]ImportResolveLine, len(lines))
+	for i, l := range lines {
+		rl := ImportResolveLine{
+			LineNumber: l.LineNumber, Raw: l.Raw, Quantity: l.Quantity, Status: l.Status,
+		}
+		if l.Match != nil {
+			m := importCardMatchFrom(*l.Match)
+			rl.Match = &m
+		}
+		for _, s := range l.Suggestions {
+			rl.Suggestions = append(rl.Suggestions, importCardMatchFrom(s))
+		}
+		out[i] = rl
+	}
+	return out
+}
+
+type resolveListOutput struct {
+	Body struct {
+		Lines []ImportResolveLine `json:"lines"`
+	}
+}
+
+func mapCardsErr(err error) error {
+	switch {
+	case errors.Is(err, cards.ErrTooManyLines):
+		return &huma.ErrorModel{
+			Status: http.StatusUnprocessableEntity, Type: "invalid-import",
+			Title: "Unprocessable Entity", Detail: err.Error(),
+		}
+	default:
+		return err
+	}
+}
+
 func registerCards(api huma.API, deps Deps) {
 	huma.Register(api, huma.Operation{
 		OperationID: "autocompleteCards",
@@ -211,6 +285,30 @@ func registerCards(api huma.API, deps Deps) {
 		for i, r := range rows {
 			out.Body.Printings[i] = cardDetailFrom(r)
 		}
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "resolveCardList",
+		Method:      http.MethodPost,
+		Path:        "/api/cards/resolve-list",
+		Summary:     "Resolve a pasted card list to printings (no side effects)",
+		Tags:        []string{"cards"},
+	}, func(ctx context.Context, in *struct {
+		Body struct {
+			Text string `json:"text" minLength:"1" maxLength:"65536"`
+		}
+	},
+	) (*resolveListOutput, error) {
+		if _, ok := CurrentUserID(ctx); !ok {
+			return nil, huma.Error401Unauthorized("authentication required")
+		}
+		lines, err := deps.Cards.ResolveList(ctx, in.Body.Text)
+		if err != nil {
+			return nil, mapCardsErr(err)
+		}
+		out := &resolveListOutput{}
+		out.Body.Lines = resolveLinesFrom(lines)
 		return out, nil
 	})
 }

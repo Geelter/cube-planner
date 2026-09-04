@@ -1,11 +1,13 @@
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useBlocker } from "@tanstack/react-router";
-import { useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
+import { CardListImportDialog } from "@/shared/cards/CardListImportDialog";
 import { PrintingPickerDialog } from "@/shared/cards/PrintingPickerDialog";
 import { cn } from "@/shared/lib/cn";
 import { Alert } from "@/shared/ui/alert";
+import { Button } from "@/shared/ui/button";
 import { Drawer } from "@/shared/ui/drawer";
 import { Label } from "@/shared/ui/label";
 import type { CubeCardEntry } from "../api";
@@ -16,6 +18,7 @@ import {
   useCube,
   useCubeCards,
 } from "../api";
+import "../lib/importHandoff";
 import { emptyPending, pendingCount, pendingReducer, toCommitDiff } from "../lib/pendingDiff";
 import type { PendingState } from "../lib/pendingDiff";
 import { CubeSettingsSection } from "./CubeSettingsSection";
@@ -62,6 +65,7 @@ function previewEntries(server: CubeCardEntry[], pending: PendingState): CubeCar
 export function CubeEditorPage() {
   const { cubeId } = route.useParams();
   const navigate = useNavigate();
+  const routerState = useRouterState({ select: (s) => s.location.state });
   const cube = useCube(cubeId);
   const cards = useCubeCards(cubeId);
   const commit = useCommitChange(cubeId);
@@ -71,6 +75,7 @@ export function CubeEditorPage() {
   const [conflict, setConflict] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pickerEntry, setPickerEntry] = useState<CubeCardEntry | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const dirty = pendingCount(pending) > 0;
   useBlocker({
@@ -78,6 +83,20 @@ export function CubeEditorPage() {
     enableBeforeUnload: () => dirty,
     disabled: !dirty,
   });
+
+  // A cube created from a pasted list (Task 21) arrives here with the
+  // resolved items in router state — stage them once on mount, then clear
+  // the state so a refresh or Back does not re-stage them. The ref guard
+  // (matching VerifyEmailPage's single-fire pattern) stops StrictMode's
+  // dev-mode double effect invocation from staging the import twice.
+  const imported = routerState.importedItems;
+  const stagedImport = useRef(false);
+  useEffect(() => {
+    if (imported === undefined || imported.length === 0 || stagedImport.current) return;
+    stagedImport.current = true;
+    dispatch({ type: "addMany", items: imported });
+    void navigate({ to: ".", replace: true, state: {} });
+  }, [imported, dispatch, navigate]);
 
   const preview = useMemo(
     () => previewEntries(cards.data?.cards ?? [], pending),
@@ -147,10 +166,24 @@ export function CubeEditorPage() {
       {commitAlerts}
       {changePrinting.isError && <Alert variant="danger">{changePrinting.error.message}</Alert>}
 
-      <div className="flex max-w-md flex-col gap-1.5">
-        <Label htmlFor="editor-add">{m.cubes_editor_add_label()}</Label>
-        <CardAutocomplete id="editor-add" onSelect={(card) => dispatch({ type: "add", card })} />
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex max-w-md flex-1 flex-col gap-1.5">
+          <Label htmlFor="editor-add">{m.cubes_editor_add_label()}</Label>
+          <CardAutocomplete id="editor-add" onSelect={(card) => dispatch({ type: "add", card })} />
+        </div>
+        <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
+          {m.cubes_import_open()}
+        </Button>
       </div>
+      <CardListImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onApply={(items) => {
+          dispatch({ type: "addMany", items });
+          setImportOpen(false);
+        }}
+        confirmLabel={m.cubes_import_confirm}
+      />
 
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="min-w-0 flex-1">

@@ -956,6 +956,12 @@ components:
       properties:
         collectorNumber:
           type: string
+        colors:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         imageNormal:
           type:
             - string
@@ -987,6 +993,7 @@ components:
         - setCode
         - setName
         - collectorNumber
+        - colors
         - imageSmall
         - imageNormal
       type: object
@@ -1321,13 +1328,13 @@ components:
         - token
         - newPassword
       type: object
-    ResolveImportInputBody:
+    ResolveCardListRequest:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - https://example.com/schemas/ResolveImportInputBody.json
+            - https://example.com/schemas/ResolveCardListRequest.json
           format: uri
           readOnly: true
           type: string
@@ -1338,13 +1345,13 @@ components:
       required:
         - text
       type: object
-    ResolveImportOutputBody:
+    ResolveListOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - https://example.com/schemas/ResolveImportOutputBody.json
+            - https://example.com/schemas/ResolveListOutputBody.json
           format: uri
           readOnly: true
           type: string
@@ -1989,6 +1996,31 @@ paths:
       summary: Card name autocomplete
       tags:
         - cards
+  /api/cards/resolve-list:
+    post:
+      operationId: resolveCardList
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveCardListRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolveListOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Resolve a pasted card list to printings (no side effects)
+      tags:
+        - cards
   /api/cards/search:
     get:
       operationId: searchCards
@@ -2255,31 +2287,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Add quantities onto the collection (bulk import commit)
-      tags:
-        - collection
-  /api/collection/import/resolve:
-    post:
-      operationId: resolveCollectionImport
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ResolveImportInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ResolveImportOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Resolve a pasted card list (pure read, nothing is written)
       tags:
         - collection
   /api/cubes:

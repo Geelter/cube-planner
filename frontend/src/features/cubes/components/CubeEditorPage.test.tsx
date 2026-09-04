@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { m } from "@/paraglide/messages";
 
@@ -16,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   blockerOptions: {
     current: null as null | BlockerOptions,
   },
+  // location.state as seen by useRouterState — most tests navigate here
+  // with none, so this defaults to empty.
+  locationState: {
+    current: {} as Record<string, unknown>,
+  },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -27,6 +33,8 @@ vi.mock("@tanstack/react-router", () => ({
   useBlocker: (options: BlockerOptions) => {
     mocks.blockerOptions.current = options;
   },
+  useRouterState: (options: { select: (s: { location: { state: unknown } }) => unknown }) =>
+    options.select({ location: { state: mocks.locationState.current } }),
 }));
 
 vi.mock("../api", async (importOriginal) => {
@@ -129,6 +137,7 @@ beforeEach(() => {
   mocks.mutate.mockReset();
   mocks.navigate.mockReset();
   mocks.blockerOptions.current = null;
+  mocks.locationState.current = {};
 });
 
 afterEach(() => {
@@ -157,6 +166,137 @@ test("add via autocomplete lands in pending and commits with expectedVersion", a
     }),
     expect.anything(),
   );
+});
+
+test("imported cards land in the pending diff, not straight into the cube", async () => {
+  const resolveMatch = (scryfallId: string, oracleId: string, name: string) => ({
+    scryfallId,
+    oracleId,
+    name,
+    manaCost: "{U}",
+    typeLine: "Instant",
+    setCode: "tst",
+    setName: "Test Set",
+    collectorNumber: "1",
+    colors: ["U"],
+    imageSmall: null,
+    imageNormal: null,
+  });
+  const fetchMock = vi.fn(async (input: Request | string) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.includes("/cards/resolve-list")) {
+      return jsonResponse({
+        lines: [
+          {
+            lineNumber: 1,
+            raw: "4 Brainstorm",
+            quantity: 4,
+            status: "matched",
+            match: resolveMatch("s-storm", "o-storm", "Brainstorm"),
+          },
+          {
+            lineNumber: 2,
+            raw: "2 Ponder",
+            quantity: 2,
+            status: "matched",
+            match: resolveMatch("s-ponder", "o-ponder", "Ponder"),
+          },
+        ],
+      });
+    }
+    return jsonResponse({});
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderPage();
+  await userEvent.click(screen.getByRole("button", { name: m.cubes_import_open() }));
+  await userEvent.type(await screen.findByLabelText("Card list"), "4 Brainstorm{enter}2 Ponder");
+  await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
+  await userEvent.click(await screen.findByRole("button", { name: /add to cube/i }));
+
+  // The mobile summary bar totals copies across both staged cards (4 + 2).
+  const bar = await screen.findByRole("region", { name: /pending changes/i });
+  expect(within(bar).getByText(/\+6/)).toBeDefined();
+  expect(within(screen.getByRole("complementary")).getByText("Brainstorm")).toBeDefined();
+  expect(within(screen.getByRole("complementary")).getByText("Ponder")).toBeDefined();
+  // The resolver's match carries real colors, so the staged cards must sit
+  // under the Blue bucket in the reviewed pending-diff list — not
+  // Colorless, which is where a hardcoded `colors: []` would put them.
+  const blueGroup = screen.getByText(m.cubes_bucket_blue(), { exact: false }).closest("section");
+  expect(blueGroup).not.toBeNull();
+  expect(within(blueGroup as HTMLElement).getByText("Brainstorm")).toBeDefined();
+  expect(within(blueGroup as HTMLElement).getByText("Ponder")).toBeDefined();
+  expect(screen.queryByText(m.cubes_bucket_colorless(), { exact: false })).toBeNull();
+  // Staging is local — no commit request went out.
+  const changeCalls = fetchMock.mock.calls.filter(([input]) => {
+    const url = typeof input === "string" ? input : (input as Request).url;
+    return url.includes("/changes");
+  });
+  expect(changeCalls).toHaveLength(0);
+  expect(mocks.mutate).not.toHaveBeenCalled();
+});
+
+// Task 21: a cube created from a pasted list hands its resolved items to
+// the editor via router state instead of a straight commit.
+test("stages items handed off via router state and clears it so a refresh does not re-stage", async () => {
+  mocks.locationState.current = {
+    importedItems: [
+      {
+        card: {
+          scryfallId: "s-storm",
+          oracleId: "o-storm",
+          name: "Brainstorm",
+          manaCost: "{U}",
+          typeLine: "Instant",
+          colors: ["U"],
+          imageSmall: null,
+        },
+        quantity: 3,
+      },
+    ],
+  };
+
+  renderPage();
+
+  await waitFor(() =>
+    expect(within(screen.getByRole("complementary")).getByText("Brainstorm")).toBeDefined(),
+  );
+  expect(within(screen.getByRole("complementary")).getByText(/\+3/)).toBeDefined();
+  expect(mocks.navigate).toHaveBeenCalledWith({ to: ".", replace: true, state: {} });
+});
+
+// StrictMode double-invokes effects on mount in development — without a
+// fired-once guard this would stage the router-state import twice.
+test("stages a router-state import exactly once under StrictMode", async () => {
+  mocks.locationState.current = {
+    importedItems: [
+      {
+        card: {
+          scryfallId: "s-storm",
+          oracleId: "o-storm",
+          name: "Brainstorm",
+          manaCost: "{U}",
+          typeLine: "Instant",
+          colors: ["U"],
+          imageSmall: null,
+        },
+        quantity: 3,
+      },
+    ],
+  };
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <StrictMode>
+      <QueryClientProvider client={qc}>
+        <CubeEditorPage />
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+
+  await waitFor(() =>
+    expect(within(screen.getByRole("complementary")).getByText(/\+3/)).toBeDefined(),
+  );
+  expect(within(screen.getByRole("complementary")).queryByText(/\+6/)).toBeNull();
 });
 
 test("decrement of existing card lands in pending removes", async () => {

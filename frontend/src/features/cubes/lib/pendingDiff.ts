@@ -11,6 +11,7 @@ export type PendingState = {
 
 export type PendingAction =
   | { type: "add"; card: CardSummary }
+  | { type: "addMany"; items: { card: CardSummary; quantity: number }[] }
   | { type: "increment"; entry: CubeCardEntry }
   | { type: "decrement"; entry: CubeCardEntry }
   | { type: "remove"; entry: CubeCardEntry }
@@ -82,6 +83,8 @@ export function pendingReducer(state: PendingState, action: PendingAction): Pend
   switch (action.type) {
     case "add":
       return bumpAdd(state, action.card, 1);
+    case "addMany":
+      return action.items.reduce((acc, i) => bumpAdd(acc, i.card, i.quantity), state);
     case "increment":
       return bumpAdd(state, summaryFromEntry(action.entry), 1);
     case "decrement":

@@ -126,6 +126,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/cards/resolve-list": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Resolve a pasted card list to printings (no side effects) */
+    post: operations["resolveCardList"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/cards/search": {
     parameters: {
       query?: never;
@@ -222,23 +239,6 @@ export interface paths {
     put?: never;
     /** Add quantities onto the collection (bulk import commit) */
     post: operations["importCollectionItems"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/collection/import/resolve": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Resolve a pasted card list (pure read, nothing is written) */
-    post: operations["resolveCollectionImport"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1236,6 +1236,7 @@ export interface components {
     };
     ImportCardMatch: {
       collectorNumber: string;
+      colors: string[] | null;
       imageNormal: string | null;
       imageSmall: string | null;
       manaCost: string;
@@ -1412,20 +1413,20 @@ export interface components {
       newPassword: string;
       token: string;
     };
-    ResolveImportInputBody: {
+    ResolveCardListRequest: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
-       * @example https://example.com/schemas/ResolveImportInputBody.json
+       * @example https://example.com/schemas/ResolveCardListRequest.json
        */
       readonly $schema?: string;
       text: string;
     };
-    ResolveImportOutputBody: {
+    ResolveListOutputBody: {
       /**
        * Format: uri
        * @description A URL to the JSON Schema for this object.
-       * @example https://example.com/schemas/ResolveImportOutputBody.json
+       * @example https://example.com/schemas/ResolveListOutputBody.json
        */
       readonly $schema?: string;
       lines: components["schemas"]["ImportResolveLine"][] | null;
@@ -1865,6 +1866,39 @@ export interface operations {
       };
     };
   };
+  resolveCardList: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ResolveCardListRequest"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResolveListOutputBody"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
   searchCards: {
     parameters: {
       query?: {
@@ -2065,39 +2099,6 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ImportItemsOutputBody"];
-        };
-      };
-      /** @description Error */
-      default: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/problem+json": components["schemas"]["ErrorModel"];
-        };
-      };
-    };
-  };
-  resolveCollectionImport: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ResolveImportInputBody"];
-      };
-    };
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ResolveImportOutputBody"];
         };
       };
       /** @description Error */

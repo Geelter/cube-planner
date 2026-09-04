@@ -4,24 +4,84 @@ import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { Dialog } from "@/shared/ui/dialog";
 import { Label } from "@/shared/ui/label";
-import type { ImportResolveLine } from "../api";
-import { useImportItems, useResolveImport } from "../api";
-import type { LineChoice } from "../lib/importReview";
-import { buildImportItems, defaultChoices } from "../lib/importReview";
+import type { CardSummary } from "./api";
+import { buildImportItems, defaultChoices } from "./listImportReview";
+import type { LineChoice } from "./listImportReview";
+import { useResolveCardList } from "./useResolveCardList";
+import type { ImportCardMatch, ImportResolveLine } from "./useResolveCardList";
 
-export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+// The card, not just its id: the resolved lines already carry a full CardRef,
+// and the cube editor's pending diff needs the card to render staged rows.
+// Callers that only need an id (collection's commit) map down themselves.
+export type ResolvedItem = { card: CardSummary; quantity: number };
+
+function cardSummaryFromMatch(match: ImportCardMatch): CardSummary {
+  return {
+    scryfallId: match.scryfallId,
+    oracleId: match.oracleId,
+    name: match.name,
+    manaCost: match.manaCost,
+    typeLine: match.typeLine,
+    colors: match.colors ?? [],
+    imageSmall: match.imageSmall,
+  };
+}
+
+function toResolvedItems(
+  lines: ImportResolveLine[],
+  choices: Map<number, LineChoice>,
+): ResolvedItem[] {
+  const matchByScryfallId = new Map<string, ImportCardMatch>();
+  for (const line of lines) {
+    if (line.match) matchByScryfallId.set(line.match.scryfallId, line.match);
+    for (const s of line.suggestions ?? []) matchByScryfallId.set(s.scryfallId, s);
+  }
+  return buildImportItems(lines, choices).flatMap(({ scryfallId, quantity }) => {
+    const match = matchByScryfallId.get(scryfallId);
+    return match ? [{ card: cardSummaryFromMatch(match), quantity }] : [];
+  });
+}
+
+export function CardListImportDialog({
+  open,
+  onClose,
+  onApply,
+  applying,
+  applyError,
+  result = null,
+  initialLines,
+  confirmLabel,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onApply: (items: ResolvedItem[]) => void;
+  applying?: boolean;
+  applyError?: Error | null;
+  result?: { added: number; updated: number } | null;
+  /** Seed the review phase directly, skipping the paste phase — used by the
+   *  create-cube flow, which resolves before the cube exists (Task 21).
+   *  Must be present at mount: this dialog is meant to be conditionally
+   *  mounted (like other seeded dialogs in this codebase) rather than kept
+   *  around with a changing `initialLines`. */
+  initialLines?: ImportResolveLine[];
+  /** Confirm-button label for the review step, given the resolved item
+   *  count. Defaults to the collection's "Add to collection" copy; callers
+   *  staging into a cube (editor or create-cube flow) must pass their own
+   *  so the button doesn't lie about where the cards are going. */
+  confirmLabel?: (args: { count: number }) => string;
+}) {
+  const seeded = initialLines !== undefined;
   const [text, setText] = useState("");
-  const [lines, setLines] = useState<ImportResolveLine[] | null>(null);
-  const [choices, setChoices] = useState<Map<number, LineChoice>>(new Map());
-  const [result, setResult] = useState<{ added: number; updated: number } | null>(null);
-  const resolve = useResolveImport();
-  const importItems = useImportItems();
+  const [lines, setLines] = useState<ImportResolveLine[] | null>(initialLines ?? null);
+  const [choices, setChoices] = useState<Map<number, LineChoice>>(
+    initialLines ? defaultChoices(initialLines) : new Map(),
+  );
+  const resolve = useResolveCardList();
 
   const reset = () => {
     setText("");
-    setLines(null);
-    setChoices(new Map());
-    setResult(null);
+    setLines(initialLines ?? null);
+    setChoices(initialLines ? defaultChoices(initialLines) : new Map());
   };
   const close = () => {
     reset();
@@ -31,7 +91,7 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
   const matched = lines?.filter((l) => l.status === "matched") ?? [];
   const ambiguous = lines?.filter((l) => l.status === "ambiguous") ?? [];
   const unmatched = lines?.filter((l) => l.status === "unmatched") ?? [];
-  const items = lines ? buildImportItems(lines, choices) : [];
+  const items = lines ? toResolvedItems(lines, choices) : [];
 
   return (
     <Dialog open={open} onClose={close} title={m.collection_import_title()}>
@@ -143,27 +203,20 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
               </ul>
             </section>
           )}
-          {importItems.isError && <Alert variant="danger">{importItems.error.message}</Alert>}
+          {applyError && <Alert variant="danger">{applyError.message}</Alert>}
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => setLines(null)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => (seeded ? close() : setLines(null))}
+            >
               {m.collection_import_back()}
             </Button>
             {items.length === 0 ? (
               <p className="text-sm text-fg-muted">{m.collection_import_nothing()}</p>
             ) : (
-              <Button
-                type="button"
-                loading={importItems.isPending}
-                onClick={() =>
-                  importItems.mutate(
-                    { items },
-                    {
-                      onSuccess: (r) => setResult({ added: r.addedRows, updated: r.updatedRows }),
-                    },
-                  )
-                }
-              >
-                {m.collection_import_confirm({ count: items.length })}
+              <Button type="button" loading={applying === true} onClick={() => onApply(items)}>
+                {(confirmLabel ?? m.collection_import_confirm)({ count: items.length })}
               </Button>
             )}
           </div>

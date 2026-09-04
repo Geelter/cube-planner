@@ -135,3 +135,37 @@ limit sqlc.arg(page_limit)::int offset sqlc.arg(page_offset)::int;
 select * from cards
 where oracle_id = sqlc.arg(oracle_id)
 order by released_at desc, set_code asc, collector_number asc;
+
+-- Exact-name resolution for import: representative printing per oracle
+-- card (same non-promo/newest/has-image rule as autocomplete). Several
+-- oracle cards sharing one name all come back — the service treats that
+-- name as ambiguous.
+-- name: GetCardsByNormalizedNames :many
+with matches as (
+    select distinct on (oracle_id) *
+    from cards
+    where normalized_name = any(sqlc.arg(names)::text[])
+    order by oracle_id, promo, released_at desc, (image_small is null)
+)
+select scryfall_id, oracle_id, name, normalized_name, mana_cost, type_line,
+    set_code, set_name, collector_number, image_small, image_normal, colors
+from matches;
+
+-- Fuzzy suggestions for one unresolved import line. Same <% + GUC
+-- threshold setup as autocomplete (see above for why the operator form
+-- matters); oracle-level with a representative printing.
+-- name: SuggestCardsByName :many
+with matches as (
+    select distinct on (oracle_id) *
+    from cards
+    where sqlc.arg(query)::text <% normalized_name
+    order by oracle_id, promo, released_at desc, (image_small is null)
+)
+select scryfall_id, oracle_id, name, mana_cost, type_line,
+    set_code, set_name, collector_number, image_small, image_normal, colors
+from matches
+order by
+    word_similarity(sqlc.arg(query), normalized_name) desc,
+    similarity(sqlc.arg(query), normalized_name) desc,
+    name asc
+limit 5;

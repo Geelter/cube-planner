@@ -37,39 +37,6 @@ func collectionEntryFrom(e collections.ItemEntry) CollectionItemEntry {
 	}
 }
 
-// ImportCardMatch is a resolved card for import review (match or
-// suggestion) — CollectionItemEntry shape without quantity.
-type ImportCardMatch struct {
-	ScryfallID      uuid.UUID `json:"scryfallId"`
-	OracleID        uuid.UUID `json:"oracleId"`
-	Name            string    `json:"name"`
-	ManaCost        string    `json:"manaCost"`
-	TypeLine        string    `json:"typeLine"`
-	SetCode         string    `json:"setCode"`
-	SetName         string    `json:"setName"`
-	CollectorNumber string    `json:"collectorNumber"`
-	ImageSmall      *string   `json:"imageSmall"`
-	ImageNormal     *string   `json:"imageNormal"`
-}
-
-type ImportResolveLine struct {
-	LineNumber  int32             `json:"lineNumber"`
-	Raw         string            `json:"raw"`
-	Quantity    int32             `json:"quantity"`
-	Status      string            `json:"status" enum:"matched,ambiguous,unmatched"`
-	Match       *ImportCardMatch  `json:"match,omitempty"`
-	Suggestions []ImportCardMatch `json:"suggestions,omitempty"`
-}
-
-func importCardMatchFrom(r collections.CardRef) ImportCardMatch {
-	return ImportCardMatch{
-		ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
-		ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
-		SetName: r.SetName, CollectorNumber: r.CollectorNumber,
-		ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
-	}
-}
-
 func mapCollectionErr(err error) error {
 	switch {
 	case errors.Is(err, collections.ErrCubeNotFound):
@@ -130,18 +97,6 @@ type changePrintingInput struct {
 type collectionItemOutput struct {
 	Body struct {
 		Item *CollectionItemEntry `json:"item,omitempty" doc:"absent after a quantity-0 delete"`
-	}
-}
-
-type resolveImportInput struct {
-	Body struct {
-		Text string `json:"text" minLength:"1" maxLength:"65536"`
-	}
-}
-
-type resolveImportOutput struct {
-	Body struct {
-		Lines []ImportResolveLine `json:"lines"`
 	}
 }
 
@@ -260,38 +215,6 @@ func registerCollections(api huma.API, deps Deps) {
 		out := &collectionItemOutput{}
 		e := collectionEntryFrom(*entry)
 		out.Body.Item = &e
-		return out, nil
-	})
-
-	huma.Register(api, huma.Operation{
-		OperationID: "resolveCollectionImport",
-		Method:      http.MethodPost,
-		Path:        "/api/collection/import/resolve",
-		Summary:     "Resolve a pasted card list (pure read, nothing is written)",
-		Tags:        []string{"collection"},
-	}, func(ctx context.Context, in *resolveImportInput) (*resolveImportOutput, error) {
-		if _, ok := CurrentUserID(ctx); !ok {
-			return nil, huma.Error401Unauthorized("authentication required")
-		}
-		lines, err := deps.Collections.ResolveImport(ctx, in.Body.Text)
-		if err != nil {
-			return nil, mapCollectionErr(err)
-		}
-		out := &resolveImportOutput{}
-		out.Body.Lines = make([]ImportResolveLine, len(lines))
-		for i, l := range lines {
-			rl := ImportResolveLine{
-				LineNumber: l.LineNumber, Raw: l.Raw, Quantity: l.Quantity, Status: l.Status,
-			}
-			if l.Match != nil {
-				m := importCardMatchFrom(*l.Match)
-				rl.Match = &m
-			}
-			for _, s := range l.Suggestions {
-				rl.Suggestions = append(rl.Suggestions, importCardMatchFrom(s))
-			}
-			out.Body.Lines[i] = rl
-		}
 		return out, nil
 	})
 

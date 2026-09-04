@@ -1,3 +1,5 @@
+// Package collections owns per-user card collections and the
+// cube-vs-collection wantlist.
 package collections
 
 import (
@@ -14,9 +16,11 @@ import (
 	"github.com/mjabloniec/cube-planner/backend/internal/db"
 )
 
-// Service owns collection CRUD, import resolution, and the wantlist.
-// Collections are strictly private: every method operates on the
-// session user's rows only.
+// Service owns collection CRUD, import application, and the wantlist.
+// List resolution (parsing pasted text, matching names to printings)
+// lives in the cards package, shared with cube import. Collections are
+// strictly private: every method operates on the session user's rows
+// only.
 type Service struct {
 	queries *db.Queries
 	pool    *pgxpool.Pool
@@ -30,13 +34,18 @@ var (
 	// ErrInvalidItem covers unknown printings, oracle mismatches, and
 	// change-printing misuse — the whole 422 invalid-collection-item family.
 	ErrInvalidItem = errors.New("invalid collection item")
-	// ErrInvalidImport covers bad import batches (unknown ids, too many lines).
+	// ErrInvalidImport covers bad import batches (unknown ids).
 	ErrInvalidImport = errors.New("invalid import")
 	// ErrCubeNotFound also covers "exists but private and you are not the
 	// owner" — private cubes must not leak their existence (same rule as
 	// the cubes package).
 	ErrCubeNotFound = errors.New("cube not found")
 )
+
+// MaxItemQuantity re-exports cards.MaxItemQuantity: ApplyImport clamps to
+// the same per-printing maximum as list resolution, and the two must
+// never drift apart.
+const MaxItemQuantity = cards.MaxItemQuantity
 
 // ItemEntry is one collection line with card display data.
 type ItemEntry struct {
@@ -180,129 +189,6 @@ func (s *Service) ChangePrinting(ctx context.Context, userID, fromID, toID uuid.
 		return nil, err
 	}
 	return s.getEntry(ctx, userID, toID)
-}
-
-// CardRef is a resolved card reference for import review (a match or a
-// suggestion) — display fields, no quantity.
-type CardRef struct {
-	ScryfallID      uuid.UUID
-	OracleID        uuid.UUID
-	Name            string
-	ManaCost        string
-	TypeLine        string
-	SetCode         string
-	SetName         string
-	CollectorNumber string
-	ImageSmall      *string
-	ImageNormal     *string
-}
-
-// ResolvedLine statuses.
-const (
-	StatusMatched   = "matched"
-	StatusAmbiguous = "ambiguous"
-	StatusUnmatched = "unmatched"
-)
-
-type ResolvedLine struct {
-	LineNumber  int32
-	Raw         string
-	Quantity    int32
-	Status      string
-	Match       *CardRef
-	Suggestions []CardRef
-}
-
-// ResolveImport parses pasted text and resolves each line. Pure read:
-// nothing is written. Exact (case-insensitive, normalized) name matches
-// resolve to the oracle card's representative printing; a name shared by
-// several oracle cards falls through to ambiguous; misses get fuzzy
-// suggestions or unmatched.
-func (s *Service) ResolveImport(ctx context.Context, text string) ([]ResolvedLine, error) {
-	lines, err := ParseImportText(text)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidImport, err)
-	}
-
-	nameSet := make(map[string]struct{})
-	var names []string
-	for _, l := range lines {
-		if !l.OK {
-			continue
-		}
-		n := cards.NormalizeName(l.Name)
-		if _, seen := nameSet[n]; !seen {
-			nameSet[n] = struct{}{}
-			names = append(names, n)
-		}
-	}
-	exact := make(map[string][]CardRef)
-	if len(names) > 0 {
-		rows, err := s.queries.GetCardsByNormalizedNames(ctx, names)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range rows {
-			exact[r.NormalizedName] = append(exact[r.NormalizedName], CardRef{
-				ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
-				ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
-				SetName: r.SetName, CollectorNumber: r.CollectorNumber,
-				ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
-			})
-		}
-	}
-
-	out := make([]ResolvedLine, len(lines))
-	for i, l := range lines {
-		rl := ResolvedLine{LineNumber: l.LineNumber, Raw: l.Raw, Quantity: l.Quantity}
-		switch {
-		case !l.OK:
-			rl.Status = StatusUnmatched
-		default:
-			matches := exact[cards.NormalizeName(l.Name)]
-			switch len(matches) {
-			case 1:
-				rl.Status = StatusMatched
-				m := matches[0]
-				rl.Match = &m
-			case 0:
-				// Only misses pay for a fuzzy query.
-				suggestions, err := s.suggest(ctx, l.Name)
-				if err != nil {
-					return nil, err
-				}
-				if len(suggestions) > 0 {
-					rl.Status = StatusAmbiguous
-					rl.Suggestions = suggestions
-				} else {
-					rl.Status = StatusUnmatched
-				}
-			default:
-				// One name, several oracle cards — the user must choose.
-				rl.Status = StatusAmbiguous
-				rl.Suggestions = matches
-			}
-		}
-		out[i] = rl
-	}
-	return out, nil
-}
-
-func (s *Service) suggest(ctx context.Context, name string) ([]CardRef, error) {
-	rows, err := s.queries.SuggestCardsByName(ctx, cards.NormalizeName(name))
-	if err != nil {
-		return nil, err
-	}
-	refs := make([]CardRef, len(rows))
-	for i, r := range rows {
-		refs[i] = CardRef{
-			ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
-			ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
-			SetName: r.SetName, CollectorNumber: r.CollectorNumber,
-			ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
-		}
-	}
-	return refs, nil
 }
 
 type WantlistItem struct {

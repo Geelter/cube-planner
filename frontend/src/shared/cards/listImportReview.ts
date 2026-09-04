@@ -1,4 +1,4 @@
-import type { ImportResolveLine } from "../api";
+import type { ImportResolveLine } from "./useResolveCardList";
 
 /** Chosen printing per lineNumber; null = skip the line. */
 export type LineChoice = string | null;
