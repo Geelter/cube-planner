@@ -81,6 +81,8 @@
   "cubes_field_name": "Name",
   "cubes_field_description": "Description",
   "cubes_field_visibility": "Visibility",
+  "cubes_create_cards_label": "Cards (optional)",
+  "cubes_create_cards_hint": "One card per line, e.g. “4 Lightning Bolt”. You can review them before saving.",
   "cubes_create_submit": "Create cube",
   "cubes_edit_meta": "Edit details",
   "cubes_save_meta": "Save details",

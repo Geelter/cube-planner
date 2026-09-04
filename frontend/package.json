@@ -29,6 +29,7 @@
     "@inlang/paraglide-js": "^2.23.0",
     "@inlang/plugin-message-format": "^4.4.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/history": "^1.162.0",
     "@tanstack/react-devtools": "^0.10.9",
     "@tanstack/react-query-devtools": "^5.101.4",
     "@tanstack/react-router-devtools": "^1.167.0",

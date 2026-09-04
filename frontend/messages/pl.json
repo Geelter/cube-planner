@@ -83,6 +83,8 @@
   "cubes_field_name": "Nazwa",
   "cubes_field_description": "Opis",
   "cubes_field_visibility": "Widoczność",
+  "cubes_create_cards_label": "Karty (opcjonalnie)",
+  "cubes_create_cards_hint": "Jedna karta na linię, np. „4 Lightning Bolt”. Przed zapisem będzie można je sprawdzić.",
   "cubes_create_submit": "Utwórz cube",
   "cubes_edit_meta": "Edytuj szczegóły",
   "cubes_save_meta": "Zapisz szczegóły",

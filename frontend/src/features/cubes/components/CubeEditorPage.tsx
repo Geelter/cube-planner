@@ -1,6 +1,6 @@
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useBlocker } from "@tanstack/react-router";
-import { useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
 import { CardListImportDialog } from "@/shared/cards/CardListImportDialog";
@@ -18,6 +18,7 @@ import {
   useCube,
   useCubeCards,
 } from "../api";
+import "../lib/importHandoff";
 import { emptyPending, pendingCount, pendingReducer, toCommitDiff } from "../lib/pendingDiff";
 import type { PendingState } from "../lib/pendingDiff";
 import { CubeSettingsSection } from "./CubeSettingsSection";
@@ -64,6 +65,7 @@ function previewEntries(server: CubeCardEntry[], pending: PendingState): CubeCar
 export function CubeEditorPage() {
   const { cubeId } = route.useParams();
   const navigate = useNavigate();
+  const routerState = useRouterState({ select: (s) => s.location.state });
   const cube = useCube(cubeId);
   const cards = useCubeCards(cubeId);
   const commit = useCommitChange(cubeId);
@@ -81,6 +83,20 @@ export function CubeEditorPage() {
     enableBeforeUnload: () => dirty,
     disabled: !dirty,
   });
+
+  // A cube created from a pasted list (Task 21) arrives here with the
+  // resolved items in router state — stage them once on mount, then clear
+  // the state so a refresh or Back does not re-stage them. The ref guard
+  // (matching VerifyEmailPage's single-fire pattern) stops StrictMode's
+  // dev-mode double effect invocation from staging the import twice.
+  const imported = routerState.importedItems;
+  const stagedImport = useRef(false);
+  useEffect(() => {
+    if (imported === undefined || imported.length === 0 || stagedImport.current) return;
+    stagedImport.current = true;
+    dispatch({ type: "addMany", items: imported });
+    void navigate({ to: ".", replace: true, state: {} });
+  }, [imported, dispatch, navigate]);
 
   const preview = useMemo(
     () => previewEntries(cards.data?.cards ?? [], pending),

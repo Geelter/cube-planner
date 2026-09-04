@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { m } from "@/paraglide/messages";
 
@@ -16,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   blockerOptions: {
     current: null as null | BlockerOptions,
   },
+  // location.state as seen by useRouterState — most tests navigate here
+  // with none, so this defaults to empty.
+  locationState: {
+    current: {} as Record<string, unknown>,
+  },
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -27,6 +33,8 @@ vi.mock("@tanstack/react-router", () => ({
   useBlocker: (options: BlockerOptions) => {
     mocks.blockerOptions.current = options;
   },
+  useRouterState: (options: { select: (s: { location: { state: unknown } }) => unknown }) =>
+    options.select({ location: { state: mocks.locationState.current } }),
 }));
 
 vi.mock("../api", async (importOriginal) => {
@@ -129,6 +137,7 @@ beforeEach(() => {
   mocks.mutate.mockReset();
   mocks.navigate.mockReset();
   mocks.blockerOptions.current = null;
+  mocks.locationState.current = {};
 });
 
 afterEach(() => {
@@ -216,6 +225,69 @@ test("imported cards land in the pending diff, not straight into the cube", asyn
   });
   expect(changeCalls).toHaveLength(0);
   expect(mocks.mutate).not.toHaveBeenCalled();
+});
+
+// Task 21: a cube created from a pasted list hands its resolved items to
+// the editor via router state instead of a straight commit.
+test("stages items handed off via router state and clears it so a refresh does not re-stage", async () => {
+  mocks.locationState.current = {
+    importedItems: [
+      {
+        card: {
+          scryfallId: "s-storm",
+          oracleId: "o-storm",
+          name: "Brainstorm",
+          manaCost: "{U}",
+          typeLine: "Instant",
+          colors: ["U"],
+          imageSmall: null,
+        },
+        quantity: 3,
+      },
+    ],
+  };
+
+  renderPage();
+
+  await waitFor(() =>
+    expect(within(screen.getByRole("complementary")).getByText("Brainstorm")).toBeDefined(),
+  );
+  expect(within(screen.getByRole("complementary")).getByText(/\+3/)).toBeDefined();
+  expect(mocks.navigate).toHaveBeenCalledWith({ to: ".", replace: true, state: {} });
+});
+
+// StrictMode double-invokes effects on mount in development — without a
+// fired-once guard this would stage the router-state import twice.
+test("stages a router-state import exactly once under StrictMode", async () => {
+  mocks.locationState.current = {
+    importedItems: [
+      {
+        card: {
+          scryfallId: "s-storm",
+          oracleId: "o-storm",
+          name: "Brainstorm",
+          manaCost: "{U}",
+          typeLine: "Instant",
+          colors: ["U"],
+          imageSmall: null,
+        },
+        quantity: 3,
+      },
+    ],
+  };
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <StrictMode>
+      <QueryClientProvider client={qc}>
+        <CubeEditorPage />
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+
+  await waitFor(() =>
+    expect(within(screen.getByRole("complementary")).getByText(/\+3/)).toBeDefined(),
+  );
+  expect(within(screen.getByRole("complementary")).queryByText(/\+6/)).toBeNull();
 });
 
 test("decrement of existing card lands in pending removes", async () => {
