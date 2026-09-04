@@ -421,7 +421,7 @@ func TestOrganizerReportLocksOutPlayers(t *testing.T) {
 		t.Fatalf("organizer report = %v", err)
 	}
 	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, p1User, false,
-		Result{P1Games: 0, P2Games: 2}); !errors.Is(err, ErrResultLocked) {
+		Result{P1Games: 0, P2Games: 2}); err != ErrResultLocked {
 		t.Fatalf("player report after organizer = %v, want ErrResultLocked", err)
 	}
 	after := f.detail(t)
