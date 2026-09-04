@@ -139,6 +139,42 @@ describe("remove clears the whole row", () => {
   });
 });
 
+function card(overrides: { oracleId: string; scryfallId: string; name: string }): CardSummary {
+  return {
+    scryfallId: overrides.scryfallId,
+    oracleId: overrides.oracleId,
+    name: overrides.name,
+    manaCost: "{1}",
+    typeLine: "Artifact",
+    colors: [],
+    imageSmall: null,
+  };
+}
+
+test("addMany stages several cards at once, capped at 99", () => {
+  const boltCard = card({ oracleId: "o1", scryfallId: "s1", name: "Lightning Bolt" });
+  const storm = card({ oracleId: "o2", scryfallId: "s2", name: "Brainstorm" });
+  const state = pendingReducer(emptyPending, {
+    type: "addMany",
+    items: [
+      { card: boltCard, quantity: 4 },
+      { card: storm, quantity: 200 },
+    ],
+  });
+  expect(state.adds.get("o1")?.quantity).toBe(4);
+  expect(state.adds.get("o2")?.quantity).toBe(99);
+});
+
+test("addMany accumulates onto an existing pending add", () => {
+  const boltCard = card({ oracleId: "o1", scryfallId: "s1", name: "Lightning Bolt" });
+  const once = pendingReducer(emptyPending, { type: "add", card: boltCard });
+  const state = pendingReducer(once, {
+    type: "addMany",
+    items: [{ card: boltCard, quantity: 2 }],
+  });
+  expect(state.adds.get("o1")?.quantity).toBe(3);
+});
+
 const totalsCard = (oracleId: string) => ({
   scryfallId: `s-${oracleId}`,
   oracleId,

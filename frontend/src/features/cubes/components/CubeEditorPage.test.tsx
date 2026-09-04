@@ -159,6 +159,65 @@ test("add via autocomplete lands in pending and commits with expectedVersion", a
   );
 });
 
+test("imported cards land in the pending diff, not straight into the cube", async () => {
+  const resolveMatch = (scryfallId: string, oracleId: string, name: string) => ({
+    scryfallId,
+    oracleId,
+    name,
+    manaCost: "{U}",
+    typeLine: "Instant",
+    setCode: "tst",
+    setName: "Test Set",
+    collectorNumber: "1",
+    imageSmall: null,
+    imageNormal: null,
+  });
+  const fetchMock = vi.fn(async (input: Request | string) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.includes("/cards/resolve-list")) {
+      return jsonResponse({
+        lines: [
+          {
+            lineNumber: 1,
+            raw: "4 Brainstorm",
+            quantity: 4,
+            status: "matched",
+            match: resolveMatch("s-storm", "o-storm", "Brainstorm"),
+          },
+          {
+            lineNumber: 2,
+            raw: "2 Ponder",
+            quantity: 2,
+            status: "matched",
+            match: resolveMatch("s-ponder", "o-ponder", "Ponder"),
+          },
+        ],
+      });
+    }
+    return jsonResponse({});
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderPage();
+  await userEvent.click(screen.getByRole("button", { name: m.cubes_import_open() }));
+  await userEvent.type(await screen.findByLabelText("Card list"), "4 Brainstorm{enter}2 Ponder");
+  await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
+  await userEvent.click(await screen.findByRole("button", { name: /add to collection/i }));
+
+  // The mobile summary bar totals copies across both staged cards (4 + 2).
+  const bar = await screen.findByRole("region", { name: /pending changes/i });
+  expect(within(bar).getByText(/\+6/)).toBeDefined();
+  expect(within(screen.getByRole("complementary")).getByText("Brainstorm")).toBeDefined();
+  expect(within(screen.getByRole("complementary")).getByText("Ponder")).toBeDefined();
+  // Staging is local — no commit request went out.
+  const changeCalls = fetchMock.mock.calls.filter(([input]) => {
+    const url = typeof input === "string" ? input : (input as Request).url;
+    return url.includes("/changes");
+  });
+  expect(changeCalls).toHaveLength(0);
+  expect(mocks.mutate).not.toHaveBeenCalled();
+});
+
 test("decrement of existing card lands in pending removes", async () => {
   renderPage();
   fireEvent.click(screen.getByRole("button", { name: /decrease quantity of lightning bolt/i }));

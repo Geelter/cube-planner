@@ -3,9 +3,11 @@ import { useBlocker } from "@tanstack/react-router";
 import { useMemo, useReducer, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
+import { CardListImportDialog } from "@/shared/cards/CardListImportDialog";
 import { PrintingPickerDialog } from "@/shared/cards/PrintingPickerDialog";
 import { cn } from "@/shared/lib/cn";
 import { Alert } from "@/shared/ui/alert";
+import { Button } from "@/shared/ui/button";
 import { Drawer } from "@/shared/ui/drawer";
 import { Label } from "@/shared/ui/label";
 import type { CubeCardEntry } from "../api";
@@ -71,6 +73,7 @@ export function CubeEditorPage() {
   const [conflict, setConflict] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pickerEntry, setPickerEntry] = useState<CubeCardEntry | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const dirty = pendingCount(pending) > 0;
   useBlocker({
@@ -147,10 +150,23 @@ export function CubeEditorPage() {
       {commitAlerts}
       {changePrinting.isError && <Alert variant="danger">{changePrinting.error.message}</Alert>}
 
-      <div className="flex max-w-md flex-col gap-1.5">
-        <Label htmlFor="editor-add">{m.cubes_editor_add_label()}</Label>
-        <CardAutocomplete id="editor-add" onSelect={(card) => dispatch({ type: "add", card })} />
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex max-w-md flex-1 flex-col gap-1.5">
+          <Label htmlFor="editor-add">{m.cubes_editor_add_label()}</Label>
+          <CardAutocomplete id="editor-add" onSelect={(card) => dispatch({ type: "add", card })} />
+        </div>
+        <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
+          {m.cubes_import_open()}
+        </Button>
       </div>
+      <CardListImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onApply={(items) => {
+          dispatch({ type: "addMany", items });
+          setImportOpen(false);
+        }}
+      />
 
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="min-w-0 flex-1">

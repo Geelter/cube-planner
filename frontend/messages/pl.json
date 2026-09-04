@@ -108,6 +108,7 @@
   "cubes_version_badge": "w. {version}",
   "cubes_editor_title": "Edycja: {name}",
   "cubes_editor_add_label": "Dodaj kartę",
+  "cubes_import_open": "Importuj listę",
   "cubes_pending_title": "Oczekujące zmiany",
   "cubes_pending_empty": "Brak oczekujących zmian.",
   "cubes_pending_adds": "Dodania",
