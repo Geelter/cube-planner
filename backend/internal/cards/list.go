@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -22,14 +23,19 @@ var ErrTooManyLines = errors.New("import exceeds 500 lines")
 
 // ParsedLine is one non-blank line of a pasted import list.
 // Grammar: optional quantity prefix ("4" or "4x"/"4X", 1–999), then a
-// card name. A line whose first token is not numeric is a bare name
-// with quantity 1. OK=false = unparsable (bad quantity or no name).
+// card name, then optionally a parenthesized set code and (only if a set
+// was given) a collector number — the Moxfield/Archidekt convention:
+// "4 Lightning Bolt (LEB) 123". A line whose first token is not numeric
+// is a bare name with quantity 1. OK=false = unparsable (bad quantity or
+// no name).
 type ParsedLine struct {
-	LineNumber int32 // 1-based position in the original text; blank lines count
-	Raw        string
-	Quantity   int32
-	Name       string
-	OK         bool
+	LineNumber      int32 // 1-based position in the original text; blank lines count
+	Raw             string
+	Quantity        int32
+	Name            string
+	SetCode         string // lowercased, "" if not specified
+	CollectorNumber string // lowercased, "" if not specified
+	OK              bool
 }
 
 func ParseImportText(text string) ([]ParsedLine, error) {
@@ -47,6 +53,58 @@ func ParseImportText(text string) ([]ParsedLine, error) {
 	return out, nil
 }
 
+var (
+	setCodeRe   = regexp.MustCompile(`^\(([A-Za-z0-9]{2,5})\)$`)
+	collectorRe = regexp.MustCompile(`^[A-Za-z0-9★†-]+$`)
+)
+
+// splitSelectors peels an optional trailing "(SET)" and, only when a set
+// was found, an optional trailing collector number. Card names really do
+// contain parentheses ("B.F.M. (Big Furry Monster)"), so the token must
+// look like a set code — 2–5 alphanumerics — to be treated as one.
+func splitSelectors(name string) (rest, setCode, collectorNumber string) {
+	fields := strings.Fields(name)
+	if len(fields) < 2 {
+		return name, "", ""
+	}
+	last := len(fields) - 1
+	// Case: "... (SET) 83a"
+	if last >= 1 && collectorRe.MatchString(fields[last]) {
+		if mt := setCodeRe.FindStringSubmatch(fields[last-1]); mt != nil {
+			return strings.Join(fields[:last-1], " "), strings.ToLower(mt[1]), strings.ToLower(fields[last])
+		}
+	}
+	// Case: "... (SET)"
+	if mt := setCodeRe.FindStringSubmatch(fields[last]); mt != nil {
+		return strings.Join(fields[:last], " "), strings.ToLower(mt[1]), ""
+	}
+	return name, "", ""
+}
+
+// NameWithoutQuantity strips a leading quantity token ("4", "4x") if one is
+// present. Exported because list resolution retries a line as a bare name
+// when the set-aware reading finds nothing, and it must strip the quantity
+// the same way parseLine does.
+func NameWithoutQuantity(line string) string {
+	first, rest := line, ""
+	if i := strings.IndexAny(line, " \t"); i >= 0 {
+		first, rest = line[:i], strings.TrimSpace(line[i+1:])
+	}
+	tok := strings.TrimSuffix(strings.TrimSuffix(first, "x"), "X")
+	qty, err := strconv.Atoi(tok)
+	if err != nil || rest == "" || qty < 1 || qty > MaxItemQuantity {
+		return line
+	}
+	return rest
+}
+
+// looksLikeCardYear reports whether qty is shaped like a year a card name
+// might embed (e.g. the actual card "1996 World Champion") rather than a
+// mistyped quantity. Magic's first set (Alpha) released in 1993.
+func looksLikeCardYear(qty int) bool {
+	return qty >= 1993 && qty <= 2099
+}
+
 func parseLine(n int32, line string) ParsedLine {
 	p := ParsedLine{LineNumber: n, Raw: line}
 	first, rest := line, ""
@@ -57,16 +115,33 @@ func parseLine(n int32, line string) ParsedLine {
 	if len(qtyToken) > 1 && (strings.HasSuffix(qtyToken, "x") || strings.HasSuffix(qtyToken, "X")) {
 		qtyToken = qtyToken[:len(qtyToken)-1]
 	}
+	var nameText string
 	qty, err := strconv.Atoi(qtyToken)
-	if err != nil {
+	switch {
+	case err != nil:
 		// No leading quantity — the whole line is the name.
-		p.Quantity, p.Name, p.OK = 1, line, true
+		qty = 1
+		nameText = line
+	case qty > MaxItemQuantity && rest != "" && looksLikeCardYear(qty):
+		// "1996 World Champion" is a card, not 1996 copies of something —
+		// but an arbitrary over-cap number like "1000 Lightning Bolt" is
+		// almost certainly a mistyped quantity, so only numbers shaped
+		// like a year (Magic's first set released in 1993) get the pass.
+		qty = 1
+		nameText = line
+	case qty < 1 || qty > MaxItemQuantity || rest == "":
+		return p
+	default:
+		nameText = rest
+	}
+
+	rest, setCode, collectorNumber := splitSelectors(nameText)
+	if rest == "" {
+		// The whole line was a selector; treat it as unparsable rather than
+		// producing an empty name.
 		return p
 	}
-	if qty < 1 || qty > MaxItemQuantity || rest == "" {
-		return p
-	}
-	p.Quantity, p.Name, p.OK = int32(qty), rest, true
+	p.Quantity, p.Name, p.SetCode, p.CollectorNumber, p.OK = int32(qty), rest, setCode, collectorNumber, true
 	return p
 }
 
