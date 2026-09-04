@@ -79,7 +79,7 @@ export function useChangePrinting() {
 export function useResolveImport() {
   return useMutation({
     mutationFn: async (vars: { text: string }): Promise<ImportResolveLine[]> => {
-      const { data, error } = await client.POST("/api/collection/import/resolve", {
+      const { data, error } = await client.POST("/api/cards/resolve-list", {
         body: { text: vars.text },
       });
       return unwrap(data, error).lines ?? [];

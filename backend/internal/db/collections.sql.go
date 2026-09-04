@@ -56,68 +56,6 @@ func (q *Queries) DeleteCollectionItem(ctx context.Context, arg DeleteCollection
 	return result.RowsAffected(), nil
 }
 
-const getCardsByNormalizedNames = `-- name: GetCardsByNormalizedNames :many
-with matches as (
-    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, edhrec_rank
-    from cards
-    where normalized_name = any($1::text[])
-    order by oracle_id, promo, released_at desc, (image_small is null)
-)
-select scryfall_id, oracle_id, name, normalized_name, mana_cost, type_line,
-    set_code, set_name, collector_number, image_small, image_normal
-from matches
-`
-
-type GetCardsByNormalizedNamesRow struct {
-	ScryfallID      uuid.UUID
-	OracleID        uuid.UUID
-	Name            string
-	NormalizedName  string
-	ManaCost        string
-	TypeLine        string
-	SetCode         string
-	SetName         string
-	CollectorNumber string
-	ImageSmall      *string
-	ImageNormal     *string
-}
-
-// Exact-name resolution for import: representative printing per oracle
-// card (same non-promo/newest/has-image rule as autocomplete). Several
-// oracle cards sharing one name all come back — the service treats that
-// name as ambiguous.
-func (q *Queries) GetCardsByNormalizedNames(ctx context.Context, names []string) ([]GetCardsByNormalizedNamesRow, error) {
-	rows, err := q.db.Query(ctx, getCardsByNormalizedNames, names)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetCardsByNormalizedNamesRow
-	for rows.Next() {
-		var i GetCardsByNormalizedNamesRow
-		if err := rows.Scan(
-			&i.ScryfallID,
-			&i.OracleID,
-			&i.Name,
-			&i.NormalizedName,
-			&i.ManaCost,
-			&i.TypeLine,
-			&i.SetCode,
-			&i.SetName,
-			&i.CollectorNumber,
-			&i.ImageSmall,
-			&i.ImageNormal,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getCollectionItemEntry = `-- name: GetCollectionItemEntry :one
 select ci.scryfall_id, ci.oracle_id, ci.quantity,
     ca.name, ca.mana_cost, ca.type_line, ca.set_code, ca.set_name,
@@ -361,70 +299,6 @@ func (q *Queries) ListCollectionItems(ctx context.Context, arg ListCollectionIte
 			&i.ImageNormal,
 			&i.Total,
 			&i.TotalCopies,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const suggestCardsByName = `-- name: SuggestCardsByName :many
-with matches as (
-    select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, edhrec_rank
-    from cards
-    where $1::text <% normalized_name
-    order by oracle_id, promo, released_at desc, (image_small is null)
-)
-select scryfall_id, oracle_id, name, mana_cost, type_line,
-    set_code, set_name, collector_number, image_small, image_normal
-from matches
-order by
-    word_similarity($1, normalized_name) desc,
-    similarity($1, normalized_name) desc,
-    name asc
-limit 5
-`
-
-type SuggestCardsByNameRow struct {
-	ScryfallID      uuid.UUID
-	OracleID        uuid.UUID
-	Name            string
-	ManaCost        string
-	TypeLine        string
-	SetCode         string
-	SetName         string
-	CollectorNumber string
-	ImageSmall      *string
-	ImageNormal     *string
-}
-
-// Fuzzy suggestions for one unresolved import line. Same <% + GUC
-// threshold setup as autocomplete (see cards.sql for why the operator
-// form matters); oracle-level with a representative printing.
-func (q *Queries) SuggestCardsByName(ctx context.Context, query string) ([]SuggestCardsByNameRow, error) {
-	rows, err := q.db.Query(ctx, suggestCardsByName, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SuggestCardsByNameRow
-	for rows.Next() {
-		var i SuggestCardsByNameRow
-		if err := rows.Scan(
-			&i.ScryfallID,
-			&i.OracleID,
-			&i.Name,
-			&i.ManaCost,
-			&i.TypeLine,
-			&i.SetCode,
-			&i.SetName,
-			&i.CollectorNumber,
-			&i.ImageSmall,
-			&i.ImageNormal,
 		); err != nil {
 			return nil, err
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/mjabloniec/cube-planner/backend/internal/auth"
 	"github.com/mjabloniec/cube-planner/backend/internal/cards"
 	"github.com/mjabloniec/cube-planner/backend/internal/db"
 	"github.com/mjabloniec/cube-planner/backend/internal/platform/httpapi"
@@ -72,6 +73,24 @@ func newCardsServer(t *testing.T) (*httptest.Server, *pgxpool.Pool) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	return srv, pool
+}
+
+// newCardsServerWithSession additionally wires Auth/Sessions for endpoints
+// that require a logged-in caller (resolve-list).
+func newCardsServerWithSession(t *testing.T) (*httptest.Server, *pgxpool.Pool, *db.Queries) {
+	t.Helper()
+	pool := testdb.New(t)
+	q := db.New(pool)
+	deps := httpapi.Deps{
+		Auth:     auth.NewService(q, noopMailer{}, "http://test"),
+		Sessions: auth.NewSessions(q, false),
+		Queries:  q,
+		Cards:    cards.NewService(q),
+	}
+	_, handler := httpapi.Build(deps)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	return srv, pool, q
 }
 
 func getJSON(t *testing.T, srv *httptest.Server, path string, out any) int {
@@ -252,5 +271,69 @@ func TestSearchPopularityOrdering(t *testing.T) {
 	}
 	if body.Cards[0].Name != "Frost Bolt" {
 		t.Fatalf("no-name first = %q, want alphabetical Frost Bolt", body.Cards[0].Name)
+	}
+}
+
+type resolveListLineBody struct {
+	LineNumber int32  `json:"lineNumber"`
+	Raw        string `json:"raw"`
+	Quantity   int32  `json:"quantity"`
+	Status     string `json:"status"`
+	Match      *struct {
+		ScryfallID string `json:"scryfallId"`
+		Name       string `json:"name"`
+	} `json:"match"`
+	Suggestions []struct {
+		ScryfallID string `json:"scryfallId"`
+		Name       string `json:"name"`
+	} `json:"suggestions"`
+}
+
+type resolveListBody struct {
+	Lines []resolveListLineBody `json:"lines"`
+}
+
+func TestResolveCardListEndpoint(t *testing.T) {
+	srv, pool, q := newCardsServerWithSession(t)
+	c := loggedInClient(t, srv, q, "imp1@test.dev")
+
+	boltO := uuid.New()
+	// Two printings of Bolt: representative = newer non-promo.
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: boltO, name: "Lightning Bolt", released: "1993-08-05"})
+	newBolt := uuid.New()
+	seedCard(t, pool, testCard{scryfallID: newBolt, oracleID: boltO, name: "Lightning Bolt", released: "2010-07-16"})
+	// Duplicate name across two oracle ids → ambiguous even on exact match.
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Twin Name"})
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: uuid.New(), name: "Twin Name"})
+
+	resp := c.do(t, "POST", "/api/cards/resolve-list",
+		`{"text":"4 Lightning Bolt\nLihgtning Blot\nTwin Name\n17 Utter Gibberish Nonexistent\n0 Lightning Bolt"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("resolve = %d, want 200", resp.StatusCode)
+	}
+	body := decode[resolveListBody](t, resp)
+	if len(body.Lines) != 5 {
+		t.Fatalf("lines = %d, want 5", len(body.Lines))
+	}
+
+	exact := body.Lines[0]
+	if exact.Status != "matched" || exact.Quantity != 4 ||
+		exact.Match == nil || exact.Match.ScryfallID != newBolt.String() {
+		t.Fatalf("exact line = %+v (want matched, representative printing)", exact)
+	}
+	fuzzy := body.Lines[1]
+	if fuzzy.Status != "ambiguous" || len(fuzzy.Suggestions) == 0 ||
+		fuzzy.Suggestions[0].Name != "Lightning Bolt" {
+		t.Fatalf("fuzzy line = %+v (want ambiguous with Bolt suggestion)", fuzzy)
+	}
+	twin := body.Lines[2]
+	if twin.Status != "ambiguous" || len(twin.Suggestions) != 2 {
+		t.Fatalf("duplicate-name line = %+v (want ambiguous, 2 suggestions)", twin)
+	}
+	if body.Lines[3].Status != "unmatched" {
+		t.Fatalf("gibberish line = %+v, want unmatched", body.Lines[3])
+	}
+	if body.Lines[4].Status != "unmatched" {
+		t.Fatalf("bad-quantity line = %+v, want unmatched", body.Lines[4])
 	}
 }

@@ -28,7 +28,7 @@ const card = (scryfallId: string, name: string) => ({
 test("paste → review groups → confirm posts matched + default ambiguous choice", async () => {
   const fetchMock = vi.fn(async (input: Request | string, _init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.url;
-    if (url.includes("/import/resolve")) {
+    if (url.includes("/cards/resolve-list")) {
       return new Response(
         JSON.stringify({
           lines: [
