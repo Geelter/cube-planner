@@ -13,9 +13,7 @@ const validResult = (r: ResultInput) =>
   r.p1Games <= 2 &&
   r.p2Games >= 0 &&
   r.p2Games <= 2 &&
-  r.draws >= 0 &&
-  r.draws <= 3 &&
-  r.p1Games + r.p2Games + r.draws <= 3 &&
+  r.p1Games + r.p2Games <= 3 &&
   !(r.p1Games === 2 && r.p2Games === 2);
 
 function GamesField({
@@ -63,7 +61,6 @@ export function ResultForm({
   const [result, setResult] = useState<ResultInput>({
     p1Games: match.p1Games ?? 0,
     p2Games: match.p2Games ?? 0,
-    draws: match.draws ?? 0,
   });
   const [touchedInvalid, setTouchedInvalid] = useState(false);
 
@@ -96,16 +93,12 @@ export function ResultForm({
         max={2}
         onChange={(v) => setResult({ ...result, p2Games: v })}
       />
-      <GamesField
-        id={`draws-${match.id}`}
-        label={m.tournament_drawn_games()}
-        value={result.draws}
-        max={3}
-        onChange={(v) => setResult({ ...result, draws: v })}
-      />
       <Button type="submit" size="lg" loading={pending}>
         {m.tournament_report_result()}
       </Button>
+      {result.p1Games === result.p2Games && (
+        <p className="w-full text-sm text-fg-muted">{m.tournament_result_draw_hint()}</p>
+      )}
       {touchedInvalid && (
         <p role="alert" className="w-full text-sm text-danger">
           {m.tournament_result_invalid()}

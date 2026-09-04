@@ -259,6 +259,52 @@ func TestResultPermissions(t *testing.T) {
 	}
 }
 
+// The result form no longer collects a drawn-games count; ReportResult
+// must always persist 0 for it regardless of what the caller passes for
+// P1Games/P2Games, and standings must still read a 1-1 score as a draw.
+func TestReportResultPersistsZeroDraws(t *testing.T) {
+	f := newFixture(t, 4)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Publish(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	d := f.detail(t)
+	m := d.Rounds[0].Matches[0]
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, f.users[0], true,
+		Result{P1Games: 1, P2Games: 1}); err != nil {
+		t.Fatalf("report 1-1 = %v", err)
+	}
+	after := f.detail(t)
+	var reported MatchDetail
+	for _, rd := range after.Rounds {
+		if rd.Number != 1 {
+			continue
+		}
+		for _, rm := range rd.Matches {
+			if rm.ID == m.ID {
+				reported = rm
+			}
+		}
+	}
+	if reported.Draws == nil || *reported.Draws != 0 {
+		t.Fatalf("stored draws = %v, want 0", reported.Draws)
+	}
+	for _, id := range []uuid.UUID{m.Player1ID, *m.Player2ID} {
+		var mp int
+		for _, s := range after.Standings {
+			if s.PlayerID == id {
+				mp = s.MatchPoints
+			}
+		}
+		if mp != 1 {
+			t.Errorf("player %v: MP = %d, want 1 (a 1-1 draw)", id, mp)
+		}
+	}
+}
+
 func TestDropAndUndropTiming(t *testing.T) {
 	f := newFixture(t, 4)
 	ctx := context.Background()

@@ -106,7 +106,7 @@ export function useSwapSlots(eventId: string) {
   );
 }
 
-export type ResultInput = { p1Games: number; p2Games: number; draws: number };
+export type ResultInput = { p1Games: number; p2Games: number };
 
 export function useReportResult(eventId: string) {
   return useTournamentMutation(

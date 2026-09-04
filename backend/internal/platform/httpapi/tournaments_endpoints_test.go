@@ -176,7 +176,7 @@ func TestTournamentEndpointsHappyPath(t *testing.T) {
 	}
 	resp = player.do(t, http.MethodPut,
 		fmt.Sprintf("%s/matches/%s/result", base, myMatch.ID),
-		jsonBody(t, map[string]any{"p1Games": 2, "p2Games": 1, "draws": 0}))
+		jsonBody(t, map[string]any{"p1Games": 2, "p2Games": 1}))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("player report = %d", resp.StatusCode)
 	}

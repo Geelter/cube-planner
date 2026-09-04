@@ -37,7 +37,7 @@ test("submits a valid 2-1", async () => {
   await userEvent.clear(screen.getByLabelText("Bob: games won"));
   await userEvent.type(screen.getByLabelText("Bob: games won"), "1");
   await userEvent.click(screen.getByRole("button", { name: "Report result" }));
-  expect(onSubmit).toHaveBeenCalledWith({ p1Games: 2, p2Games: 1, draws: 0 });
+  expect(onSubmit).toHaveBeenCalledWith({ p1Games: 2, p2Games: 1 });
 });
 
 test("rejects 2-2 with a validation message", async () => {
@@ -49,4 +49,15 @@ test("rejects 2-2 with a validation message", async () => {
   await userEvent.click(screen.getByRole("button", { name: "Report result" }));
   expect(onSubmit).not.toHaveBeenCalled();
   expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid best-of-3 score.");
+});
+
+test("has no draws input and hints that equal games are a draw", async () => {
+  renderForm();
+  expect(screen.queryByLabelText(/draw/i)).not.toBeInTheDocument();
+
+  await userEvent.clear(screen.getByLabelText("Ann: games won"));
+  await userEvent.type(screen.getByLabelText("Ann: games won"), "1");
+  await userEvent.clear(screen.getByLabelText("Bob: games won"));
+  await userEvent.type(screen.getByLabelText("Bob: games won"), "1");
+  expect(screen.getByText(/recorded as a draw/i)).toBeInTheDocument();
 });
