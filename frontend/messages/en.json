@@ -276,6 +276,7 @@
   "regs_deny_confirm": "Deny the refund for {name}? They keep nothing; the row closes.",
   "regs_remove": "Remove",
   "regs_remove_confirm": "Remove {name} from this event? No fee was charged.",
+  "regs_remove_drops_from_tournament": "They are also dropped from the tournament, so later rounds skip them; results they already played stay.",
   "regs_remove_keep": "Remove — no refund",
   "regs_remove_keep_confirm": "Remove {name} without refunding their entry fee? The fee is kept and this cannot be undone.",
   "regs_empty": "Nobody here.",

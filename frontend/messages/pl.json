@@ -269,6 +269,7 @@
   "regs_deny_confirm": "Odmówić zwrotu dla {name}? Wiersz zostanie zamknięty bez zwrotu.",
   "regs_remove": "Usuń",
   "regs_remove_confirm": "Usunąć {name} z wydarzenia? Opłata nie została pobrana.",
+  "regs_remove_drops_from_tournament": "Gracz zostanie też wycofany z turnieju, więc kolejne rundy go pominą; rozegrane wyniki pozostaną.",
   "regs_remove_keep": "Usuń — bez zwrotu",
   "regs_remove_keep_confirm": "Usunąć {name} bez zwrotu opłaty? Opłata zostanie zatrzymana i nie można tego cofnąć.",
   "regs_empty": "Nikogo tu nie ma.",

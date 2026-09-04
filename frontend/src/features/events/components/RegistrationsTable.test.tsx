@@ -170,11 +170,57 @@ test("draft renders nothing when the refund queue is empty", () => {
   expect(screen.queryByText("Ala")).not.toBeInTheDocument();
 });
 
-test("started shows only the refund queue", () => {
-  regsData = [defaultRows[0]!, defaultRows[2]!]; // paid (Ala) + refund_requested (Cez)
+test("started shows the refund queue and the paid roster, nothing else", () => {
+  // paid (Ala) + waitlisted (Bea) + refund_requested (Cez) + expired (Dag)
   renderTable("started");
   expect(screen.getByText("Cez")).toBeInTheDocument();
-  expect(screen.queryByText("Ala")).not.toBeInTheDocument();
+  // The paid group outlives `published` so a no-show can still be removed —
+  // that is only ever discovered after the event starts.
+  expect(screen.getByText("Ala")).toBeInTheDocument();
+  expect(screen.queryByText("Bea")).not.toBeInTheDocument();
+  expect(screen.queryByText("Dag")).not.toBeInTheDocument();
+});
+
+test("started renders the paid roster read-only: Remove, no Refund", () => {
+  renderTable("started", [row({ status: "paid", displayName: "Ala", hasPayment: true })]);
+  const alaRow = screen.getByText("Ala").closest("li");
+  expect(alaRow).not.toBeNull();
+  expect(
+    within(alaRow as HTMLElement).getByRole("button", { name: m.regs_remove_keep() }),
+  ).toBeInTheDocument();
+  expect(
+    within(alaRow as HTMLElement).queryByRole("button", { name: m.regs_refund() }),
+  ).not.toBeInTheDocument();
+});
+
+test("started keeps the refund queue's own Refund and Deny buttons", () => {
+  renderTable("started", [
+    row({ status: "refund_requested", displayName: "Cez", hasPayment: true }),
+  ]);
+  const cezRow = screen.getByText("Cez").closest("li");
+  expect(cezRow).not.toBeNull();
+  expect(
+    within(cezRow as HTMLElement).getByRole("button", { name: m.regs_refund() }),
+  ).toBeInTheDocument();
+  expect(
+    within(cezRow as HTMLElement).getByRole("button", { name: m.regs_deny() }),
+  ).toBeInTheDocument();
+});
+
+test("started warns that removing also drops the player from the tournament", async () => {
+  const user = userEvent.setup();
+  renderTable("started", [row({ status: "paid", displayName: "Ala", hasPayment: true })]);
+  await user.click(screen.getByRole("button", { name: m.regs_remove_keep() }));
+  expect(screen.getByText(new RegExp(m.regs_remove_drops_from_tournament()))).toBeInTheDocument();
+});
+
+test("published does not warn about the tournament — nobody is paired yet", async () => {
+  const user = userEvent.setup();
+  renderTable("published", [row({ status: "paid", displayName: "Ala", hasPayment: true })]);
+  await user.click(screen.getByRole("button", { name: m.regs_remove_keep() }));
+  expect(
+    screen.queryByText(new RegExp(m.regs_remove_drops_from_tournament())),
+  ).not.toBeInTheDocument();
 });
 
 test("finished with an empty queue renders nothing", () => {

@@ -90,6 +90,36 @@ func (q *Queries) DeleteMatchesForRound(ctx context.Context, roundID uuid.UUID) 
 	return err
 }
 
+const dropTournamentPlayerByEventUser = `-- name: DropTournamentPlayerByEventUser :execrows
+update tournament_players tp
+set dropped_at = $1
+from tournaments t
+where tp.tournament_id = t.id
+  and t.event_id = $2
+  and tp.user_id = $3
+  and tp.dropped_at is null
+`
+
+type DropTournamentPlayerByEventUserParams struct {
+	DroppedAt *time.Time
+	EventID   uuid.UUID
+	UserID    uuid.UUID
+}
+
+// Removing a participant after the event starts must also take them out of
+// the pairings: tournament_players is snapshotted at start and nothing else
+// writes it, so the roster would otherwise keep pairing a removed player.
+// Dropping (rather than deleting) is what the organizer's own Drop button
+// does, so results already played stay on the books. A no-op when the event
+// has no tournament or the player is already dropped.
+func (q *Queries) DropTournamentPlayerByEventUser(ctx context.Context, arg DropTournamentPlayerByEventUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, dropTournamentPlayerByEventUser, arg.DroppedAt, arg.EventID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getMatch = `-- name: GetMatch :one
 select m.id, m.round_id, m.table_number, m.player1_id, m.player2_id, m.p1_games, m.p2_games, m.draws, m.reported_by, m.reported_at, m.created_at, m.updated_at, r.number as round_number, r.status as round_status,
     r.tournament_id
