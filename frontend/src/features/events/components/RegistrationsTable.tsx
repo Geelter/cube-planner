@@ -11,34 +11,56 @@ import {
   useRemoveRegistration,
 } from "../api";
 
-// `queue` is the only group that outlives `published`: a player who
-// self-cancels past the refund deadline lands in refund_requested, and the
-// organizer still needs a screen to resolve it after the event starts.
-const GROUPS: { key: string; title: () => string; statuses: string[]; publishedOnly: boolean }[] = [
-  { key: "paid", title: () => m.regs_group_paid(), statuses: ["paid"], publishedOnly: true },
+type EventStatus = EventSummary["status"];
+
+const ALL_STATUSES: EventStatus[] = ["draft", "published", "started", "finished", "cancelled"];
+
+// Two groups outlive `published`:
+//
+// - `queue`, because a player who self-cancels past the refund deadline lands
+//   in refund_requested and the organizer still needs a screen to resolve it.
+// - `paid`, on `started` only, because a no-show is by definition discovered
+//   after the event starts — without it the remove action is unreachable in
+//   exactly the case it exists for. It renders roster-style there: the Refund
+//   button is suppressed (see `canRefund`), leaving only Remove.
+//
+// Outside `published` a group renders only when it has rows, so the common
+// case is still a clean page.
+const GROUPS: {
+  key: string;
+  title: () => string;
+  statuses: string[];
+  visibleOn: EventStatus[];
+}[] = [
+  {
+    key: "paid",
+    title: () => m.regs_group_paid(),
+    statuses: ["paid"],
+    visibleOn: ["published", "started"],
+  },
   {
     key: "pending",
     title: () => m.regs_group_pending(),
     statuses: ["pending_payment"],
-    publishedOnly: true,
+    visibleOn: ["published"],
   },
   {
     key: "waitlist",
     title: () => m.regs_group_waitlist(),
     statuses: ["waitlisted"],
-    publishedOnly: true,
+    visibleOn: ["published"],
   },
   {
     key: "queue",
     title: () => m.regs_group_refund_queue(),
     statuses: ["refund_requested"],
-    publishedOnly: false,
+    visibleOn: ALL_STATUSES,
   },
   {
     key: "history",
     title: () => m.regs_group_history(),
     statuses: ["cancelled", "refunded", "expired", "removed"],
-    publishedOnly: true,
+    visibleOn: ["published"],
   },
 ];
 
@@ -73,10 +95,34 @@ export function RegistrationsTable({
       .sort((a, b) => (a.waitlistPos ?? 0) - (b.waitlistPos ?? 0));
 
   const published = status === "published";
-  const visible = GROUPS.filter((g) =>
-    published ? true : !g.publishedOnly && rowsFor(g.statuses).length > 0,
+  const visible = GROUPS.filter(
+    (g) => g.visibleOn.includes(status) && (published || rowsFor(g.statuses).length > 0),
   );
   if (visible.length === 0) return null;
+
+  // Refunding a paid row is a `published` action: once the event has started
+  // the organizer's tool is Remove (keep or refund is then a Stripe-dashboard
+  // decision). Rows in the refund queue keep their buttons at every status —
+  // that queue is the whole reason the section outlives `published`.
+  const canRefund = (r: EventRegistrationRow) =>
+    r.status === "refund_requested" || (r.status === "paid" && r.hasPayment && published);
+
+  const confirmMessage = () => {
+    if (confirm == null) return "";
+    const name = confirm.row.displayName;
+    if (confirm.kind !== "remove") {
+      return confirm.kind === "deny"
+        ? m.regs_deny_confirm({ name })
+        : m.regs_refund_confirm({ name });
+    }
+    const base = confirm.keepPayment
+      ? m.regs_remove_keep_confirm({ name })
+      : m.regs_remove_confirm({ name });
+    // Once the event has started, removing also drops the player from the
+    // pairings. Say so here rather than let the organizer find out in the
+    // next round.
+    return status === "started" ? `${base} ${m.regs_remove_drops_from_tournament()}` : base;
+  };
 
   const err = refund.error ?? deny.error ?? remove.error;
   const locale = getLocale();
@@ -128,8 +174,7 @@ export function RegistrationsTable({
                     </span>
                     <span className="flex items-center gap-3">
                       <span className="text-fg-muted">{rowMeta(r)}</span>
-                      {(r.status === "refund_requested" ||
-                        (r.status === "paid" && r.hasPayment)) && (
+                      {canRefund(r) && (
                         <Button
                           type="button"
                           size="sm"
@@ -186,17 +231,7 @@ export function RegistrationsTable({
                 : m.regs_remove()
               : m.regs_refund()
         }
-        message={
-          confirm == null
-            ? ""
-            : confirm.kind === "deny"
-              ? m.regs_deny_confirm({ name: confirm.row.displayName })
-              : confirm.kind === "remove"
-                ? confirm.keepPayment
-                  ? m.regs_remove_keep_confirm({ name: confirm.row.displayName })
-                  : m.regs_remove_confirm({ name: confirm.row.displayName })
-                : m.regs_refund_confirm({ name: confirm.row.displayName })
-        }
+        message={confirmMessage()}
         confirmLabel={
           confirm?.kind === "deny"
             ? m.regs_deny()

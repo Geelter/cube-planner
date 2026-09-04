@@ -1848,3 +1848,115 @@ func TestRemoveFailedSessionExpiryStillRemoves(t *testing.T) {
 		t.Fatalf("want no successful expiry recorded, got %v", e.stripe.expired)
 	}
 }
+
+// A no-show is only ever discovered after the event starts, and
+// tournament_players is snapshotted at start and never rewritten. Removing a
+// registration must therefore also drop the player, or the pairings keep
+// seating someone who is no longer in the event.
+func TestRemoveAfterStartDropsFromTournament(t *testing.T) {
+	ctx := context.Background()
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	staying := e.seedUser(t, "staying@example.com")
+	leaving := e.seedUser(t, "leaving@example.com")
+	ev := e.createEvent(t, org, 0, 8)
+	e.publish(t, ev.ID)
+	stayingReg, err := e.svc.Register(ctx, ev.ID, staying)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leavingReg, err := e.svc.Register(ctx, ev.ID, leaving)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Transition(ctx, ev.ID, "start"); err != nil {
+		t.Fatal(err)
+	}
+	// Stand in for the roster snapshot the tournament service takes at start.
+	tour, err := e.q.CreateTournament(ctx, db.CreateTournamentParams{EventID: ev.ID, PlannedRounds: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []uuid.UUID{staying, leaving} {
+		if _, err := e.q.InsertTournamentPlayer(ctx, db.InsertTournamentPlayerParams{
+			TournamentID: tour.ID, UserID: u,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := e.svc.RemoveRegistration(ctx, ev.ID, leavingReg.ID, false); err != nil {
+		t.Fatalf("removing after start must succeed: %v", err)
+	}
+
+	players, err := e.q.ListTournamentPlayers(ctx, tour.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range players {
+		switch p.UserID {
+		case leaving:
+			if p.DroppedAt == nil {
+				t.Fatal("the removed player must be dropped from the tournament")
+			}
+		case staying:
+			if p.DroppedAt != nil {
+				t.Fatal("removing one player must not drop anyone else")
+			}
+		}
+	}
+	// The registration side still behaves exactly as before.
+	if stayingReg.Status != "paid" {
+		t.Fatalf("free registration should be paid, got %s", stayingReg.Status)
+	}
+}
+
+// A player who already dropped themselves keeps their original drop time:
+// the organizer removing them afterwards must not rewrite when they left.
+func TestRemoveDoesNotRestampAnAlreadyDroppedPlayer(t *testing.T) {
+	ctx := context.Background()
+	e := newTestEnv(t)
+	org := e.seedUser(t, "org@example.com")
+	user := e.seedUser(t, "player@example.com")
+	ev := e.createEvent(t, org, 0, 8)
+	e.publish(t, ev.ID)
+	reg, err := e.svc.Register(ctx, ev.ID, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Transition(ctx, ev.ID, "start"); err != nil {
+		t.Fatal(err)
+	}
+	tour, err := e.q.CreateTournament(ctx, db.CreateTournamentParams{EventID: ev.ID, PlannedRounds: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	player, err := e.q.InsertTournamentPlayer(ctx, db.InsertTournamentPlayerParams{
+		TournamentID: tour.ID, UserID: user,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	selfDropped := e.clock.t.Add(-time.Hour)
+	if _, err := e.q.SetPlayerDropped(ctx, db.SetPlayerDroppedParams{
+		ID: player.ID, DroppedAt: &selfDropped,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := e.svc.RemoveRegistration(ctx, ev.ID, reg.ID, false); err != nil {
+		t.Fatalf("removing an already-dropped player must succeed: %v", err)
+	}
+
+	players, err := e.q.ListTournamentPlayers(ctx, tour.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(players) != 1 || players[0].DroppedAt == nil {
+		t.Fatal("the player must still be dropped")
+	}
+	if !players[0].DroppedAt.Equal(selfDropped) {
+		t.Fatalf("the original drop time must be preserved, got %v want %v",
+			players[0].DroppedAt, selfDropped)
+	}
+}

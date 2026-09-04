@@ -860,6 +860,7 @@ func (s *Service) RemoveRegistration(
 	var out db.Registration
 	var emails []pendingEmail
 	sessionToExpire := ""
+	droppedFromTournament := false
 	err := s.withTx(ctx, func(qtx *db.Queries) error {
 		reg, err := qtx.GetRegistration(ctx, registrationID)
 		if errors.Is(err, pgx.ErrNoRows) || (err == nil && reg.EventID != eventID) {
@@ -905,6 +906,23 @@ func (s *Service) RemoveRegistration(
 		if err != nil {
 			return err
 		}
+		// Keep the tournament roster in step. tournament_players is
+		// snapshotted from paid registrations when the event starts and
+		// nothing else writes it, so without this a player removed after
+		// the start keeps getting paired. Dropping matches what the
+		// organizer's own Drop button does: played results stay on the
+		// books, future rounds skip them. No-op before the event starts,
+		// for events with no tournament, and for an already-dropped player.
+		droppedAt := s.now()
+		dropped, err := qtx.DropTournamentPlayerByEventUser(ctx, db.DropTournamentPlayerByEventUserParams{
+			DroppedAt: &droppedAt,
+			EventID:   reg.EventID,
+			UserID:    reg.UserID,
+		})
+		if err != nil {
+			return err
+		}
+		droppedFromTournament = dropped > 0
 		u, err := qtx.GetUserByID(ctx, reg.UserID)
 		if err != nil {
 			return err
@@ -916,6 +934,10 @@ func (s *Service) RemoveRegistration(
 	})
 	if err != nil {
 		return nil, err
+	}
+	if droppedFromTournament {
+		s.log.Info("events: removed participant dropped from the tournament",
+			"event", eventID, "registration", out.ID)
 	}
 	s.sendEmails(ctx, emails)
 	if sessionToExpire != "" {

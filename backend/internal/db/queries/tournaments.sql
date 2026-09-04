@@ -153,3 +153,18 @@ select exists (
     select 1 from match_result_reports
     where match_id = sqlc.arg(match_id) and is_organizer
 );
+
+-- Removing a participant after the event starts must also take them out of
+-- the pairings: tournament_players is snapshotted at start and nothing else
+-- writes it, so the roster would otherwise keep pairing a removed player.
+-- Dropping (rather than deleting) is what the organizer's own Drop button
+-- does, so results already played stay on the books. A no-op when the event
+-- has no tournament or the player is already dropped.
+-- name: DropTournamentPlayerByEventUser :execrows
+update tournament_players tp
+set dropped_at = sqlc.arg(dropped_at)
+from tournaments t
+where tp.tournament_id = t.id
+  and t.event_id = sqlc.arg(event_id)
+  and tp.user_id = sqlc.arg(user_id)
+  and tp.dropped_at is null;

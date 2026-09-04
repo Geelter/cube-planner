@@ -132,7 +132,8 @@ already gated to `started`.
 
 | Section | draft | published | started | finished | cancelled |
 |---|---|---|---|---|---|
-| Registrations: paid / pending / waitlist / history | — | yes | — | — | — |
+| Registrations: paid | — | yes | roster-only | — | — |
+| Registrations: pending / waitlist / history | — | yes | — | — | — |
 | Registrations: refund-queue group | if non-empty | yes | if non-empty | if non-empty | if non-empty |
 | Attendee chips (public page) | — | yes | yes | — | yes |
 | Players list (organizer panel) | — | — | yes | — | — |
@@ -142,6 +143,17 @@ the refund deadline lands in `refund_requested`, and hiding the whole
 section on `started`/`finished` would leave the organizer no screen on
 which to approve or deny that request. It renders only when the queue is
 non-empty, so the common case is still a clean page.
+
+**Amended 2026-09-04.** The paid group also survives into `started`. As
+first written, this matrix and PR 5's button gating each matched their own
+section but never intersected: remove renders only for
+`paid`/`pending_payment`/`waitlisted`, none of which were visible once the
+event began — so the feature was unreachable in its headline case, a
+no-show, which is by definition discovered after the start. On `started`
+the paid group renders roster-style: the Refund button is suppressed
+(refund-vs-keep becomes a Stripe-dashboard decision there), leaving only
+Remove. Removing then also drops the player from the tournament — see
+below.
 
 Two readings made explicit, since "the players section" is ambiguous —
 there are two of them:
@@ -207,6 +219,18 @@ validates there — never trusting the client's view of the row.
 
 The existing `/refund` endpoint is untouched; its "nothing was paid" 409
 simply becomes unreachable from the UI rather than being papered over.
+
+#### Tournament roster (added 2026-09-04)
+
+`tournament_players` is snapshotted from paid registrations when the event
+starts and nothing else writes it, so a player removed after the start
+would keep being paired. `RemoveRegistration` therefore also drops them
+(`DropTournamentPlayerByEventUser`), which is exactly what the organizer's
+existing Drop button does: future rounds skip them, results they already
+played stay on the books. It is a no-op before the start, for events with
+no tournament, and for an already-dropped player — whose original
+`dropped_at` is preserved rather than restamped, so a self-drop keeps its
+real time.
 
 #### Money safety
 
