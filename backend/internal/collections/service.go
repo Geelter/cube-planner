@@ -201,13 +201,20 @@ type WantlistItem struct {
 	MissingQuantity int32
 	CubeQuantity    int32
 	OwnedQuantity   int32
+	SetCode         string
+	SetName         string
+	CollectorNumber string
 }
 
-// Wantlist computes cube-minus-collection at oracle level, on demand,
-// never stored. Cube visibility follows the cubes rule: private cubes
-// 404 for non-owners (no existence leak). No dependency on the cubes
-// package — the same GetCube query enforces it here.
-func (s *Service) Wantlist(ctx context.Context, cubeID, userID uuid.UUID) (string, []WantlistItem, int64, error) {
+// Wantlist computes cube-minus-collection on demand, never stored.
+// matchPrinting switches ownership from oracle level (any printing
+// satisfies a slot) to printing level (the cube's exact printing must be
+// owned). Cube visibility follows the cubes rule: private cubes 404 for
+// non-owners (no existence leak). No dependency on the cubes package —
+// the same GetCube query enforces it here.
+func (s *Service) Wantlist(
+	ctx context.Context, cubeID, userID uuid.UUID, matchPrinting bool,
+) (string, []WantlistItem, int64, error) {
 	cube, err := s.queries.GetCube(ctx, cubeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil, 0, ErrCubeNotFound
@@ -218,22 +225,47 @@ func (s *Service) Wantlist(ctx context.Context, cubeID, userID uuid.UUID) (strin
 	if cube.Visibility == "private" && cube.OwnerID != userID {
 		return "", nil, 0, ErrCubeNotFound
 	}
-	rows, err := s.queries.GetCubeWantlist(ctx, db.GetCubeWantlistParams{
-		CubeID: cubeID, UserID: userID,
-	})
-	if err != nil {
-		return "", nil, 0, err
-	}
-	items := make([]WantlistItem, len(rows))
-	var totalMissing int64
-	for i, r := range rows {
-		items[i] = WantlistItem{
-			OracleID: r.OracleID, ScryfallID: r.ScryfallID, Name: r.Name,
-			ManaCost: r.ManaCost, ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
-			MissingQuantity: r.MissingQuantity, CubeQuantity: r.CubeQuantity,
-			OwnedQuantity: r.OwnedQuantity,
+
+	var items []WantlistItem
+	if matchPrinting {
+		rows, err := s.queries.GetCubeWantlistByPrinting(ctx, db.GetCubeWantlistByPrintingParams{
+			CubeID: cubeID, UserID: userID,
+		})
+		if err != nil {
+			return "", nil, 0, err
 		}
-		totalMissing += int64(r.MissingQuantity)
+		items = make([]WantlistItem, len(rows))
+		for i, r := range rows {
+			items[i] = WantlistItem{
+				OracleID: r.OracleID, ScryfallID: r.ScryfallID, Name: r.Name,
+				ManaCost: r.ManaCost, ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
+				MissingQuantity: r.MissingQuantity, CubeQuantity: r.CubeQuantity,
+				OwnedQuantity: r.OwnedQuantity, SetCode: r.SetCode, SetName: r.SetName,
+				CollectorNumber: r.CollectorNumber,
+			}
+		}
+	} else {
+		rows, err := s.queries.GetCubeWantlist(ctx, db.GetCubeWantlistParams{
+			CubeID: cubeID, UserID: userID,
+		})
+		if err != nil {
+			return "", nil, 0, err
+		}
+		items = make([]WantlistItem, len(rows))
+		for i, r := range rows {
+			items[i] = WantlistItem{
+				OracleID: r.OracleID, ScryfallID: r.ScryfallID, Name: r.Name,
+				ManaCost: r.ManaCost, ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
+				MissingQuantity: r.MissingQuantity, CubeQuantity: r.CubeQuantity,
+				OwnedQuantity: r.OwnedQuantity, SetCode: r.SetCode, SetName: r.SetName,
+				CollectorNumber: r.CollectorNumber,
+			}
+		}
+	}
+
+	var totalMissing int64
+	for _, it := range items {
+		totalMissing += int64(it.MissingQuantity)
 	}
 	return cube.Name, items, totalMissing, nil
 }

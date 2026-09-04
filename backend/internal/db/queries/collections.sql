@@ -70,7 +70,8 @@ select cc.oracle_id, cc.scryfall_id,
     cc.quantity as cube_quantity,
     coalesce(own.owned, 0)::int as owned_quantity,
     (cc.quantity - coalesce(own.owned, 0))::int as missing_quantity,
-    ca.name, ca.mana_cost, ca.image_small, ca.image_normal
+    ca.name, ca.mana_cost, ca.image_small, ca.image_normal,
+    ca.set_code, ca.set_name, ca.collector_number
 from cube_cards cc
 join cards ca on ca.scryfall_id = cc.scryfall_id
 left join (
@@ -81,4 +82,23 @@ left join (
 ) own on own.oracle_id = cc.oracle_id
 where cc.cube_id = sqlc.arg(cube_id)
   and cc.quantity > coalesce(own.owned, 0)
+order by ca.name;
+
+-- Printing-aware wantlist: ownership counts only the exact printing the
+-- cube calls for, so owning Lightning Bolt (LEB) does not satisfy a slot
+-- asking for (MM2). Same columns as GetCubeWantlist so the service maps
+-- both identically.
+-- name: GetCubeWantlistByPrinting :many
+select cc.oracle_id, cc.scryfall_id,
+    cc.quantity as cube_quantity,
+    coalesce(own.quantity, 0)::int as owned_quantity,
+    (cc.quantity - coalesce(own.quantity, 0))::int as missing_quantity,
+    ca.name, ca.mana_cost, ca.image_small, ca.image_normal,
+    ca.set_code, ca.set_name, ca.collector_number
+from cube_cards cc
+join cards ca on ca.scryfall_id = cc.scryfall_id
+left join collection_items own
+    on own.user_id = sqlc.arg(user_id) and own.scryfall_id = cc.scryfall_id
+where cc.cube_id = sqlc.arg(cube_id)
+  and cc.quantity > coalesce(own.quantity, 0)
 order by ca.name;

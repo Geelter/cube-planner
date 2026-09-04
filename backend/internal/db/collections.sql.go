@@ -135,7 +135,8 @@ select cc.oracle_id, cc.scryfall_id,
     cc.quantity as cube_quantity,
     coalesce(own.owned, 0)::int as owned_quantity,
     (cc.quantity - coalesce(own.owned, 0))::int as missing_quantity,
-    ca.name, ca.mana_cost, ca.image_small, ca.image_normal
+    ca.name, ca.mana_cost, ca.image_small, ca.image_normal,
+    ca.set_code, ca.set_name, ca.collector_number
 from cube_cards cc
 join cards ca on ca.scryfall_id = cc.scryfall_id
 left join (
@@ -164,6 +165,9 @@ type GetCubeWantlistRow struct {
 	ManaCost        string
 	ImageSmall      *string
 	ImageNormal     *string
+	SetCode         string
+	SetName         string
+	CollectorNumber string
 }
 
 // Wantlist: per cube row (already oracle-level), missing = cube quantity
@@ -188,6 +192,82 @@ func (q *Queries) GetCubeWantlist(ctx context.Context, arg GetCubeWantlistParams
 			&i.ManaCost,
 			&i.ImageSmall,
 			&i.ImageNormal,
+			&i.SetCode,
+			&i.SetName,
+			&i.CollectorNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCubeWantlistByPrinting = `-- name: GetCubeWantlistByPrinting :many
+select cc.oracle_id, cc.scryfall_id,
+    cc.quantity as cube_quantity,
+    coalesce(own.quantity, 0)::int as owned_quantity,
+    (cc.quantity - coalesce(own.quantity, 0))::int as missing_quantity,
+    ca.name, ca.mana_cost, ca.image_small, ca.image_normal,
+    ca.set_code, ca.set_name, ca.collector_number
+from cube_cards cc
+join cards ca on ca.scryfall_id = cc.scryfall_id
+left join collection_items own
+    on own.user_id = $1 and own.scryfall_id = cc.scryfall_id
+where cc.cube_id = $2
+  and cc.quantity > coalesce(own.quantity, 0)
+order by ca.name
+`
+
+type GetCubeWantlistByPrintingParams struct {
+	UserID uuid.UUID
+	CubeID uuid.UUID
+}
+
+type GetCubeWantlistByPrintingRow struct {
+	OracleID        uuid.UUID
+	ScryfallID      uuid.UUID
+	CubeQuantity    int32
+	OwnedQuantity   int32
+	MissingQuantity int32
+	Name            string
+	ManaCost        string
+	ImageSmall      *string
+	ImageNormal     *string
+	SetCode         string
+	SetName         string
+	CollectorNumber string
+}
+
+// Printing-aware wantlist: ownership counts only the exact printing the
+// cube calls for, so owning Lightning Bolt (LEB) does not satisfy a slot
+// asking for (MM2). Same columns as GetCubeWantlist so the service maps
+// both identically.
+func (q *Queries) GetCubeWantlistByPrinting(ctx context.Context, arg GetCubeWantlistByPrintingParams) ([]GetCubeWantlistByPrintingRow, error) {
+	rows, err := q.db.Query(ctx, getCubeWantlistByPrinting, arg.UserID, arg.CubeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCubeWantlistByPrintingRow
+	for rows.Next() {
+		var i GetCubeWantlistByPrintingRow
+		if err := rows.Scan(
+			&i.OracleID,
+			&i.ScryfallID,
+			&i.CubeQuantity,
+			&i.OwnedQuantity,
+			&i.MissingQuantity,
+			&i.Name,
+			&i.ManaCost,
+			&i.ImageSmall,
+			&i.ImageNormal,
+			&i.SetCode,
+			&i.SetName,
+			&i.CollectorNumber,
 		); err != nil {
 			return nil, err
 		}
