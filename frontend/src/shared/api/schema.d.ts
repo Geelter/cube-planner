@@ -1490,9 +1490,14 @@ export interface components {
       /** Format: int32 */
       currentRound?: number;
       eventId: string;
+      exists: boolean;
+      /** Format: int32 */
+      paidPlayerCount: number;
       /** Format: int32 */
       plannedRounds: number;
       players: components["schemas"]["TournamentPlayerInfo"][] | null;
+      /** Format: int32 */
+      recommendedRounds: number;
       rounds: components["schemas"]["TournamentRoundInfo"][] | null;
       standings: components["schemas"]["TournamentStandingInfo"][] | null;
     };

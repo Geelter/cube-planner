@@ -48,17 +48,22 @@ type TournamentStandingInfo struct {
 }
 
 type TournamentInfo struct {
-	EventID       uuid.UUID                `json:"eventId"`
-	PlannedRounds int32                    `json:"plannedRounds"`
-	CurrentRound  *int32                   `json:"currentRound,omitempty"`
-	Players       []TournamentPlayerInfo   `json:"players"`
-	Rounds        []TournamentRoundInfo    `json:"rounds"`
-	Standings     []TournamentStandingInfo `json:"standings"`
+	EventID uuid.UUID `json:"eventId"`
+	// Exists is false before the organizer creates the tournament.
+	Exists            bool                     `json:"exists"`
+	PlannedRounds     int32                    `json:"plannedRounds"`
+	RecommendedRounds int32                    `json:"recommendedRounds"`
+	PaidPlayerCount   int32                    `json:"paidPlayerCount"`
+	CurrentRound      *int32                   `json:"currentRound,omitempty"`
+	Players           []TournamentPlayerInfo   `json:"players"`
+	Rounds            []TournamentRoundInfo    `json:"rounds"`
+	Standings         []TournamentStandingInfo `json:"standings"`
 }
 
 func tournamentInfoFrom(d *tournaments.Detail) TournamentInfo {
 	out := TournamentInfo{
-		EventID: d.EventID, PlannedRounds: d.PlannedRounds,
+		EventID: d.EventID, Exists: d.Exists, PlannedRounds: d.PlannedRounds,
+		RecommendedRounds: d.RecommendedRounds, PaidPlayerCount: d.PaidPlayerCount,
 		Players:   make([]TournamentPlayerInfo, len(d.Players)),
 		Rounds:    make([]TournamentRoundInfo, len(d.Rounds)),
 		Standings: make([]TournamentStandingInfo, len(d.Standings)),

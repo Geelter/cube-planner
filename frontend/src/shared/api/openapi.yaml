@@ -1472,6 +1472,11 @@ components:
           type: integer
         eventId:
           type: string
+        exists:
+          type: boolean
+        paidPlayerCount:
+          format: int32
+          type: integer
         plannedRounds:
           format: int32
           type: integer
@@ -1481,6 +1486,9 @@ components:
           type:
             - array
             - "null"
+        recommendedRounds:
+          format: int32
+          type: integer
         rounds:
           items:
             $ref: "#/components/schemas/TournamentRoundInfo"
@@ -1495,7 +1503,10 @@ components:
             - "null"
       required:
         - eventId
+        - exists
         - plannedRounds
+        - recommendedRounds
+        - paidPlayerCount
         - players
         - rounds
         - standings

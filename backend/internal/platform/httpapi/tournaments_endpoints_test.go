@@ -108,10 +108,26 @@ func TestTournamentEndpointsHappyPath(t *testing.T) {
 	myPlayerUserID := meID(t, player)
 	base := fmt.Sprintf("/api/events/%s/tournament", eventID)
 
-	// 404 before creation.
+	// 200 with an empty aggregate before creation, recommending rounds
+	// from the seeded paid roster.
 	resp := player.do(t, http.MethodGet, base, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("pre-creation GET = %d, want 200", resp.StatusCode)
+	}
+	pre := decode[httpapi.TournamentInfo](t, resp)
+	if pre.Exists {
+		t.Fatal("pre-creation GET: exists = true, want false")
+	}
+	if pre.RecommendedRounds != 2 { // ceil(log2(4))
+		t.Fatalf("pre-creation GET: recommendedRounds = %d, want 2", pre.RecommendedRounds)
+	}
+	if pre.PaidPlayerCount != 4 {
+		t.Fatalf("pre-creation GET: paidPlayerCount = %d, want 4", pre.PaidPlayerCount)
+	}
+	// An unknown event id still 404s.
+	resp = player.do(t, http.MethodGet, fmt.Sprintf("/api/events/%s/tournament", uuid.New()), "")
 	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("pre-creation GET = %d, want 404", resp.StatusCode)
+		t.Fatalf("unknown event GET = %d, want 404", resp.StatusCode)
 	}
 	// Non-admin cannot pair.
 	resp = player.do(t, http.MethodPost, base+"/rounds", "")

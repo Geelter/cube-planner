@@ -123,19 +123,53 @@ type RoundDetail struct {
 }
 
 type Detail struct {
-	EventID       uuid.UUID
-	PlannedRounds int32
-	Players       []PlayerDetail
-	Rounds        []RoundDetail
-	Standings     []swiss.Standing
+	EventID uuid.UUID
+	// Exists is false before the organizer creates the tournament. The
+	// endpoint returns 200 with an empty aggregate rather than 404 so the
+	// client has no error state to flicker through, and so a genuinely
+	// missing event stays distinguishable from "no tournament yet".
+	Exists            bool
+	PlannedRounds     int32
+	RecommendedRounds int32
+	PaidPlayerCount   int32
+	Players           []PlayerDetail
+	Rounds            []RoundDetail
+	Standings         []swiss.Standing
 }
 
 // Get returns the whole tournament aggregate. Draft rounds are included
-// only for admins; standings never include draft matches.
+// only for admins; standings never include draft matches. Before the
+// organizer creates the tournament, Get still succeeds — it returns an
+// empty aggregate with Exists=false and a rounds recommendation based
+// on the live paid roster, rather than 404.
 func (s *Service) Get(ctx context.Context, eventID uuid.UUID, admin bool) (*Detail, error) {
+	ev, err := s.queries.GetEvent(ctx, eventID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrEventNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Drafts are invisible (same convention as internal/events).
+	if ev.Status == "draft" {
+		return nil, ErrEventNotFound
+	}
+	// The recommendation tracks the live paid roster, so it stays useful
+	// while registrations are still moving.
+	roster, err := s.queries.ListPaidRegistrationUsers(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	recommended := defaultRounds(len(roster))
+
 	tour, err := s.queries.GetTournamentByEvent(ctx, eventID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrTournamentNotFound
+		return &Detail{
+			EventID:           eventID,
+			Exists:            false,
+			RecommendedRounds: recommended,
+			PaidPlayerCount:   int32(len(roster)),
+		}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -153,7 +187,10 @@ func (s *Service) Get(ctx context.Context, eventID uuid.UUID, admin bool) (*Deta
 		return nil, err
 	}
 
-	d := &Detail{EventID: eventID, PlannedRounds: tour.PlannedRounds}
+	d := &Detail{
+		EventID: eventID, Exists: true, PlannedRounds: tour.PlannedRounds,
+		RecommendedRounds: recommended, PaidPlayerCount: int32(len(roster)),
+	}
 	swissPlayers := make([]swiss.Player, len(players))
 	for i, p := range players {
 		d.Players = append(d.Players, PlayerDetail{
