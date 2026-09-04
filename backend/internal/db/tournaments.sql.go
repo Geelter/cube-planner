@@ -281,6 +281,45 @@ func (q *Queries) InsertMatch(ctx context.Context, arg InsertMatchParams) (Match
 	return i, err
 }
 
+const insertMatchResultReport = `-- name: InsertMatchResultReport :one
+insert into match_result_reports (
+    match_id, reported_by, is_organizer, p1_games, p2_games)
+values (
+    $1, $2, $3,
+    $4, $5)
+returning id, match_id, reported_by, is_organizer, p1_games, p2_games, reported_at
+`
+
+type InsertMatchResultReportParams struct {
+	MatchID     uuid.UUID
+	ReportedBy  uuid.UUID
+	IsOrganizer bool
+	P1Games     int32
+	P2Games     int32
+}
+
+func (q *Queries) InsertMatchResultReport(ctx context.Context, arg InsertMatchResultReportParams) (MatchResultReport, error) {
+	row := q.db.QueryRow(
+		ctx, insertMatchResultReport,
+		arg.MatchID,
+		arg.ReportedBy,
+		arg.IsOrganizer,
+		arg.P1Games,
+		arg.P2Games,
+	)
+	var i MatchResultReport
+	err := row.Scan(
+		&i.ID,
+		&i.MatchID,
+		&i.ReportedBy,
+		&i.IsOrganizer,
+		&i.P1Games,
+		&i.P2Games,
+		&i.ReportedAt,
+	)
+	return i, err
+}
+
 const insertTournamentPlayer = `-- name: InsertTournamentPlayer :one
 insert into tournament_players (tournament_id, user_id)
 values ($1, $2)
@@ -303,6 +342,58 @@ func (q *Queries) InsertTournamentPlayer(ctx context.Context, arg InsertTourname
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listMatchResultReportsForTournament = `-- name: ListMatchResultReportsForTournament :many
+select rr.id, rr.match_id, rr.reported_by, rr.is_organizer, rr.p1_games, rr.p2_games, rr.reported_at, u.display_name
+from match_result_reports rr
+join matches mt on mt.id = rr.match_id
+join rounds rd on rd.id = mt.round_id
+join users u on u.id = rr.reported_by
+where rd.tournament_id = $1
+order by rr.match_id, rr.reported_at
+`
+
+type ListMatchResultReportsForTournamentRow struct {
+	ID          uuid.UUID
+	MatchID     uuid.UUID
+	ReportedBy  uuid.UUID
+	IsOrganizer bool
+	P1Games     int32
+	P2Games     int32
+	ReportedAt  time.Time
+	DisplayName string
+}
+
+// Every report for one tournament, oldest first, with the reporter's name
+// for the organizer's dispute history.
+func (q *Queries) ListMatchResultReportsForTournament(ctx context.Context, tournamentID uuid.UUID) ([]ListMatchResultReportsForTournamentRow, error) {
+	rows, err := q.db.Query(ctx, listMatchResultReportsForTournament, tournamentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMatchResultReportsForTournamentRow
+	for rows.Next() {
+		var i ListMatchResultReportsForTournamentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MatchID,
+			&i.ReportedBy,
+			&i.IsOrganizer,
+			&i.P1Games,
+			&i.P2Games,
+			&i.ReportedAt,
+			&i.DisplayName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listMatchesForRound = `-- name: ListMatchesForRound :many
@@ -512,6 +603,20 @@ func (q *Queries) ListTournamentPlayers(ctx context.Context, tournamentID uuid.U
 		return nil, err
 	}
 	return items, nil
+}
+
+const matchHasOrganizerReport = `-- name: MatchHasOrganizerReport :one
+select exists (
+    select 1 from match_result_reports
+    where match_id = $1 and is_organizer
+)
+`
+
+func (q *Queries) MatchHasOrganizerReport(ctx context.Context, matchID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, matchHasOrganizerReport, matchID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const setMatchPlayers = `-- name: SetMatchPlayers :one

@@ -737,6 +737,12 @@ func (s *Service) ReportResult(ctx context.Context, eventID, matchID, callerID u
 				return ErrResultLocked
 			}
 		}
+		if _, err := qtx.InsertMatchResultReport(ctx, db.InsertMatchResultReportParams{
+			MatchID: m.ID, ReportedBy: callerID, IsOrganizer: admin,
+			P1Games: r.P1Games, P2Games: r.P2Games,
+		}); err != nil {
+			return err
+		}
 		_, err = qtx.UpdateMatchResult(ctx, db.UpdateMatchResultParams{
 			ID: m.ID, P1Games: &r.P1Games, P2Games: &r.P2Games, Draws: &r.Draws,
 			ReportedBy: pgUUID(&callerID),

@@ -305,6 +305,78 @@ func TestReportResultPersistsZeroDraws(t *testing.T) {
 	}
 }
 
+// The report log is append-only: every reported result is preserved even
+// when a later report overwrites the authoritative result on the match
+// itself (last write wins there, unchanged).
+func TestReportResultAppendsToTheLog(t *testing.T) {
+	f := newFixture(t, 2)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Publish(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	d := f.detail(t)
+	m := d.Rounds[0].Matches[0]
+	var p1User, p2User uuid.UUID
+	for _, p := range d.Players {
+		if p.ID == m.Player1ID {
+			p1User = p.UserID
+		}
+		if m.Player2ID != nil && p.ID == *m.Player2ID {
+			p2User = p.UserID
+		}
+	}
+	tour, err := f.q.GetTournamentByEvent(ctx, f.eventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, p1User, false,
+		Result{P1Games: 2, P2Games: 1}); err != nil {
+		t.Fatalf("player A report = %v", err)
+	}
+	reports, err := f.q.ListMatchResultReportsForTournament(ctx, tour.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 1 {
+		t.Fatalf("reports after A = %d, want 1", len(reports))
+	}
+	if reports[0].IsOrganizer {
+		t.Error("player report must not be flagged organizer")
+	}
+	if reports[0].P1Games != 2 || reports[0].P2Games != 1 {
+		t.Errorf("report A score = %d-%d, want 2-1", reports[0].P1Games, reports[0].P2Games)
+	}
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, p2User, false,
+		Result{P1Games: 1, P2Games: 2}); err != nil {
+		t.Fatalf("player B report = %v", err)
+	}
+	reports, err = f.q.ListMatchResultReportsForTournament(ctx, tour.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 2 {
+		t.Fatalf("reports after B = %d, want 2 (both preserved)", len(reports))
+	}
+
+	after := f.detail(t)
+	var stored MatchDetail
+	for _, rd := range after.Rounds {
+		for _, rm := range rd.Matches {
+			if rm.ID == m.ID {
+				stored = rm
+			}
+		}
+	}
+	if stored.P1Games == nil || *stored.P1Games != 1 || stored.P2Games == nil || *stored.P2Games != 2 {
+		t.Fatalf("stored result = %v-%v, want 1-2 (last write wins)", stored.P1Games, stored.P2Games)
+	}
+}
+
 func TestDropAndUndropTiming(t *testing.T) {
 	f := newFixture(t, 4)
 	ctx := context.Background()
