@@ -1041,6 +1041,9 @@ components:
     ImportResolveLine:
       additionalProperties: false
       properties:
+        collectorNumber:
+          description: Parsed collector-number selector, empty if none
+          type: string
         lineNumber:
           format: int32
           type: integer
@@ -1051,11 +1054,15 @@ components:
           type: integer
         raw:
           type: string
+        setCode:
+          description: Parsed set selector, empty if none
+          type: string
         status:
           enum:
             - matched
             - ambiguous
             - unmatched
+            - printing-not-found
           type: string
         suggestions:
           items:
@@ -1068,6 +1075,8 @@ components:
         - raw
         - quantity
         - status
+        - setCode
+        - collectorNumber
       type: object
     Item:
       additionalProperties: false

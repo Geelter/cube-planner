@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
@@ -25,6 +25,61 @@ function cardSummaryFromMatch(match: ImportCardMatch): CardSummary {
     colors: match.colors ?? [],
     imageSmall: match.imageSmall,
   };
+}
+
+// Echoes what the parser understood from the pasted selector, e.g.
+// " (ATQ) 83a" or " (ATQ)" — empty when the line had no set selector.
+function parsedSelector(l: { setCode: string; collectorNumber: string }): string {
+  if (!l.setCode) return "";
+  const set = l.setCode.toUpperCase();
+  return l.collectorNumber ? ` (${set}) ${l.collectorNumber}` : ` (${set})`;
+}
+
+// Shared by the ambiguous and printing-not-found groups: both offer the
+// same kind of choice (pick a printing from suggestions, or skip).
+function ChoiceSection({
+  heading,
+  lines,
+  choices,
+  setChoices,
+}: {
+  heading: string;
+  lines: ImportResolveLine[];
+  choices: Map<number, LineChoice>;
+  setChoices: Dispatch<SetStateAction<Map<number, LineChoice>>>;
+}) {
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-fg">{heading}</h3>
+      <ul className="flex flex-col gap-2">
+        {lines.map((l) => {
+          const selectId = `import-choice-${l.lineNumber}`;
+          return (
+            <li key={l.lineNumber} className="flex flex-col gap-1">
+              <Label htmlFor={selectId}>{m.collection_import_choice_label({ raw: l.raw })}</Label>
+              <select
+                id={selectId}
+                value={choices.get(l.lineNumber) ?? ""}
+                onChange={(e) =>
+                  setChoices((prev) =>
+                    new Map(prev).set(l.lineNumber, e.target.value === "" ? null : e.target.value),
+                  )
+                }
+                className="rounded-md border border-border bg-surface p-1.5 text-sm text-fg"
+              >
+                {(l.suggestions ?? []).map((s) => (
+                  <option key={s.scryfallId} value={s.scryfallId}>
+                    {s.name} ({s.setName} · #{s.collectorNumber})
+                  </option>
+                ))}
+                <option value="">{m.collection_import_skip()}</option>
+              </select>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
 }
 
 function toResolvedItems(
@@ -90,6 +145,7 @@ export function CardListImportDialog({
 
   const matched = lines?.filter((l) => l.status === "matched") ?? [];
   const ambiguous = lines?.filter((l) => l.status === "ambiguous") ?? [];
+  const printingNotFound = lines?.filter((l) => l.status === "printing-not-found") ?? [];
   const unmatched = lines?.filter((l) => l.status === "unmatched") ?? [];
   const items = lines ? toResolvedItems(lines, choices) : [];
 
@@ -147,49 +203,27 @@ export function CardListImportDialog({
                 {matched.map((l) => (
                   <li key={l.lineNumber}>
                     {l.quantity}× {l.match?.name}
+                    {parsedSelector(l)}
                   </li>
                 ))}
               </ul>
             </section>
           )}
           {ambiguous.length > 0 && (
-            <section>
-              <h3 className="text-sm font-semibold text-fg">
-                {m.collection_import_ambiguous({ count: ambiguous.length })}
-              </h3>
-              <ul className="flex flex-col gap-2">
-                {ambiguous.map((l) => {
-                  const selectId = `import-choice-${l.lineNumber}`;
-                  return (
-                    <li key={l.lineNumber} className="flex flex-col gap-1">
-                      <Label htmlFor={selectId}>
-                        {m.collection_import_choice_label({ raw: l.raw })}
-                      </Label>
-                      <select
-                        id={selectId}
-                        value={choices.get(l.lineNumber) ?? ""}
-                        onChange={(e) =>
-                          setChoices((prev) =>
-                            new Map(prev).set(
-                              l.lineNumber,
-                              e.target.value === "" ? null : e.target.value,
-                            ),
-                          )
-                        }
-                        className="rounded-md border border-border bg-surface p-1.5 text-sm text-fg"
-                      >
-                        {(l.suggestions ?? []).map((s) => (
-                          <option key={s.scryfallId} value={s.scryfallId}>
-                            {s.name} ({s.setName} · #{s.collectorNumber})
-                          </option>
-                        ))}
-                        <option value="">{m.collection_import_skip()}</option>
-                      </select>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
+            <ChoiceSection
+              heading={m.collection_import_ambiguous({ count: ambiguous.length })}
+              lines={ambiguous}
+              choices={choices}
+              setChoices={setChoices}
+            />
+          )}
+          {printingNotFound.length > 0 && (
+            <ChoiceSection
+              heading={m.collection_import_printing_not_found({ count: printingNotFound.length })}
+              lines={printingNotFound}
+              choices={choices}
+              setChoices={setChoices}
+            />
           )}
           {unmatched.length > 0 && (
             <section>

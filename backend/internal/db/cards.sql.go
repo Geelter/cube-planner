@@ -171,6 +171,74 @@ func (q *Queries) FinishSyncRunSuccess(ctx context.Context, arg FinishSyncRunSuc
 	return err
 }
 
+const getCardsByNameAndSet = `-- name: GetCardsByNameAndSet :many
+select scryfall_id, oracle_id, name, normalized_name, mana_cost, type_line,
+    set_code, set_name, collector_number, image_small, image_normal, colors
+from cards
+where (normalized_name, lower(set_code)) in (
+    select nm.name, lower(sc.set_code)
+    from unnest($1::text[]) with ordinality as nm(name, idx)
+    join unnest($2::text[]) with ordinality as sc(set_code, idx)
+        using (idx)
+)
+order by normalized_name, lower(set_code), collector_number
+`
+
+type GetCardsByNameAndSetParams struct {
+	Names    []string
+	SetCodes []string
+}
+
+type GetCardsByNameAndSetRow struct {
+	ScryfallID      uuid.UUID
+	OracleID        uuid.UUID
+	Name            string
+	NormalizedName  string
+	ManaCost        string
+	TypeLine        string
+	SetCode         string
+	SetName         string
+	CollectorNumber string
+	ImageSmall      *string
+	ImageNormal     *string
+	Colors          []string
+}
+
+// Every printing of a name within one set: one row → matched, several →
+// ambiguous (e.g. the four Antiquities Urza's Mine variants).
+func (q *Queries) GetCardsByNameAndSet(ctx context.Context, arg GetCardsByNameAndSetParams) ([]GetCardsByNameAndSetRow, error) {
+	rows, err := q.db.Query(ctx, getCardsByNameAndSet, arg.Names, arg.SetCodes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCardsByNameAndSetRow
+	for rows.Next() {
+		var i GetCardsByNameAndSetRow
+		if err := rows.Scan(
+			&i.ScryfallID,
+			&i.OracleID,
+			&i.Name,
+			&i.NormalizedName,
+			&i.ManaCost,
+			&i.TypeLine,
+			&i.SetCode,
+			&i.SetName,
+			&i.CollectorNumber,
+			&i.ImageSmall,
+			&i.ImageNormal,
+			&i.Colors,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCardsByNormalizedNames = `-- name: GetCardsByNormalizedNames :many
 with matches as (
     select distinct on (oracle_id) scryfall_id, oracle_id, name, normalized_name, released_at, set_code, set_name, collector_number, rarity, layout, mana_cost, cmc, type_line, oracle_text, colors, color_identity, promo, image_small, image_normal, back_image_small, back_image_normal, updated_at, edhrec_rank
@@ -211,6 +279,77 @@ func (q *Queries) GetCardsByNormalizedNames(ctx context.Context, names []string)
 	var items []GetCardsByNormalizedNamesRow
 	for rows.Next() {
 		var i GetCardsByNormalizedNamesRow
+		if err := rows.Scan(
+			&i.ScryfallID,
+			&i.OracleID,
+			&i.Name,
+			&i.NormalizedName,
+			&i.ManaCost,
+			&i.TypeLine,
+			&i.SetCode,
+			&i.SetName,
+			&i.CollectorNumber,
+			&i.ImageSmall,
+			&i.ImageNormal,
+			&i.Colors,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCardsBySetAndCollectorNumbers = `-- name: GetCardsBySetAndCollectorNumbers :many
+select distinct on (lower(set_code), lower(collector_number))
+    scryfall_id, oracle_id, name, normalized_name, mana_cost, type_line,
+    set_code, set_name, collector_number, image_small, image_normal, colors
+from cards
+where (lower(set_code), lower(collector_number)) in (
+    select lower(sc.set_code), lower(cn.collector_number)
+    from unnest($1::text[]) with ordinality as sc(set_code, idx)
+    join unnest($2::text[]) with ordinality as cn(collector_number, idx)
+        using (idx)
+)
+order by lower(set_code), lower(collector_number), promo, released_at desc, (image_small is null)
+`
+
+type GetCardsBySetAndCollectorNumbersParams struct {
+	SetCodes         []string
+	CollectorNumbers []string
+}
+
+type GetCardsBySetAndCollectorNumbersRow struct {
+	ScryfallID      uuid.UUID
+	OracleID        uuid.UUID
+	Name            string
+	NormalizedName  string
+	ManaCost        string
+	TypeLine        string
+	SetCode         string
+	SetName         string
+	CollectorNumber string
+	ImageSmall      *string
+	ImageNormal     *string
+	Colors          []string
+}
+
+// Exact printings for import lines carrying "(SET) <collector-number>".
+// Batched over parallel arrays so 500 lines stay one round trip. The
+// tie-break mirrors the other card lookups: (set_code, collector_number)
+// has no unique index, so a duplicate pair must resolve stably.
+func (q *Queries) GetCardsBySetAndCollectorNumbers(ctx context.Context, arg GetCardsBySetAndCollectorNumbersParams) ([]GetCardsBySetAndCollectorNumbersRow, error) {
+	rows, err := q.db.Query(ctx, getCardsBySetAndCollectorNumbers, arg.SetCodes, arg.CollectorNumbers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCardsBySetAndCollectorNumbersRow
+	for rows.Next() {
+		var i GetCardsBySetAndCollectorNumbersRow
 		if err := rows.Scan(
 			&i.ScryfallID,
 			&i.OracleID,

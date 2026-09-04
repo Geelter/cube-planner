@@ -151,6 +151,37 @@ select scryfall_id, oracle_id, name, normalized_name, mana_cost, type_line,
     set_code, set_name, collector_number, image_small, image_normal, colors
 from matches;
 
+-- Exact printings for import lines carrying "(SET) <collector-number>".
+-- Batched over parallel arrays so 500 lines stay one round trip. The
+-- tie-break mirrors the other card lookups: (set_code, collector_number)
+-- has no unique index, so a duplicate pair must resolve stably.
+-- name: GetCardsBySetAndCollectorNumbers :many
+select distinct on (lower(set_code), lower(collector_number))
+    scryfall_id, oracle_id, name, normalized_name, mana_cost, type_line,
+    set_code, set_name, collector_number, image_small, image_normal, colors
+from cards
+where (lower(set_code), lower(collector_number)) in (
+    select lower(sc.set_code), lower(cn.collector_number)
+    from unnest(sqlc.arg(set_codes)::text[]) with ordinality as sc(set_code, idx)
+    join unnest(sqlc.arg(collector_numbers)::text[]) with ordinality as cn(collector_number, idx)
+        using (idx)
+)
+order by lower(set_code), lower(collector_number), promo, released_at desc, (image_small is null);
+
+-- Every printing of a name within one set: one row → matched, several →
+-- ambiguous (e.g. the four Antiquities Urza's Mine variants).
+-- name: GetCardsByNameAndSet :many
+select scryfall_id, oracle_id, name, normalized_name, mana_cost, type_line,
+    set_code, set_name, collector_number, image_small, image_normal, colors
+from cards
+where (normalized_name, lower(set_code)) in (
+    select nm.name, lower(sc.set_code)
+    from unnest(sqlc.arg(names)::text[]) with ordinality as nm(name, idx)
+    join unnest(sqlc.arg(set_codes)::text[]) with ordinality as sc(set_code, idx)
+        using (idx)
+)
+order by normalized_name, lower(set_code), collector_number;
+
 -- Fuzzy suggestions for one unresolved import line. Same <% + GUC
 -- threshold setup as autocomplete (see above for why the operator form
 -- matters); oracle-level with a representative printing.

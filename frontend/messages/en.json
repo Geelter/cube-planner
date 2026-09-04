@@ -158,6 +158,7 @@
   "collection_import_resolve_button": "Preview import",
   "collection_import_matched": "Matched ({count})",
   "collection_import_ambiguous": "Needs a choice ({count})",
+  "collection_import_printing_not_found": "Printing not found — pick another ({count})",
   "collection_import_unmatched": "Not found ({count})",
   "collection_import_skip": "Skip this line",
   "collection_import_choice_label": "Match for \"{raw}\"",

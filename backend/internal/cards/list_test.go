@@ -56,6 +56,52 @@ func TestParseImportTextSkipsBlankLinesButCountsThem(t *testing.T) {
 	}
 }
 
+func TestParseSetAndCollectorNumber(t *testing.T) {
+	tests := []struct {
+		name    string
+		line    string
+		wantQty int32
+		wantNm  string
+		wantSet string
+		wantCN  string
+		wantOK  bool
+	}{
+		{"bare name", "Lightning Bolt", 1, "Lightning Bolt", "", "", true},
+		{"qty and name", "4 Lightning Bolt", 4, "Lightning Bolt", "", "", true},
+		{"qty x and name", "4x Lightning Bolt", 4, "Lightning Bolt", "", "", true},
+		{"name and set", "Lightning Bolt (LEB)", 1, "Lightning Bolt", "leb", "", true},
+		{"qty name set", "4 Lightning Bolt (leb)", 4, "Lightning Bolt", "leb", "", true},
+		{"full", "1 Urza's Mine (ATQ) 83a", 1, "Urza's Mine", "atq", "83a", true},
+		{"numeric set", "1 Lightning Bolt (2X2) 117", 1, "Lightning Bolt", "2x2", "117", true},
+		{"star collector number", "1 Arcane Signet (SLD) ★12", 1, "Arcane Signet", "sld", "★12", true},
+		// A parenthesized token that is not set-shaped stays part of the name.
+		{"paren name unglued", "B.F.M. (Big Furry Monster)", 1, "B.F.M. (Big Furry Monster)", "", "", true},
+		{"paren name unhinged", "Erase (Not the Urza's Legacy One)", 1, "Erase (Not the Urza's Legacy One)", "", "", true},
+		// A bare trailing number is part of the name, not a collector number.
+		{"no set means no collector number", "Fire // Ice 128", 1, "Fire // Ice 128", "", "", true},
+		{"quantity over cap", "1000 Lightning Bolt", 0, "", "", "", false},
+		// Regression: a name that begins with a big number is not a quantity.
+		{"numeric name", "1996 World Champion", 1, "1996 World Champion", "", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseLine(1, tt.line)
+			if got.OK != tt.wantOK {
+				t.Fatalf("OK: want %v, got %v", tt.wantOK, got.OK)
+			}
+			if !tt.wantOK {
+				return
+			}
+			if got.Quantity != tt.wantQty || got.Name != tt.wantNm ||
+				got.SetCode != tt.wantSet || got.CollectorNumber != tt.wantCN {
+				t.Fatalf("want qty=%d name=%q set=%q cn=%q, got qty=%d name=%q set=%q cn=%q",
+					tt.wantQty, tt.wantNm, tt.wantSet, tt.wantCN,
+					got.Quantity, got.Name, got.SetCode, got.CollectorNumber)
+			}
+		})
+	}
+}
+
 func TestParseImportTextLineCap(t *testing.T) {
 	text := strings.Repeat("Lightning Bolt\n", MaxImportLines)
 	if _, err := ParseImportText(text); err != nil {

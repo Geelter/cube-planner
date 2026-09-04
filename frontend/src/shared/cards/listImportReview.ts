@@ -8,7 +8,7 @@ export function defaultChoices(lines: ImportResolveLine[]): Map<number, LineChoi
   for (const line of lines) {
     if (line.status === "matched" && line.match) {
       choices.set(line.lineNumber, line.match.scryfallId);
-    } else if (line.status === "ambiguous") {
+    } else if (line.status === "ambiguous" || line.status === "printing-not-found") {
       choices.set(line.lineNumber, line.suggestions?.[0]?.scryfallId ?? null);
     } else {
       choices.set(line.lineNumber, null);

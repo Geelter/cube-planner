@@ -277,18 +277,23 @@ func TestSearchPopularityOrdering(t *testing.T) {
 }
 
 type resolveListLineBody struct {
-	LineNumber int32  `json:"lineNumber"`
-	Raw        string `json:"raw"`
-	Quantity   int32  `json:"quantity"`
-	Status     string `json:"status"`
-	Match      *struct {
-		ScryfallID string   `json:"scryfallId"`
-		Name       string   `json:"name"`
-		Colors     []string `json:"colors"`
+	LineNumber      int32  `json:"lineNumber"`
+	Raw             string `json:"raw"`
+	Quantity        int32  `json:"quantity"`
+	Status          string `json:"status"`
+	SetCode         string `json:"setCode"`
+	CollectorNumber string `json:"collectorNumber"`
+	Match           *struct {
+		ScryfallID      string   `json:"scryfallId"`
+		Name            string   `json:"name"`
+		SetCode         string   `json:"setCode"`
+		CollectorNumber string   `json:"collectorNumber"`
+		Colors          []string `json:"colors"`
 	} `json:"match"`
 	Suggestions []struct {
-		ScryfallID string `json:"scryfallId"`
-		Name       string `json:"name"`
+		ScryfallID      string `json:"scryfallId"`
+		Name            string `json:"name"`
+		CollectorNumber string `json:"collectorNumber"`
 	} `json:"suggestions"`
 }
 
@@ -343,6 +348,45 @@ func TestResolveCardListEndpoint(t *testing.T) {
 	}
 	if body.Lines[4].Status != "unmatched" {
 		t.Fatalf("bad-quantity line = %+v, want unmatched", body.Lines[4])
+	}
+}
+
+// TestResolveCardListEndpointPrintingSelectors covers the wire-level
+// contract for Task 25: setCode/collectorNumber echoed on every line, and
+// the printing-not-found status when the name is real but the requested
+// printing is not.
+func TestResolveCardListEndpointPrintingSelectors(t *testing.T) {
+	srv, pool, q := newCardsServerWithSession(t)
+	c := loggedInClient(t, srv, q, "imp-printings@test.dev")
+
+	boltO := uuid.New()
+	leb := uuid.New()
+	seedCard(t, pool, testCard{scryfallID: leb, oracleID: boltO, name: "Lightning Bolt", setCode: "leb"})
+	seedCard(t, pool, testCard{scryfallID: uuid.New(), oracleID: boltO, name: "Lightning Bolt", setCode: "mm2"})
+
+	resp := c.do(t, "POST", "/api/cards/resolve-list",
+		`{"text":"1 Lightning Bolt (LEB)\n1 Lightning Bolt (XYZ) 999"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("resolve = %d, want 200", resp.StatusCode)
+	}
+	body := decode[resolveListBody](t, resp)
+	if len(body.Lines) != 2 {
+		t.Fatalf("lines = %d, want 2", len(body.Lines))
+	}
+
+	bySet := body.Lines[0]
+	if bySet.Status != "matched" || bySet.SetCode != "leb" ||
+		bySet.Match == nil || bySet.Match.ScryfallID != leb.String() {
+		t.Fatalf("set-only line = %+v, want matched to the leb printing", bySet)
+	}
+
+	notFound := body.Lines[1]
+	if notFound.Status != "printing-not-found" || notFound.SetCode != "xyz" ||
+		notFound.CollectorNumber != "999" {
+		t.Fatalf("bad-printing line = %+v, want printing-not-found echoing xyz/999", notFound)
+	}
+	if len(notFound.Suggestions) != 2 {
+		t.Fatalf("suggestions = %d, want both real printings", len(notFound.Suggestions))
 	}
 }
 
