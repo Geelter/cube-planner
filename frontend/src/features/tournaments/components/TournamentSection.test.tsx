@@ -8,6 +8,7 @@ const report = vi.fn();
 const playerAct = vi.fn();
 const playerActState: { isPending: boolean } = { isPending: false };
 let tournamentData: TournamentInfo | undefined;
+let tournamentError: Error | null = null;
 let eventStatus = "started";
 
 vi.mock("@/features/auth/api", () => ({
@@ -16,7 +17,7 @@ vi.mock("@/features/auth/api", () => ({
 vi.mock("../api", async (orig) => ({
   ...(await orig()),
   useEventStatus: () => ({ data: { status: eventStatus } }),
-  useTournament: () => ({ data: tournamentData, isPending: false, error: null }),
+  useTournament: () => ({ data: tournamentData, isPending: false, error: tournamentError }),
   useReportResult: () => ({ mutate: report, isPending: false, error: null }),
   usePlayerAction: () => ({ mutate: playerAct, error: null, ...playerActState }),
 }));
@@ -27,6 +28,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   playerActState.isPending = false;
+  tournamentError = null;
 });
 
 function renderSection() {
@@ -45,7 +47,10 @@ function renderSection() {
 function baseTournament(): TournamentInfo {
   return {
     eventId: "e1",
+    exists: true,
     plannedRounds: 2,
+    recommendedRounds: 2,
+    paidPlayerCount: 2,
     currentRound: 1,
     players: [
       { id: "pl1", userId: "u1", displayName: "Ann", dropped: false },
@@ -185,4 +190,22 @@ test("renders nothing before the event starts", () => {
   const { container } = renderSection();
   expect(container).toBeEmptyDOMElement();
   eventStatus = "started";
+});
+
+test("renders nothing when no tournament exists yet", () => {
+  tournamentData = { ...baseTournament(), exists: false, rounds: [] };
+  const { container } = renderSection();
+  expect(container).toBeEmptyDOMElement();
+});
+
+test("keeps the section rendered while a background refetch is in flight", () => {
+  tournamentData = baseTournament();
+  const { rerenderSame } = renderSection();
+  expect(screen.getByRole("heading", { name: /standings/i })).toBeInTheDocument();
+  // A single failed 10s poll: keepPreviousData means `data` stays the last
+  // good aggregate even though the hook now also carries an error.
+  tournamentError = new Error("network error");
+  rerenderSame();
+  expect(screen.getByRole("heading", { name: /standings/i })).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });

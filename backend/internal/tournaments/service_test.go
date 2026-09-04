@@ -2,6 +2,7 @@ package tournaments
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -107,8 +108,8 @@ func (f *fixture) reportAll(t *testing.T, roundNumber int32) {
 func TestLazyCreationSnapshotsPaidRoster(t *testing.T) {
 	f := newFixture(t, 4)
 	ctx := context.Background()
-	if _, err := f.svc.Get(ctx, f.eventID, true); err != ErrTournamentNotFound {
-		t.Fatalf("pre-creation Get err = %v, want ErrTournamentNotFound", err)
+	if d, err := f.svc.Get(ctx, f.eventID, true); err != nil || d.Exists {
+		t.Fatalf("pre-creation Get = (%+v, %v), want Exists=false, err=nil", d, err)
 	}
 	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
 		t.Fatal(err)
@@ -467,5 +468,65 @@ func TestFinishGuardBlocksOpenRound(t *testing.T) {
 	}
 	if open != 0 {
 		t.Fatalf("open rounds after complete = %d, want 0", open)
+	}
+}
+
+// ---- PR 6: empty tournament aggregate ----
+
+func TestGetBeforeTournamentExistsReportsRecommendation(t *testing.T) {
+	f := newFixture(t, 12)
+	d, err := f.svc.Get(context.Background(), f.eventID, true)
+	if err != nil {
+		t.Fatalf("Get must succeed before a tournament exists: %v", err)
+	}
+	if d.Exists {
+		t.Fatal("Exists must be false when no tournament row exists")
+	}
+	// ceil(log2(12)) = 4
+	if d.RecommendedRounds != 4 {
+		t.Fatalf("want RecommendedRounds 4 for 12 players, got %d", d.RecommendedRounds)
+	}
+	if d.PaidPlayerCount != 12 {
+		t.Fatalf("want PaidPlayerCount 12, got %d", d.PaidPlayerCount)
+	}
+	if len(d.Rounds) != 0 {
+		t.Fatalf("want no rounds, got %d", len(d.Rounds))
+	}
+}
+
+func TestGetAfterTournamentExistsSetsExists(t *testing.T) {
+	f := newFixture(t, 4)
+	ctx := context.Background()
+	if err := f.svc.Upsert(ctx, f.eventID, nil); err != nil {
+		t.Fatal(err)
+	}
+	d, err := f.svc.Get(ctx, f.eventID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.Exists {
+		t.Fatal("Exists must be true once the tournament row exists")
+	}
+	if d.RecommendedRounds != 2 {
+		t.Fatalf("want RecommendedRounds 2 for 4 players, got %d", d.RecommendedRounds)
+	}
+}
+
+func TestGetUnknownEventStillNotFound(t *testing.T) {
+	f := newFixture(t, 0)
+	if _, err := f.svc.Get(context.Background(), uuid.New(), true); !errors.Is(err, ErrEventNotFound) {
+		t.Fatalf("an unknown event must still be not-found, got %v", err)
+	}
+}
+
+func TestGetDraftEventStillNotFound(t *testing.T) {
+	f := newFixture(t, 4)
+	ctx := context.Background()
+	if _, err := f.pool.Exec(ctx,
+		`update events set status='draft' where id=$1`, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Get(ctx, f.eventID, true); !errors.Is(err, ErrEventNotFound) {
+		t.Fatalf("a draft event must still be not-found, got %v", err)
 	}
 }

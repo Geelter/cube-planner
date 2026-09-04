@@ -4,7 +4,6 @@ import { useMe } from "@/features/auth/api";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import {
-  NotFoundError,
   usePairNextRound,
   usePlayerAction,
   useReportResult,
@@ -48,32 +47,38 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
   const status = event.data?.status;
   if (status !== "started" && status !== "finished") return null;
 
-  const noTournament = tournament.error instanceof NotFoundError;
-  if (tournament.error && !noTournament)
-    return (
+  const t = tournament.data;
+  if (t === undefined) {
+    // First load only: keepPreviousData means refetches keep the old body.
+    return tournament.error ? (
       <p role="alert" className="text-danger">
         {tournament.error.message}
       </p>
+    ) : (
+      <p className="text-sm text-fg-muted">{m.loading()}</p>
     );
-  if (tournament.isPending && !noTournament) return null;
+  }
 
-  const t = noTournament ? null : tournament.data!;
-  const latest = t ? latestRound(t) : undefined;
+  const noTournament = !t.exists;
+  // plannedRounds is only meaningful once the tournament exists (it's the
+  // int32 zero value beforehand); recommendedRounds is the useful default.
+  const suggestedRounds = t.exists ? t.plannedRounds : t.recommendedRounds;
+  const latest = latestRound(t);
   const draft = latest?.status === "draft" ? latest : undefined;
   const published = latest?.status === "published" ? latest : undefined;
-  const players = t?.players ?? [];
+  const players = t.players ?? [];
   const playerNames = new Map(players.map((p) => [p.id, p.displayName]));
   const nextRoundNumber = (latest?.number ?? 0) + 1;
   const canPair =
     status === "started" &&
     !draft &&
     !published &&
-    (!t || (t.rounds ?? []).length < t.plannedRounds);
+    (noTournament || (t.rounds ?? []).length < t.plannedRounds);
   const roundsExhausted =
     status === "started" &&
     !draft &&
     !published &&
-    t != null &&
+    !noTournament &&
     (t.rounds ?? []).length >= t.plannedRounds;
   const draftMatches = draft?.matches ?? [];
   const publishedMatches = published?.matches ?? [];
@@ -110,8 +115,10 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
           className="flex items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            const v = plannedRounds == null ? NaN : Number(plannedRounds);
-            if (Number.isInteger(v) && v >= 1) upsert.mutate(v);
+            const raw = plannedRounds ?? String(suggestedRounds);
+            const v = Number(raw);
+            if (!Number.isInteger(v) || v < 1 || v > 30) return;
+            upsert.mutate(v);
           }}
         >
           <div className="flex flex-col gap-1">
@@ -121,7 +128,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
               type="number"
               min={1}
               max={30}
-              value={plannedRounds ?? t?.plannedRounds ?? ""}
+              value={plannedRounds ?? suggestedRounds}
               onChange={(e) => setPlannedRounds(e.target.value)}
               className="w-24 rounded-md border border-border bg-surface px-2 py-1 text-fg"
             />
@@ -145,7 +152,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
         </form>
       )}
 
-      {!t && <p className="text-sm text-fg-muted">{m.tournament_none_yet_organizer()}</p>}
+      {noTournament && <p className="text-sm text-fg-muted">{m.tournament_none_yet_organizer()}</p>}
 
       {draft && (
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-raised p-3">
@@ -289,7 +296,7 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
         </div>
       )}
 
-      {t && (
+      {!noTournament && (
         <>
           <h3 className="text-base font-medium text-fg">{m.tournament_standings()}</h3>
           <StandingsTable standings={t.standings ?? []} />
