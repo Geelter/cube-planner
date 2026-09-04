@@ -6,7 +6,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { WantlistPage } from "./WantlistPage";
@@ -168,4 +168,40 @@ test("switching to exact-printing mode refetches and shows the set column", asyn
 
   await screen.findByText("Lightning Bolt");
   expect(requestedMatches).toContain("printing");
+});
+
+test("switching mode keeps the table on screen instead of blanking to Loading", async () => {
+  // Resolve the initial ("oracle") request immediately, but hang the
+  // second ("printing") one until the test releases it, so we can assert
+  // on the in-between state.
+  const printingGate: { release: (() => void) | null } = { release: null };
+  const fetchMock = vi.fn(async (input: Request | string) => {
+    const url = typeof input === "string" ? input : input.url;
+    const match = new URL(url).searchParams.get("match");
+    if (match === "printing") {
+      await new Promise<void>((resolve) => {
+        printingGate.release = resolve;
+      });
+    }
+    return jsonResponse({ cubeName: "Vintage Cube", totalMissing: 1, items: [wantlistItem] });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  renderPage();
+
+  expect(await screen.findByText("Lightning Bolt")).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("radio", { name: "Exact printing" }));
+
+  // While the printing-mode request is still in flight, the previously
+  // loaded table and its toggle must both still be on screen — no
+  // full-page "Loading…" blank-out — with a spinner marking the toggle
+  // as busy.
+  expect(screen.getByText("Lightning Bolt")).toBeInTheDocument();
+  expect(screen.getByRole("radio", { name: "Exact printing" })).toBeInTheDocument();
+  expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+  expect(screen.getByRole("status")).toBeInTheDocument();
+
+  printingGate.release?.();
+  await screen.findByText("Lightning Bolt");
+  await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
 });
