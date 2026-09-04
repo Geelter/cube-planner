@@ -1,5 +1,6 @@
-// Package cards owns the Scryfall mirror: bulk import, daily sync, and
-// local card search.
+// Package cards owns the Scryfall mirror (bulk import, daily sync, local
+// card search) and pasted-list parsing/resolution shared by the cube and
+// collection importers.
 package cards
 
 import (

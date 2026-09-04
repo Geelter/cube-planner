@@ -3,9 +3,11 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -335,5 +337,32 @@ func TestResolveCardListEndpoint(t *testing.T) {
 	}
 	if body.Lines[4].Status != "unmatched" {
 		t.Fatalf("bad-quantity line = %+v, want unmatched", body.Lines[4])
+	}
+}
+
+// TestResolveCardListTooManyLines guards the RFC 7807 detail string the
+// endpoint returns for an over-limit paste. That copy is user-facing and
+// must not drift silently — it moved from collections.ResolveImport's
+// wrapping (`"invalid import: " + parse error`) to cards.ResolveList's own
+// wrap, and nothing at the HTTP layer asserted the exact wording before.
+func TestResolveCardListTooManyLines(t *testing.T) {
+	srv, _, q := newCardsServerWithSession(t)
+	c := loggedInClient(t, srv, q, "imp-toomany@test.dev")
+
+	text := strings.Repeat("Lightning Bolt\n", cards.MaxImportLines+1)
+	resp := c.do(t, "POST", "/api/cards/resolve-list", fmt.Sprintf(`{"text":%q}`, text))
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", resp.StatusCode)
+	}
+	problem := decode[struct {
+		Type   string `json:"type"`
+		Detail string `json:"detail"`
+	}](t, resp)
+	if problem.Type != "invalid-import" {
+		t.Fatalf("type = %q, want invalid-import", problem.Type)
+	}
+	const wantDetail = "invalid import: import exceeds 500 lines"
+	if problem.Detail != wantDetail {
+		t.Fatalf("detail = %q, want %q", problem.Detail, wantDetail)
 	}
 }

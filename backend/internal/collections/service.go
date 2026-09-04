@@ -1,3 +1,5 @@
+// Package collections owns per-user card collections and the
+// cube-vs-collection wantlist.
 package collections
 
 import (

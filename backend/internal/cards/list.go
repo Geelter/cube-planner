@@ -3,6 +3,7 @@ package cards
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -108,7 +109,10 @@ type ResolvedLine struct {
 func (s *Service) ResolveList(ctx context.Context, text string) ([]ResolvedLine, error) {
 	lines, err := ParseImportText(text)
 	if err != nil {
-		return nil, err
+		// Preserves the pre-move wording ("invalid import: ...") — the
+		// RFC 7807 detail string is user-facing copy, not an internal
+		// detail, so it must not drift just because the code moved.
+		return nil, fmt.Errorf("invalid import: %w", err)
 	}
 
 	nameSet := make(map[string]struct{})
