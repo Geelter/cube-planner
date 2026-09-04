@@ -1,5 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { m } from "@/paraglide/messages";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
@@ -9,9 +8,6 @@ export type TournamentRound = components["schemas"]["TournamentRoundInfo"];
 export type TournamentMatch = components["schemas"]["TournamentMatchInfo"];
 export type TournamentPlayer = components["schemas"]["TournamentPlayerInfo"];
 export type TournamentStanding = components["schemas"]["TournamentStandingInfo"];
-
-/** 404 = no tournament yet — a normal state, not an error banner. */
-export class NotFoundError extends Error {}
 
 // The event detail under the events feature's queryKey: same endpoint +
 // key, so TanStack dedupes with features/events and their invalidations
@@ -34,11 +30,13 @@ export function useTournament(eventId: string, opts?: { refetchInterval?: number
     queryKey: ["tournaments", eventId],
     retry: false,
     refetchInterval: opts?.refetchInterval ?? false,
+    // Keep the previous aggregate on screen while polling refetches, so a
+    // single failed poll cannot blank the section.
+    placeholderData: keepPreviousData,
     queryFn: async () => {
-      const { data, error, response } = await client.GET("/api/events/{eventId}/tournament", {
+      const { data, error } = await client.GET("/api/events/{eventId}/tournament", {
         params: { path: { eventId } },
       });
-      if (response.status === 404) throw new NotFoundError(m.tournament_none_yet());
       return unwrap(data, error);
     },
   });

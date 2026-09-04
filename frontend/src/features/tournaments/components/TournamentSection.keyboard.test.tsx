@@ -39,7 +39,10 @@ function renderSection() {
 function twoRoundTournament(): TournamentInfo {
   return {
     eventId: "e1",
+    exists: true,
     plannedRounds: 2,
+    recommendedRounds: 2,
+    paidPlayerCount: 2,
     currentRound: 2,
     players: [
       { id: "pl1", userId: "u1", displayName: "Ann", dropped: false },

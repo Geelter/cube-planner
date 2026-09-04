@@ -3,13 +3,7 @@ import { m } from "@/paraglide/messages";
 import { useMe } from "@/features/auth/api";
 import { Button } from "@/shared/ui/button";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import {
-  NotFoundError,
-  usePlayerAction,
-  useReportResult,
-  useEventStatus,
-  useTournament,
-} from "../api";
+import { usePlayerAction, useReportResult, useEventStatus, useTournament } from "../api";
 import type { TournamentMatch } from "../api";
 import { ResultForm } from "./ResultForm";
 import { StandingsTable } from "./StandingsTable";
@@ -35,16 +29,19 @@ export function TournamentSection({ eventId }: { eventId: string }) {
   const [confirmDrop, setConfirmDrop] = useState(false);
   const panelId = useId();
 
-  // Not started, no tournament yet, or still loading: render nothing.
-  if (!relevant || tournament.isPending || tournament.error instanceof NotFoundError) return null;
-  if (tournament.error)
-    return (
+  if (!relevant) return null;
+  const t = tournament.data;
+  if (t === undefined) {
+    // First load only: keepPreviousData means refetches keep the old body.
+    return tournament.error ? (
       <p role="alert" className="text-danger">
         {tournament.error.message}
       </p>
+    ) : (
+      <p className="text-sm text-fg-muted">{m.loading()}</p>
     );
-
-  const t = tournament.data;
+  }
+  if (!t.exists) return null;
   const rounds = (t.rounds ?? []).filter((r) => r.status !== "draft");
   if (rounds.length === 0) return null;
   const activeNumber = tab ?? rounds[rounds.length - 1]!.number;

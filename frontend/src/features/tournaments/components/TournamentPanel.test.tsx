@@ -4,13 +4,15 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { m } from "@/paraglide/messages";
 import type { TournamentInfo } from "../api";
-import { NotFoundError } from "../api";
 
 const pairMut = vi.fn();
 const swapMut = vi.fn();
 const roundMut = vi.fn();
 const upsertMut = vi.fn();
-let tournamentData: TournamentInfo | null = null;
+// undefined = still loading (no aggregate yet, e.g. before the first fetch
+// resolves); every other case is a full TournamentInfo, exists true or false.
+let tournamentData: TournamentInfo | undefined;
+let tournamentError: Error | null = null;
 let tournamentOpts: unknown;
 const roundState: { isPending: boolean; variables?: { action: string; number: number } } = {
   isPending: false,
@@ -24,9 +26,7 @@ vi.mock("../api", async (orig) => ({
   useEventStatus: () => ({ data: { status: "started" } }),
   useTournament: (_eventId: string, opts?: unknown) => {
     tournamentOpts = opts;
-    return tournamentData
-      ? { data: tournamentData, isPending: false, error: null }
-      : { data: undefined, isPending: false, error: new NotFoundError("none") };
+    return { data: tournamentData, isPending: false, error: tournamentError };
   },
   useUpsertTournament: () => ({ mutate: upsertMut, isPending: false, error: null }),
   usePairNextRound: () => ({ mutate: pairMut, isPending: false, error: null }),
@@ -41,7 +41,8 @@ import { TournamentPanel } from "./TournamentPanel";
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  tournamentData = null;
+  tournamentData = undefined;
+  tournamentError = null;
   tournamentOpts = undefined;
   roundState.isPending = false;
   delete roundState.variables;
@@ -49,17 +50,39 @@ afterEach(() => {
 
 function renderPanel() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  // Fresh element per (re)render — reusing one element reference makes React
+  // bail out of reconciling the subtree, hiding mock-state changes.
+  const makeUi = () => (
     <QueryClientProvider client={qc}>
       <TournamentPanel eventId="e1" />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(makeUi());
+  return { ...view, rerenderSame: () => view.rerender(makeUi()) };
+}
+
+/** The aggregate shape Get returns before the organizer creates a tournament. */
+function noTournamentYet(overrides: Partial<TournamentInfo> = {}): TournamentInfo {
+  return {
+    eventId: "e1",
+    exists: false,
+    plannedRounds: 0,
+    recommendedRounds: 1,
+    paidPlayerCount: 0,
+    players: [],
+    rounds: [],
+    standings: [],
+    ...overrides,
+  } as TournamentInfo;
 }
 
 function draftTournament(): TournamentInfo {
   return {
     eventId: "e1",
+    exists: true,
     plannedRounds: 2,
+    recommendedRounds: 2,
+    paidPlayerCount: 4,
     currentRound: 1,
     players: [
       { id: "pl1", userId: "u1", displayName: "Ann", dropped: false },
@@ -82,11 +105,44 @@ function draftTournament(): TournamentInfo {
 }
 
 test("no tournament yet: shows pair-round-1 CTA", async () => {
+  tournamentData = noTournamentYet();
   renderPanel();
   const cta = screen.getByRole("button", { name: /pair round 1/i });
   expect(cta).toBeInTheDocument();
   await userEvent.click(cta);
   expect(pairMut).toHaveBeenCalled();
+});
+
+test("prefills the planned-rounds input from the server recommendation", async () => {
+  tournamentData = noTournamentYet({ recommendedRounds: 4, paidPlayerCount: 12 });
+  renderPanel();
+  const input = await screen.findByLabelText(/planned rounds/i);
+  expect(input).toHaveValue(4);
+});
+
+test("prefers the stored plannedRounds once a tournament exists", async () => {
+  tournamentData = {
+    ...noTournamentYet({ recommendedRounds: 4, paidPlayerCount: 12 }),
+    exists: true,
+    plannedRounds: 5,
+  };
+  renderPanel();
+  const input = await screen.findByLabelText(/planned rounds/i);
+  expect(input).toHaveValue(5);
+});
+
+test("keeps the section rendered while a background refetch is in flight", async () => {
+  tournamentData = draftTournament();
+  const { rerenderSame } = renderPanel();
+  expect(
+    await screen.findByRole("heading", { name: m.tournament_standings() }),
+  ).toBeInTheDocument();
+  // A single failed 10s poll: keepPreviousData means `data` stays the last
+  // good aggregate even though the hook now also carries an error.
+  tournamentError = new Error("network error");
+  rerenderSame();
+  expect(screen.getByRole("heading", { name: m.tournament_standings() })).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
 test("draft round: select two slots → swap fires", async () => {
