@@ -351,7 +351,7 @@ join matches mt on mt.id = rr.match_id
 join rounds rd on rd.id = mt.round_id
 join users u on u.id = rr.reported_by
 where rd.tournament_id = $1
-order by rr.match_id, rr.reported_at
+order by rr.match_id, rr.reported_at, rr.id
 `
 
 type ListMatchResultReportsForTournamentRow struct {
@@ -367,6 +367,8 @@ type ListMatchResultReportsForTournamentRow struct {
 
 // Every report for one tournament, oldest first, with the reporter's name
 // for the organizer's dispute history.
+// rr.id breaks ties: reported_at is transaction-start time in Postgres, so
+// two reports can share a timestamp, and "latest wins" must stay stable.
 func (q *Queries) ListMatchResultReportsForTournament(ctx context.Context, tournamentID uuid.UUID) ([]ListMatchResultReportsForTournamentRow, error) {
 	rows, err := q.db.Query(ctx, listMatchResultReportsForTournament, tournamentID)
 	if err != nil {

@@ -144,7 +144,9 @@ join matches mt on mt.id = rr.match_id
 join rounds rd on rd.id = mt.round_id
 join users u on u.id = rr.reported_by
 where rd.tournament_id = sqlc.arg(tournament_id)
-order by rr.match_id, rr.reported_at;
+-- rr.id breaks ties: reported_at is transaction-start time in Postgres, so
+-- two reports can share a timestamp, and "latest wins" must stay stable.
+order by rr.match_id, rr.reported_at, rr.id;
 
 -- name: MatchHasOrganizerReport :one
 select exists (

@@ -240,6 +240,7 @@ func (s *Service) Get(ctx context.Context, eventID uuid.UUID, admin bool) (*Deta
 		})
 		if r.IsOrganizer {
 			organizerReported[r.MatchID] = true
+			continue // the organizer's ruling is not a player disagreement
 		}
 		per, ok := latest[r.MatchID]
 		if !ok {

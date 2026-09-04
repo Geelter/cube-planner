@@ -242,3 +242,103 @@ func TestTournamentAdminGates(t *testing.T) {
 		}
 	}
 }
+
+// hadDispute and the full report log are organizer-only — a player must
+// not be able to mine another table's dispute history through their own
+// GET — while disputed (the live badge) and resultLocked stay visible to
+// everyone, since they leak nothing beyond what the 409 on a refused
+// report already tells a player.
+func TestTournamentNonAdminRedactsDisputeHistory(t *testing.T) {
+	srv, pool, q := newTournamentServer(t)
+	eventID, _, org, players := seedStartedEvent(t, pool, q, srv, 2)
+	base := fmt.Sprintf("/api/events/%s/tournament", eventID)
+
+	resp := org.do(t, http.MethodPost, base+"/rounds", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("pair = %d", resp.StatusCode)
+	}
+	resp = org.do(t, http.MethodPost, base+"/rounds/1/publish", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("publish = %d", resp.StatusCode)
+	}
+
+	p0ID := meID(t, players[0])
+	resp = players[0].do(t, http.MethodGet, base, "")
+	tour := decode[httpapi.TournamentInfo](t, resp)
+	var myPlayerID uuid.UUID
+	for _, p := range tour.Players {
+		if p.UserID == p0ID {
+			myPlayerID = p.ID
+		}
+	}
+	var match *httpapi.TournamentMatchInfo
+	for i, m := range tour.Rounds[0].Matches {
+		if m.Player1ID == myPlayerID || (m.Player2ID != nil && *m.Player2ID == myPlayerID) {
+			match = &tour.Rounds[0].Matches[i]
+		}
+	}
+	if match == nil {
+		t.Fatal("caller's match not found")
+	}
+
+	// The players disagree, so admins see a dispute; the organizer has not
+	// ruled, so the match is not locked.
+	resultPath := fmt.Sprintf("%s/matches/%s/result", base, match.ID)
+	resp = players[0].do(t, http.MethodPut, resultPath, jsonBody(t, map[string]any{"p1Games": 2, "p2Games": 1}))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("player0 report = %d", resp.StatusCode)
+	}
+	resp = players[1].do(t, http.MethodPut, resultPath, jsonBody(t, map[string]any{"p1Games": 1, "p2Games": 2}))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("player1 report = %d", resp.StatusCode)
+	}
+
+	resp = players[0].do(t, http.MethodGet, base, "")
+	nonAdmin := decode[httpapi.TournamentInfo](t, resp)
+	nm := findTournamentMatch(t, nonAdmin, match.ID)
+	if !nm.Disputed {
+		t.Error("non-admin: disputed = false, want true (the live badge is player-visible)")
+	}
+	if nm.ResultLocked {
+		t.Error("non-admin: resultLocked = true, want false (no organizer report yet)")
+	}
+	if nm.HadDispute {
+		t.Error("non-admin: hadDispute = true, want false (organizer-only)")
+	}
+	if nm.Reports == nil {
+		t.Error("non-admin: reports = null, want [] (empty, not null)")
+	}
+	if len(nm.Reports) != 0 {
+		t.Errorf("non-admin: len(reports) = %d, want 0", len(nm.Reports))
+	}
+
+	resp = org.do(t, http.MethodGet, base, "")
+	admin := decode[httpapi.TournamentInfo](t, resp)
+	am := findTournamentMatch(t, admin, match.ID)
+	if !am.Disputed {
+		t.Error("admin: disputed = false, want true")
+	}
+	if am.ResultLocked {
+		t.Error("admin: resultLocked = true, want false")
+	}
+	if !am.HadDispute {
+		t.Error("admin: hadDispute = false, want true")
+	}
+	if len(am.Reports) != 2 {
+		t.Errorf("admin: len(reports) = %d, want 2 (the full log)", len(am.Reports))
+	}
+}
+
+// findTournamentMatch locates a match by ID within a decoded TournamentInfo.
+func findTournamentMatch(t *testing.T, tour httpapi.TournamentInfo, matchID uuid.UUID) httpapi.TournamentMatchInfo {
+	t.Helper()
+	for _, r := range tour.Rounds {
+		for _, m := range r.Matches {
+			if m.ID == matchID {
+				return m
+			}
+		}
+	}
+	t.Fatalf("match %v not found", matchID)
+	return httpapi.TournamentMatchInfo{}
+}
