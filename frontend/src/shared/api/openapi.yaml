@@ -956,6 +956,12 @@ components:
       properties:
         collectorNumber:
           type: string
+        colors:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         imageNormal:
           type:
             - string
@@ -987,6 +993,7 @@ components:
         - setCode
         - setName
         - collectorNumber
+        - colors
         - imageSmall
         - imageNormal
       type: object

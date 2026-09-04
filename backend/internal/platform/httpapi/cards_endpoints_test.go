@@ -282,8 +282,9 @@ type resolveListLineBody struct {
 	Quantity   int32  `json:"quantity"`
 	Status     string `json:"status"`
 	Match      *struct {
-		ScryfallID string `json:"scryfallId"`
-		Name       string `json:"name"`
+		ScryfallID string   `json:"scryfallId"`
+		Name       string   `json:"name"`
+		Colors     []string `json:"colors"`
 	} `json:"match"`
 	Suggestions []struct {
 		ScryfallID string `json:"scryfallId"`
@@ -322,6 +323,11 @@ func TestResolveCardListEndpoint(t *testing.T) {
 	if exact.Status != "matched" || exact.Quantity != 4 ||
 		exact.Match == nil || exact.Match.ScryfallID != newBolt.String() {
 		t.Fatalf("exact line = %+v (want matched, representative printing)", exact)
+	}
+	// Colors must ride along with the match so a card staged into a cube's
+	// pending diff groups by its real color, not "colorless", before commit.
+	if len(exact.Match.Colors) != 1 || exact.Match.Colors[0] != "R" {
+		t.Fatalf("exact match colors = %v, want [R]", exact.Match.Colors)
 	}
 	fuzzy := body.Lines[1]
 	if fuzzy.Status != "ambiguous" || len(fuzzy.Suggestions) == 0 ||

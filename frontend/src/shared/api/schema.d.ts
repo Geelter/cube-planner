@@ -1236,6 +1236,7 @@ export interface components {
     };
     ImportCardMatch: {
       collectorNumber: string;
+      colors: string[] | null;
       imageNormal: string | null;
       imageSmall: string | null;
       manaCost: string;

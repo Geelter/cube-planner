@@ -182,6 +182,7 @@ export function CubeEditorPage() {
           dispatch({ type: "addMany", items });
           setImportOpen(false);
         }}
+        confirmLabel={m.cubes_import_confirm}
       />
 
       <div className="flex flex-col gap-6 lg:flex-row">

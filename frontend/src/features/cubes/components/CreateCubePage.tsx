@@ -139,6 +139,7 @@ export function CreateCubePage() {
           applying={create.isPending}
           applyError={create.error}
           onApply={createAndStage}
+          confirmLabel={m.cubes_import_confirm}
         />
       )}
     </div>

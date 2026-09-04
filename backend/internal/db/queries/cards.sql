@@ -148,7 +148,7 @@ with matches as (
     order by oracle_id, promo, released_at desc, (image_small is null)
 )
 select scryfall_id, oracle_id, name, normalized_name, mana_cost, type_line,
-    set_code, set_name, collector_number, image_small, image_normal
+    set_code, set_name, collector_number, image_small, image_normal, colors
 from matches;
 
 -- Fuzzy suggestions for one unresolved import line. Same <% + GUC
@@ -162,7 +162,7 @@ with matches as (
     order by oracle_id, promo, released_at desc, (image_small is null)
 )
 select scryfall_id, oracle_id, name, mana_cost, type_line,
-    set_code, set_name, collector_number, image_small, image_normal
+    set_code, set_name, collector_number, image_small, image_normal, colors
 from matches
 order by
     word_similarity(sqlc.arg(query), normalized_name) desc,

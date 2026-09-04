@@ -15,10 +15,6 @@ import type { ImportCardMatch, ImportResolveLine } from "./useResolveCardList";
 // Callers that only need an id (collection's commit) map down themselves.
 export type ResolvedItem = { card: CardSummary; quantity: number };
 
-// The resolver only returns review-relevant fields (no colors) — see
-// ImportCardMatch in the backend. Empty is a safe default: staged cards
-// briefly land in the editor's colorless bucket until the change is
-// committed and the cube list is refetched with the real card data.
 function cardSummaryFromMatch(match: ImportCardMatch): CardSummary {
   return {
     scryfallId: match.scryfallId,
@@ -26,7 +22,7 @@ function cardSummaryFromMatch(match: ImportCardMatch): CardSummary {
     name: match.name,
     manaCost: match.manaCost,
     typeLine: match.typeLine,
-    colors: [],
+    colors: match.colors ?? [],
     imageSmall: match.imageSmall,
   };
 }
@@ -54,6 +50,7 @@ export function CardListImportDialog({
   applyError,
   result = null,
   initialLines,
+  confirmLabel,
 }: {
   open: boolean;
   onClose: () => void;
@@ -67,6 +64,11 @@ export function CardListImportDialog({
    *  mounted (like other seeded dialogs in this codebase) rather than kept
    *  around with a changing `initialLines`. */
   initialLines?: ImportResolveLine[];
+  /** Confirm-button label for the review step, given the resolved item
+   *  count. Defaults to the collection's "Add to collection" copy; callers
+   *  staging into a cube (editor or create-cube flow) must pass their own
+   *  so the button doesn't lie about where the cards are going. */
+  confirmLabel?: (args: { count: number }) => string;
 }) {
   const seeded = initialLines !== undefined;
   const [text, setText] = useState("");
@@ -214,7 +216,7 @@ export function CardListImportDialog({
               <p className="text-sm text-fg-muted">{m.collection_import_nothing()}</p>
             ) : (
               <Button type="button" loading={applying === true} onClick={() => onApply(items)}>
-                {m.collection_import_confirm({ count: items.length })}
+                {(confirmLabel ?? m.collection_import_confirm)({ count: items.length })}
               </Button>
             )}
           </div>

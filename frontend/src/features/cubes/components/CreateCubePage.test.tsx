@@ -35,6 +35,7 @@ const match = (scryfallId: string, oracleId: string, name: string) => ({
   setCode: "tst",
   setName: "Test Set",
   collectorNumber: "1",
+  colors: ["U"],
   imageSmall: null,
   imageNormal: null,
 });
@@ -84,7 +85,7 @@ test("a pasted list is resolved before the cube is created", async () => {
   await userEvent.type(screen.getByLabelText(/cards/i), "4 Brainstorm");
   await userEvent.click(screen.getByRole("button", { name: "Create cube" }));
 
-  await userEvent.click(await screen.findByRole("button", { name: /add to collection/i }));
+  await userEvent.click(await screen.findByRole("button", { name: /add to cube/i }));
 
   await waitFor(() => expect(mocks.navigate).toHaveBeenCalled());
   // resolve-list must complete before /api/cubes is ever hit — a hopeless

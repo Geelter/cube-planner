@@ -109,6 +109,7 @@
   "cubes_editor_title": "Editing {name}",
   "cubes_editor_add_label": "Add a card",
   "cubes_import_open": "Import list",
+  "cubes_import_confirm": "Add to cube ({count})",
   "cubes_pending_title": "Pending changes",
   "cubes_pending_empty": "No pending changes.",
   "cubes_pending_adds": "Adds",

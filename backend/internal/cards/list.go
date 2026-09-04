@@ -81,6 +81,7 @@ type CardRef struct {
 	SetCode         string
 	SetName         string
 	CollectorNumber string
+	Colors          []string
 	ImageSmall      *string
 	ImageNormal     *string
 }
@@ -138,6 +139,7 @@ func (s *Service) ResolveList(ctx context.Context, text string) ([]ResolvedLine,
 				ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
 				ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
 				SetName: r.SetName, CollectorNumber: r.CollectorNumber,
+				Colors:     r.Colors,
 				ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
 			})
 		}
@@ -190,6 +192,7 @@ func (s *Service) suggest(ctx context.Context, name string) ([]CardRef, error) {
 			ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
 			ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
 			SetName: r.SetName, CollectorNumber: r.CollectorNumber,
+			Colors:     r.Colors,
 			ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
 		}
 	}

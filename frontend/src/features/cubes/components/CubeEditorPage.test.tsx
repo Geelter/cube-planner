@@ -178,6 +178,7 @@ test("imported cards land in the pending diff, not straight into the cube", asyn
     setCode: "tst",
     setName: "Test Set",
     collectorNumber: "1",
+    colors: ["U"],
     imageSmall: null,
     imageNormal: null,
   });
@@ -211,13 +212,21 @@ test("imported cards land in the pending diff, not straight into the cube", asyn
   await userEvent.click(screen.getByRole("button", { name: m.cubes_import_open() }));
   await userEvent.type(await screen.findByLabelText("Card list"), "4 Brainstorm{enter}2 Ponder");
   await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
-  await userEvent.click(await screen.findByRole("button", { name: /add to collection/i }));
+  await userEvent.click(await screen.findByRole("button", { name: /add to cube/i }));
 
   // The mobile summary bar totals copies across both staged cards (4 + 2).
   const bar = await screen.findByRole("region", { name: /pending changes/i });
   expect(within(bar).getByText(/\+6/)).toBeDefined();
   expect(within(screen.getByRole("complementary")).getByText("Brainstorm")).toBeDefined();
   expect(within(screen.getByRole("complementary")).getByText("Ponder")).toBeDefined();
+  // The resolver's match carries real colors, so the staged cards must sit
+  // under the Blue bucket in the reviewed pending-diff list — not
+  // Colorless, which is where a hardcoded `colors: []` would put them.
+  const blueGroup = screen.getByText(m.cubes_bucket_blue(), { exact: false }).closest("section");
+  expect(blueGroup).not.toBeNull();
+  expect(within(blueGroup as HTMLElement).getByText("Brainstorm")).toBeDefined();
+  expect(within(blueGroup as HTMLElement).getByText("Ponder")).toBeDefined();
+  expect(screen.queryByText(m.cubes_bucket_colorless(), { exact: false })).toBeNull();
   // Staging is local — no commit request went out.
   const changeCalls = fetchMock.mock.calls.filter(([input]) => {
     const url = typeof input === "string" ? input : (input as Request).url;

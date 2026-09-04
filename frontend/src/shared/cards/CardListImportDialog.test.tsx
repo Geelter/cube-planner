@@ -26,6 +26,7 @@ const match = (scryfallId: string, name: string) => ({
   setCode: "tst",
   setName: "Test Set",
   collectorNumber: "1",
+  colors: [] as string[],
   imageSmall: null,
   imageNormal: null,
 });
@@ -141,6 +142,24 @@ test("back closes a seeded dialog instead of returning to a paste form", async (
 
   await userEvent.click(screen.getByRole("button", { name: "Back" }));
   expect(onClose).toHaveBeenCalled();
+});
+
+test("confirmLabel overrides the default 'Add to collection' wording", async () => {
+  const onApply = vi.fn();
+  render(
+    <CardListImportDialog
+      open
+      onClose={() => {}}
+      onApply={onApply}
+      initialLines={[matchedLine("Lightning Bolt", 3, "bolt")]}
+      confirmLabel={({ count }) => `Add to cube (${count})`}
+    />,
+    { wrapper },
+  );
+
+  expect(screen.queryByRole("button", { name: /add to collection/i })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Add to cube (1)" }));
+  expect(onApply).toHaveBeenCalled();
 });
 
 test("renders the passed-in result instead of committing itself", () => {

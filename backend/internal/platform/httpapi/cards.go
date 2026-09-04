@@ -116,8 +116,9 @@ type cardPrintingsOutput struct {
 }
 
 // ImportCardMatch is a resolved card for import review (match or
-// suggestion) — CardSummary-shaped without the color/type fields the
-// review UI doesn't render.
+// suggestion) — CardSummary-shaped, plus Colors so a card staged into a
+// cube's pending diff groups correctly by color before it is committed
+// and refetched from the server.
 type ImportCardMatch struct {
 	ScryfallID      uuid.UUID `json:"scryfallId"`
 	OracleID        uuid.UUID `json:"oracleId"`
@@ -127,6 +128,7 @@ type ImportCardMatch struct {
 	SetCode         string    `json:"setCode"`
 	SetName         string    `json:"setName"`
 	CollectorNumber string    `json:"collectorNumber"`
+	Colors          []string  `json:"colors"`
 	ImageSmall      *string   `json:"imageSmall"`
 	ImageNormal     *string   `json:"imageNormal"`
 }
@@ -145,6 +147,7 @@ func importCardMatchFrom(r cards.CardRef) ImportCardMatch {
 		ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
 		ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
 		SetName: r.SetName, CollectorNumber: r.CollectorNumber,
+		Colors:     r.Colors,
 		ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
 	}
 }

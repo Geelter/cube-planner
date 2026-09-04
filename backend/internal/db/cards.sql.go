@@ -179,7 +179,7 @@ with matches as (
     order by oracle_id, promo, released_at desc, (image_small is null)
 )
 select scryfall_id, oracle_id, name, normalized_name, mana_cost, type_line,
-    set_code, set_name, collector_number, image_small, image_normal
+    set_code, set_name, collector_number, image_small, image_normal, colors
 from matches
 `
 
@@ -195,6 +195,7 @@ type GetCardsByNormalizedNamesRow struct {
 	CollectorNumber string
 	ImageSmall      *string
 	ImageNormal     *string
+	Colors          []string
 }
 
 // Exact-name resolution for import: representative printing per oracle
@@ -222,6 +223,7 @@ func (q *Queries) GetCardsByNormalizedNames(ctx context.Context, names []string)
 			&i.CollectorNumber,
 			&i.ImageSmall,
 			&i.ImageNormal,
+			&i.Colors,
 		); err != nil {
 			return nil, err
 		}
@@ -438,7 +440,7 @@ with matches as (
     order by oracle_id, promo, released_at desc, (image_small is null)
 )
 select scryfall_id, oracle_id, name, mana_cost, type_line,
-    set_code, set_name, collector_number, image_small, image_normal
+    set_code, set_name, collector_number, image_small, image_normal, colors
 from matches
 order by
     word_similarity($1, normalized_name) desc,
@@ -458,6 +460,7 @@ type SuggestCardsByNameRow struct {
 	CollectorNumber string
 	ImageSmall      *string
 	ImageNormal     *string
+	Colors          []string
 }
 
 // Fuzzy suggestions for one unresolved import line. Same <% + GUC
@@ -483,6 +486,7 @@ func (q *Queries) SuggestCardsByName(ctx context.Context, query string) ([]Sugge
 			&i.CollectorNumber,
 			&i.ImageSmall,
 			&i.ImageNormal,
+			&i.Colors,
 		); err != nil {
 			return nil, err
 		}

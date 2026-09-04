@@ -11,6 +11,7 @@ const match = (scryfallId: string) => ({
   setCode: "tst",
   setName: "Test",
   collectorNumber: "1",
+  colors: [] as string[],
   imageSmall: null,
   imageNormal: null,
 });
