@@ -190,7 +190,11 @@ export function useRemoveRegistration(eventId: string) {
       );
       return unwrap(data, error);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["events"] }),
+    // Refetch on error too: a 409 remove-needs-decision means the client's
+    // cached hasPayment was stale (a payment webhook landed between page
+    // load and click), so re-fetching is what lets the correct Refund /
+    // Remove-no-refund buttons appear without a manual page reload.
+    onSettled: () => qc.invalidateQueries({ queryKey: ["events"] }),
   });
 }
 

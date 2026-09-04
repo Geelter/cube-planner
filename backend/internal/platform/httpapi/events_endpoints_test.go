@@ -394,6 +394,58 @@ func TestRemovePaidParticipantNeedsDecisionOverHTTP(t *testing.T) {
 	}
 }
 
+// TestRemoveOmittedKeepPaymentIsRejected proves the money-safety property
+// the design calls for: `keepPayment` has no `omitempty`, so huma's schema
+// validation makes it required and rejects an omitted field before the
+// handler — let alone the service — ever runs. A stale client that forgets
+// the field cannot silently keep the fee or remove the player: the request
+// never takes effect at all.
+func TestRemoveOmittedKeepPaymentIsRejected(t *testing.T) {
+	srv, pool, q, svc, _ := newEventsServer(t)
+	admin := loggedInClient(t, srv, q, "boss-remove-omit@test")
+	makeAdmin(t, pool, "boss-remove-omit@test")
+	user := loggedInClient(t, srv, q, "player-remove-omit@test")
+
+	evID := seedPublishedEvent(t, pool, svc, 2000, 8)
+	if resp := user.do(t, "POST", "/api/events/"+evID.String()+"/register", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("register: %d", resp.StatusCode)
+	}
+	resp := admin.do(t, "GET", "/api/events/"+evID.String()+"/registrations", "")
+	regs := decode[struct {
+		Registrations []registrationInfoBody `json:"registrations"`
+	}](t, resp)
+	if len(regs.Registrations) != 1 {
+		t.Fatalf("want one registration, got %+v", regs)
+	}
+	regID := regs.Registrations[0].ID
+	paidAt := time.Now()
+	pi := "pi_remove_omit_1"
+	regUUID, err := uuid.Parse(regID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.MarkRegistrationPaid(context.Background(), db.MarkRegistrationPaidParams{
+		ID: regUUID, PaidAt: &paidAt, PaymentIntentID: &pi,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// No "keepPayment" key at all — not even `false`.
+	resp = admin.do(t, "POST", "/api/events/"+evID.String()+"/registrations/"+regID+"/remove", `{}`)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("remove with keepPayment omitted: want 422, got %d", resp.StatusCode)
+	}
+
+	// The row must be untouched: still paid, fee still held, player still in.
+	resp = admin.do(t, "GET", "/api/events/"+evID.String()+"/registrations", "")
+	after := decode[struct {
+		Registrations []registrationInfoBody `json:"registrations"`
+	}](t, resp)
+	if len(after.Registrations) != 1 || after.Registrations[0].Status != "paid" {
+		t.Fatalf("rejected request must not change the row, got %+v", after)
+	}
+}
+
 func TestRemoveRegistrationGating(t *testing.T) {
 	srv, pool, q, svc, _ := newEventsServer(t)
 	admin := loggedInClient(t, srv, q, "boss-remove-gate@test")
