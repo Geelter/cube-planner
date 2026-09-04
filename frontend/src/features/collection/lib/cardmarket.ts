@@ -5,6 +5,14 @@ export function wantlistToCardmarketText(
   return items.map((i) => `${i.missingQuantity} ${i.name}`).join("\n");
 }
 
+// Moxfield/Archidekt accept a trailing "(SET)"; Cardmarket does not, which
+// is why this is a separate export rather than a change to the one above.
+export function wantlistToSetAnnotatedText(
+  items: readonly { missingQuantity: number; name: string; setCode: string }[],
+): string {
+  return items.map((i) => `${i.missingQuantity} ${i.name} (${i.setCode.toUpperCase()})`).join("\n");
+}
+
 export function wantlistFilename(cubeName: string): string {
   const slug =
     cubeName
