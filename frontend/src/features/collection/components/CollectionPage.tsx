@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { CardAutocomplete } from "@/shared/cards/CardAutocomplete";
 import { CardHoverPreview } from "@/shared/cards/CardHoverPreview";
+import { CardListImportDialog } from "@/shared/cards/CardListImportDialog";
 import { CardPreviewSheet, type PreviewCard } from "@/shared/cards/CardPreviewSheet";
 import { PrintingPickerDialog } from "@/shared/cards/PrintingPickerDialog";
 import { useDebouncedValue } from "@/shared/lib/useDebouncedValue";
@@ -19,7 +20,6 @@ import {
   useImportItems,
   useSetQuantity,
 } from "../api";
-import { ImportDialog } from "./ImportDialog";
 import { QuantityStepper } from "./QuantityStepper";
 
 export function CollectionPage() {
@@ -27,6 +27,7 @@ export function CollectionPage() {
   const [page, setPage] = useState(0);
   const [pickerItem, setPickerItem] = useState<CollectionItemEntry | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [importResult, setImportResult] = useState<{ added: number; updated: number } | null>(null);
   const [previewItem, setPreviewItem] = useState<PreviewCard | null>(null);
   const debouncedSearch = useDebouncedValue(search, 300);
   const collection = useCollection(debouncedSearch, page);
@@ -90,7 +91,14 @@ export function CollectionPage() {
             </p>
           )}
         </div>
-        <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setImportResult(null);
+            setImportOpen(true);
+          }}
+        >
           {m.collection_import_button()}
         </Button>
       </div>
@@ -191,7 +199,21 @@ export function CollectionPage() {
         </ul>
       )}
 
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <CardListImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onApply={(items) =>
+          importItems.mutate(
+            {
+              items: items.map((i) => ({ scryfallId: i.card.scryfallId, quantity: i.quantity })),
+            },
+            { onSuccess: (r) => setImportResult({ added: r.addedRows, updated: r.updatedRows }) },
+          )
+        }
+        applying={importItems.isPending}
+        applyError={importItems.error}
+        result={importResult}
+      />
 
       {previewItem && <CardPreviewSheet card={previewItem} onClose={() => setPreviewItem(null)} />}
 

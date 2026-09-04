@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import type { ImportResolveLine } from "../api";
-import { buildImportItems, defaultChoices } from "./importReview";
+import type { ImportResolveLine } from "./useResolveCardList";
+import { buildImportItems, defaultChoices } from "./listImportReview";
 
 const match = (scryfallId: string) => ({
   scryfallId,

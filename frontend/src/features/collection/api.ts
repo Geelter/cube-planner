@@ -5,8 +5,6 @@ import { unwrap } from "@/shared/api/helpers";
 import type { components } from "@/shared/api/schema";
 
 export type CollectionItemEntry = components["schemas"]["CollectionItemEntry"];
-export type ImportCardMatch = components["schemas"]["ImportCardMatch"];
-export type ImportResolveLine = components["schemas"]["ImportResolveLine"];
 export type WantlistEntry = components["schemas"]["WantlistEntry"];
 
 export const COLLECTION_PAGE_SIZE = 50;
@@ -73,17 +71,6 @@ export function useChangePrinting() {
       return unwrap(data, error).item ?? null;
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["collection"] }),
-  });
-}
-
-export function useResolveImport() {
-  return useMutation({
-    mutationFn: async (vars: { text: string }): Promise<ImportResolveLine[]> => {
-      const { data, error } = await client.POST("/api/cards/resolve-list", {
-        body: { text: vars.text },
-      });
-      return unwrap(data, error).lines ?? [];
-    },
   });
 }
 
