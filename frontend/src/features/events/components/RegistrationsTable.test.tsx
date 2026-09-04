@@ -1,14 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { m } from "@/paraglide/messages";
+import type { EventRegistrationRow } from "../api";
 
 const refundMutate = vi.fn();
 const denyMutate = vi.fn();
+const removeMutate = vi.fn();
 const refundState: { isPending: boolean; variables?: string } = { isPending: false };
 const denyState: { isPending: boolean; variables?: string } = { isPending: false };
-const defaultRows = [
+const removeState: {
+  isPending: boolean;
+  variables?: { registrationId: string; keepPayment: boolean };
+} = { isPending: false };
+const defaultRows: EventRegistrationRow[] = [
   {
     id: "r1",
     status: "paid",
@@ -16,6 +22,7 @@ const defaultRows = [
     email: "ala@t",
     createdAt: "2026-07-13T10:00:00Z",
     paidAt: "2026-07-13T10:05:00Z",
+    hasPayment: true,
   },
   {
     id: "r2",
@@ -24,6 +31,7 @@ const defaultRows = [
     email: "bea@t",
     createdAt: "2026-07-13T10:01:00Z",
     waitlistPos: 1,
+    hasPayment: false,
   },
   {
     id: "r3",
@@ -31,6 +39,7 @@ const defaultRows = [
     displayName: "Cez",
     email: "cez@t",
     createdAt: "2026-07-13T10:02:00Z",
+    hasPayment: true,
   },
   {
     id: "r4",
@@ -38,17 +47,19 @@ const defaultRows = [
     displayName: "Dag",
     email: "dag@t",
     createdAt: "2026-07-13T10:03:00Z",
+    hasPayment: false,
   },
 ];
 // Reassigned per-test so the status-gating tests can control which rows the
 // mocked query returns without a second `vi.mock` module.
-let regsData: typeof defaultRows = defaultRows;
+let regsData: EventRegistrationRow[] = defaultRows;
 
 vi.mock("../api", async (orig) => ({
   ...(await orig()),
   useEventRegistrations: () => ({ data: regsData, isPending: false, error: null }),
   useRefundRegistration: () => ({ mutate: refundMutate, error: null, ...refundState }),
   useDenyRefund: () => ({ mutate: denyMutate, error: null, ...denyState }),
+  useRemoveRegistration: () => ({ mutate: removeMutate, error: null, ...removeState }),
 }));
 
 import type { EventSummary } from "../api";
@@ -60,16 +71,35 @@ afterEach(() => {
   delete refundState.variables;
   denyState.isPending = false;
   delete denyState.variables;
+  removeState.isPending = false;
+  delete removeState.variables;
   regsData = defaultRows;
 });
 
-function renderTable(status: EventSummary["status"] = "published") {
+function renderTable(status: EventSummary["status"] = "published", rows?: EventRegistrationRow[]) {
+  if (rows) regsData = rows;
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <RegistrationsTable eventId="e1" status={status} />
     </QueryClientProvider>,
   );
+}
+
+let nextRowId = 100;
+function row(
+  overrides: Partial<EventRegistrationRow> & {
+    status: EventRegistrationRow["status"];
+    displayName: string;
+  },
+): EventRegistrationRow {
+  return {
+    id: `row-${nextRowId++}`,
+    email: `${overrides.displayName.toLowerCase()}@t`,
+    createdAt: "2026-07-13T10:00:00Z",
+    hasPayment: false,
+    ...overrides,
+  };
 }
 
 test("groups rows and gates actions by status", () => {
@@ -146,4 +176,27 @@ test("finished with an empty queue renders nothing", () => {
   renderTable("finished");
   expect(screen.queryByRole("heading", { name: m.regs_title() })).not.toBeInTheDocument();
   expect(screen.queryByText("Ala")).not.toBeInTheDocument();
+});
+
+test("free rows get Remove, paid rows get Refund plus Remove-no-refund", async () => {
+  renderTable("published", [
+    row({ status: "paid", displayName: "Ann", hasPayment: false }),
+    row({ status: "paid", displayName: "Bob", hasPayment: true }),
+  ]);
+  await screen.findByText("Ann");
+
+  const annRow = screen.getByText("Ann").closest("li");
+  const bobRow = screen.getByText("Bob").closest("li");
+  expect(annRow).not.toBeNull();
+  expect(bobRow).not.toBeNull();
+
+  expect(within(annRow as HTMLElement).getByRole("button", { name: "Remove" })).toBeInTheDocument();
+  expect(
+    within(annRow as HTMLElement).queryByRole("button", { name: "Refund" }),
+  ).not.toBeInTheDocument();
+
+  expect(within(bobRow as HTMLElement).getByRole("button", { name: "Refund" })).toBeInTheDocument();
+  expect(
+    within(bobRow as HTMLElement).getByRole("button", { name: "Remove — no refund" }),
+  ).toBeInTheDocument();
 });

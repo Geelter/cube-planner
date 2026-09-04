@@ -75,6 +75,7 @@ test("pending payment → Pay now + countdown", () => {
         id: "r1",
         status: "pending_payment",
         expiresAt: new Date(Date.now() + 3 * 3600_000).toISOString(),
+        hasPayment: false,
       },
     }),
   );
@@ -86,7 +87,7 @@ test("paid past refund deadline → cancel warns about losing money", async () =
   renderPanel(
     baseEvent({
       refundDeadline: new Date(Date.now() - 3600_000).toISOString(),
-      myRegistration: { id: "r1", status: "paid" },
+      myRegistration: { id: "r1", status: "paid", hasPayment: true },
     }),
   );
   await userEvent.click(screen.getByRole("button", { name: "Cancel registration" }));
@@ -100,7 +101,7 @@ test("free event past deadline → cancel shows plain confirm, no refund footnot
     baseEvent({
       feeCents: 0,
       refundDeadline: new Date(Date.now() - 3600_000).toISOString(),
-      myRegistration: { id: "r1", status: "paid" },
+      myRegistration: { id: "r1", status: "paid", hasPayment: false },
     }),
   );
   expect(screen.queryByText(/Free cancellation until/)).not.toBeInTheDocument();
@@ -120,7 +121,7 @@ test("confirm-cancel keeps the dialog open and spins while the cancellation is p
   const view = renderPanel(
     baseEvent({
       refundDeadline: new Date(Date.now() + 3600_000).toISOString(),
-      myRegistration: { id: "r1", status: "paid" },
+      myRegistration: { id: "r1", status: "paid", hasPayment: true },
     }),
   );
   await userEvent.click(screen.getByRole("button", { name: "Cancel registration" }));
@@ -139,7 +140,9 @@ test("confirm-cancel keeps the dialog open and spins while the cancellation is p
 });
 
 test("refund_requested → status note, no buttons", () => {
-  renderPanel(baseEvent({ myRegistration: { id: "r1", status: "refund_requested" } }));
+  renderPanel(
+    baseEvent({ myRegistration: { id: "r1", status: "refund_requested", hasPayment: true } }),
+  );
   expect(screen.getByText(/refund pending organizer review/)).toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });

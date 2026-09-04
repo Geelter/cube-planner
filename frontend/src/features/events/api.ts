@@ -177,6 +177,23 @@ export function useDenyRefund(eventId: string) {
   });
 }
 
+export function useRemoveRegistration(eventId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { registrationId: string; keepPayment: boolean }) => {
+      const { data, error } = await client.POST(
+        "/api/events/{eventId}/registrations/{registrationId}/remove",
+        {
+          params: { path: { eventId, registrationId: vars.registrationId } },
+          body: { keepPayment: vars.keepPayment },
+        },
+      );
+      return unwrap(data, error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["events"] }),
+  });
+}
+
 // Cube linking sources. features must not import other features
 // (structure.md), so events talks to the cubes API through the shared
 // generated client directly.
