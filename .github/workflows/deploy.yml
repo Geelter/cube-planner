@@ -9,10 +9,51 @@ on:
 permissions:
   contents: read
   packages: write
+  # Needed by the gate job to read the triggering CI run's job results.
+  actions: read
 
 jobs:
+  # Deploy gates on the CI jobs that prove the release is sound, NOT on CI's
+  # overall conclusion. Gating on the conclusion means any red job blocks the
+  # release, including advisory ones: a failing govulncheck silently skipped
+  # every deploy between 2026-08-04 and 2026-09-04, leaving production four
+  # weeks stale while PRs kept merging (govulncheck is not a required check).
+  #
+  # Jobs listed in REQUIRED_JOBS block the release. Everything else in CI is
+  # advisory - it reports, it does not stop a deploy. Renaming one of these
+  # jobs in ci.yml without updating this list fails the deploy loudly rather
+  # than skipping it silently, which is the point.
+  gate:
+    # Fork-PR guard: only ever deploy a CI run that a push triggered.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the release-gating CI jobs to have passed
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          REQUIRED_JOBS: backend frontend api-client-fresh
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs" --paginate \
+            --jq '.jobs[] | "\(.name)=\(.conclusion)"' > jobs.txt
+          echo "CI run $RUN_ID job results:"
+          sed 's/^/  /' jobs.txt
+          blocked=0
+          for job in $REQUIRED_JOBS; do
+            if ! grep -qxF "$job=success" jobs.txt; then
+              echo "::error::required CI job '$job' did not succeed - refusing to deploy"
+              blocked=1
+            fi
+          done
+          if [ "$blocked" -eq 0 ]; then
+            echo "All required jobs passed - proceeding with the deploy."
+          fi
+          exit "$blocked"
+
   build-push:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    needs: gate
     runs-on: ubuntu-latest
     env:
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -49,7 +90,6 @@ jobs:
 
   deploy:
     needs: build-push
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       - uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5

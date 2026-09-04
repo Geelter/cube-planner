@@ -45,6 +45,11 @@ Router/Query + Tailwind v4 + Paraglide i18n). Master design:
 - Deploy workflow (`workflow_run`) must keep its
   `github.event.workflow_run.event == 'push'` guard — it prevents
   fork-PR pwn requests.
+- Deploy gates on named CI jobs (`REQUIRED_JOBS` in `deploy.yml`), not on
+  CI's overall conclusion: advisory jobs like `govulncheck` report without
+  blocking a release. **Renaming a CI job means updating that list** — a
+  mismatch fails the deploy loudly, which beats the silent skip that kept
+  production four weeks stale in Aug 2026.
 - `deploy/docker-compose.prod.yml` + `.env` live at `/opt/cube-planner`
   on the VPS (placed manually).
 - Stripe dev: test-mode keys in `.env` (`STRIPE_SECRET_KEY`,
