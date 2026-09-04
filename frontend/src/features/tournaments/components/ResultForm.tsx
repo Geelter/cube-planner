@@ -67,6 +67,11 @@ export function ResultForm({
   const [touchedInvalid, setTouchedInvalid] = useState(false);
 
   const dirty = result.p1Games !== (match.p1Games ?? 0) || result.p2Games !== (match.p2Games ?? 0);
+  // Only assert "this is a draw" once there is an actual result to read —
+  // either the match was already reported, or the user has started
+  // editing this form. Otherwise every unreported match defaults to 0-0
+  // and would falsely flag as a draw before anyone has typed anything.
+  const showDrawHint = (match.reportedAt != null || dirty) && result.p1Games === result.p2Games;
   useEffect(() => {
     onDirtyChange?.(dirty);
     // Clear the flag when this form goes away, or the panel would keep
@@ -94,6 +99,9 @@ export function ResultForm({
         max={2}
         onChange={(v) => setResult({ ...result, p1Games: v })}
       />
+      {showDrawHint && (
+        <p className="w-full text-sm text-fg-muted">{m.tournament_result_draw_hint()}</p>
+      )}
       <GamesField
         id={`p2-${match.id}`}
         label={m.tournament_games_won({
@@ -106,9 +114,6 @@ export function ResultForm({
       <Button type="submit" size="lg" loading={pending}>
         {m.tournament_report_result()}
       </Button>
-      {result.p1Games === result.p2Games && (
-        <p className="w-full text-sm text-fg-muted">{m.tournament_result_draw_hint()}</p>
-      )}
       {touchedInvalid && (
         <p role="alert" className="w-full text-sm text-danger">
           {m.tournament_result_invalid()}
