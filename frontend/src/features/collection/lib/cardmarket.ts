@@ -5,12 +5,24 @@ export function wantlistToCardmarketText(
   return items.map((i) => `${i.missingQuantity} ${i.name}`).join("\n");
 }
 
-// Moxfield/Archidekt accept a trailing "(SET)"; Cardmarket does not, which
-// is why this is a separate export rather than a change to the one above.
+// Moxfield/Archidekt accept a trailing "(SET)" plus collector number; this
+// row is a specific printing (that's the whole point of exact-printing
+// mode), so the collector number goes along with the set code — that's
+// also what makes this round-trip back into our own importer, which reads
+// this exact "<qty> <name> (<SET>) <number>" grammar. Cardmarket does not
+// accept any of this, which is why this is a separate export rather than a
+// change to the one above.
 export function wantlistToSetAnnotatedText(
-  items: readonly { missingQuantity: number; name: string; setCode: string }[],
+  items: readonly {
+    missingQuantity: number;
+    name: string;
+    setCode: string;
+    collectorNumber: string;
+  }[],
 ): string {
-  return items.map((i) => `${i.missingQuantity} ${i.name} (${i.setCode.toUpperCase()})`).join("\n");
+  return items
+    .map((i) => `${i.missingQuantity} ${i.name} (${i.setCode.toUpperCase()}) ${i.collectorNumber}`)
+    .join("\n");
 }
 
 export function wantlistFilename(cubeName: string): string {
