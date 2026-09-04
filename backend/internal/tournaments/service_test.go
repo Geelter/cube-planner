@@ -518,3 +518,15 @@ func TestGetUnknownEventStillNotFound(t *testing.T) {
 		t.Fatalf("an unknown event must still be not-found, got %v", err)
 	}
 }
+
+func TestGetDraftEventStillNotFound(t *testing.T) {
+	f := newFixture(t, 4)
+	ctx := context.Background()
+	if _, err := f.pool.Exec(ctx,
+		`update events set status='draft' where id=$1`, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Get(ctx, f.eventID, true); !errors.Is(err, ErrEventNotFound) {
+		t.Fatalf("a draft event must still be not-found, got %v", err)
+	}
+}

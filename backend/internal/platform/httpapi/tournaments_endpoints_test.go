@@ -199,6 +199,22 @@ func TestTournamentEndpointsHappyPath(t *testing.T) {
 	}
 }
 
+// A draft event (never published) must 404 the same way an unknown event
+// id does — only "no tournament yet" changed to 200 in this batch.
+func TestTournamentGetDraftEventNotFound(t *testing.T) {
+	srv, pool, q := newTournamentServer(t)
+	eventID, _, _, players := seedStartedEvent(t, pool, q, srv, 1)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx,
+		`update events set status='draft' where id=$1`, eventID); err != nil {
+		t.Fatal(err)
+	}
+	resp := players[0].do(t, http.MethodGet, fmt.Sprintf("/api/events/%s/tournament", eventID), "")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("draft event GET = %d, want 404", resp.StatusCode)
+	}
+}
+
 func TestTournamentAdminGates(t *testing.T) {
 	srv, pool, q := newTournamentServer(t)
 	eventID, _, _, players := seedStartedEvent(t, pool, q, srv, 4)
