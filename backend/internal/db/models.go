@@ -163,6 +163,16 @@ type Match struct {
 	UpdatedAt   time.Time
 }
 
+type MatchResultReport struct {
+	ID          uuid.UUID
+	MatchID     uuid.UUID
+	ReportedBy  uuid.UUID
+	IsOrganizer bool
+	P1Games     int32
+	P2Games     int32
+	ReportedAt  time.Time
+}
+
 type OauthIdentity struct {
 	Provider       string
 	ProviderUserID string

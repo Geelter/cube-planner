@@ -85,6 +85,29 @@ func (f *fixture) playerByUser(t *testing.T, userID uuid.UUID) PlayerDetail {
 	return PlayerDetail{}
 }
 
+// findMatch locates a match by ID within a Detail, for assertions after a
+// fresh Get.
+func findMatch(d *Detail, matchID uuid.UUID) MatchDetail {
+	for _, rd := range d.Rounds {
+		for _, m := range rd.Matches {
+			if m.ID == matchID {
+				return m
+			}
+		}
+	}
+	return MatchDetail{}
+}
+
+// userFor returns the user ID behind a tournament player ID.
+func userFor(d *Detail, playerID uuid.UUID) uuid.UUID {
+	for _, p := range d.Players {
+		if p.ID == playerID {
+			return p.UserID
+		}
+	}
+	return uuid.UUID{}
+}
+
 // reportAll enters 2-0 (admin) for every unreported match of round n.
 func (f *fixture) reportAll(t *testing.T, roundNumber int32) {
 	t.Helper()
@@ -302,6 +325,293 @@ func TestReportResultPersistsZeroDraws(t *testing.T) {
 		if mp != 1 {
 			t.Errorf("player %v: MP = %d, want 1 (a 1-1 draw)", id, mp)
 		}
+	}
+}
+
+// The report log is append-only: every reported result is preserved even
+// when a later report overwrites the authoritative result on the match
+// itself (last write wins there, unchanged).
+func TestReportResultAppendsToTheLog(t *testing.T) {
+	f := newFixture(t, 2)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Publish(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	d := f.detail(t)
+	m := d.Rounds[0].Matches[0]
+	var p1User, p2User uuid.UUID
+	for _, p := range d.Players {
+		if p.ID == m.Player1ID {
+			p1User = p.UserID
+		}
+		if m.Player2ID != nil && p.ID == *m.Player2ID {
+			p2User = p.UserID
+		}
+	}
+	tour, err := f.q.GetTournamentByEvent(ctx, f.eventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, p1User, false,
+		Result{P1Games: 2, P2Games: 1}); err != nil {
+		t.Fatalf("player A report = %v", err)
+	}
+	reports, err := f.q.ListMatchResultReportsForTournament(ctx, tour.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 1 {
+		t.Fatalf("reports after A = %d, want 1", len(reports))
+	}
+	if reports[0].IsOrganizer {
+		t.Error("player report must not be flagged organizer")
+	}
+	if reports[0].P1Games != 2 || reports[0].P2Games != 1 {
+		t.Errorf("report A score = %d-%d, want 2-1", reports[0].P1Games, reports[0].P2Games)
+	}
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, p2User, false,
+		Result{P1Games: 1, P2Games: 2}); err != nil {
+		t.Fatalf("player B report = %v", err)
+	}
+	reports, err = f.q.ListMatchResultReportsForTournament(ctx, tour.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 2 {
+		t.Fatalf("reports after B = %d, want 2 (both preserved)", len(reports))
+	}
+
+	after := f.detail(t)
+	var stored MatchDetail
+	for _, rd := range after.Rounds {
+		for _, rm := range rd.Matches {
+			if rm.ID == m.ID {
+				stored = rm
+			}
+		}
+	}
+	if stored.P1Games == nil || *stored.P1Games != 1 || stored.P2Games == nil || *stored.P2Games != 2 {
+		t.Fatalf("stored result = %v-%v, want 1-2 (last write wins)", stored.P1Games, stored.P2Games)
+	}
+}
+
+// Once the organizer reports, ordinary players may no longer overwrite the
+// result — "let players do the work until the owner steps in" — but the
+// organizer may keep re-reporting.
+func TestOrganizerReportLocksOutPlayers(t *testing.T) {
+	f := newFixture(t, 2)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Publish(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	d := f.detail(t)
+	m := d.Rounds[0].Matches[0]
+	p1User := userFor(d, m.Player1ID)
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, f.users[0], true,
+		Result{P1Games: 2, P2Games: 0}); err != nil {
+		t.Fatalf("organizer report = %v", err)
+	}
+	if got := findMatch(f.detail(t), m.ID); !got.ResultLocked {
+		t.Error("resultLocked = false right after the organizer's report, want true")
+	}
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, p1User, false,
+		Result{P1Games: 0, P2Games: 2}); err != ErrResultLocked {
+		t.Fatalf("player report after organizer = %v, want ErrResultLocked", err)
+	}
+	after := f.detail(t)
+	stored := findMatch(after, m.ID)
+	if stored.P1Games == nil || *stored.P1Games != 2 || stored.P2Games == nil || *stored.P2Games != 0 {
+		t.Fatalf("stored result after refused player report = %v-%v, want 2-0",
+			stored.P1Games, stored.P2Games)
+	}
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, f.users[0], true,
+		Result{P1Games: 2, P2Games: 1}); err != nil {
+		t.Fatalf("organizer re-report = %v", err)
+	}
+	after = f.detail(t)
+	stored = findMatch(after, m.ID)
+	if stored.P1Games == nil || *stored.P1Games != 2 || stored.P2Games == nil || *stored.P2Games != 1 {
+		t.Fatalf("stored result after organizer re-report = %v-%v, want 2-1",
+			stored.P1Games, stored.P2Games)
+	}
+}
+
+// disputed is derived from the latest report per player, so it clears the
+// moment the players' latest reports agree again — even though the
+// disagreement did happen.
+func TestDisputeClearsWhenPlayersAgree(t *testing.T) {
+	f := newFixture(t, 2)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Publish(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	d := f.detail(t)
+	m := d.Rounds[0].Matches[0]
+	ann := userFor(d, m.Player1ID)
+	bob := userFor(d, *m.Player2ID)
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, ann, false,
+		Result{P1Games: 2, P2Games: 1}); err != nil {
+		t.Fatalf("Ann report = %v", err)
+	}
+	got := findMatch(f.detail(t), m.ID)
+	if got.Disputed {
+		t.Error("disputed = true with only one reporter, want false")
+	}
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, bob, false,
+		Result{P1Games: 1, P2Games: 2}); err != nil {
+		t.Fatalf("Bob report = %v", err)
+	}
+	got = findMatch(f.detail(t), m.ID)
+	if !got.Disputed {
+		t.Error("disputed = false after players disagree, want true")
+	}
+	if !got.HadDispute {
+		t.Error("hadDispute = false after players disagree, want true")
+	}
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, bob, false,
+		Result{P1Games: 2, P2Games: 1}); err != nil {
+		t.Fatalf("Bob correction = %v", err)
+	}
+	got = findMatch(f.detail(t), m.ID)
+	if got.Disputed {
+		t.Error("disputed = true after players agree again, want false (clears)")
+	}
+	if !got.HadDispute {
+		t.Error("hadDispute = false after clearing, want true (sticky)")
+	}
+	if got.P1Games == nil || *got.P1Games != 2 || got.P2Games == nil || *got.P2Games != 1 {
+		t.Fatalf("stored result = %v-%v, want 2-1", got.P1Games, got.P2Games)
+	}
+}
+
+// An organizer ruling resolves the dispute badge even though the players
+// themselves never agreed; the fact that they once disagreed stays visible
+// to organizers via hadDispute.
+func TestOrganizerReportResolvesDispute(t *testing.T) {
+	f := newFixture(t, 2)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Publish(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	d := f.detail(t)
+	m := d.Rounds[0].Matches[0]
+	ann := userFor(d, m.Player1ID)
+	bob := userFor(d, *m.Player2ID)
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, ann, false,
+		Result{P1Games: 2, P2Games: 1}); err != nil {
+		t.Fatalf("Ann report = %v", err)
+	}
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, bob, false,
+		Result{P1Games: 1, P2Games: 2}); err != nil {
+		t.Fatalf("Bob report = %v", err)
+	}
+	if got := findMatch(f.detail(t), m.ID); !got.Disputed {
+		t.Fatal("want disputed=true before the organizer rules")
+	}
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, f.users[0], true,
+		Result{P1Games: 2, P2Games: 0}); err != nil {
+		t.Fatalf("organizer report = %v", err)
+	}
+	got := findMatch(f.detail(t), m.ID)
+	if got.Disputed {
+		t.Error("disputed = true after organizer ruling, want false")
+	}
+	if !got.HadDispute {
+		t.Error("hadDispute = false, want true (sticky)")
+	}
+}
+
+// Reporting the same score twice is not a disagreement.
+func TestRepeatedIdenticalReportsAreNotADispute(t *testing.T) {
+	f := newFixture(t, 2)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Publish(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	d := f.detail(t)
+	m := d.Rounds[0].Matches[0]
+	ann := userFor(d, m.Player1ID)
+
+	for i := 0; i < 2; i++ {
+		if err := f.svc.ReportResult(ctx, f.eventID, m.ID, ann, false,
+			Result{P1Games: 2, P2Games: 1}); err != nil {
+			t.Fatalf("Ann report #%d = %v", i+1, err)
+		}
+	}
+	got := findMatch(f.detail(t), m.ID)
+	if got.Disputed {
+		t.Error("disputed = true after identical repeats, want false")
+	}
+	if got.HadDispute {
+		t.Error("hadDispute = true after identical repeats, want false")
+	}
+}
+
+// An organizer report that merely officiates — recorded after the players
+// already agreed with each other — must not retroactively manufacture a
+// dispute. hadDispute exists to catch a player backing down from another
+// player, not an organizer's own score differing from theirs for ordinary
+// reasons (e.g. correcting an error neither player caught).
+func TestOrganizerReportAfterPlayerAgreementIsNotADispute(t *testing.T) {
+	f := newFixture(t, 2)
+	ctx := context.Background()
+	if err := f.svc.PairNextRound(ctx, f.eventID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Publish(ctx, f.eventID, 1); err != nil {
+		t.Fatal(err)
+	}
+	d := f.detail(t)
+	m := d.Rounds[0].Matches[0]
+	ann := userFor(d, m.Player1ID)
+	bob := userFor(d, *m.Player2ID)
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, ann, false,
+		Result{P1Games: 2, P2Games: 1}); err != nil {
+		t.Fatalf("Ann report = %v", err)
+	}
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, bob, false,
+		Result{P1Games: 2, P2Games: 1}); err != nil {
+		t.Fatalf("Bob report = %v", err)
+	}
+
+	if err := f.svc.ReportResult(ctx, f.eventID, m.ID, f.users[0], true,
+		Result{P1Games: 2, P2Games: 0}); err != nil {
+		t.Fatalf("organizer report = %v", err)
+	}
+	got := findMatch(f.detail(t), m.ID)
+	if got.HadDispute {
+		t.Error("hadDispute = true after an organizer report following player agreement, want false")
+	}
+	if got.Disputed {
+		t.Error("disputed = true after an organizer report, want false")
+	}
+	if !got.ResultLocked {
+		t.Error("resultLocked = false after an organizer report, want true")
 	}
 }
 

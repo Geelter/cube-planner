@@ -126,3 +126,30 @@ returning *;
 select count(*) from rounds r
 join tournaments t on t.id = r.tournament_id
 where t.event_id = sqlc.arg(event_id) and r.status <> 'completed';
+
+-- name: InsertMatchResultReport :one
+insert into match_result_reports (
+    match_id, reported_by, is_organizer, p1_games, p2_games)
+values (
+    sqlc.arg(match_id), sqlc.arg(reported_by), sqlc.arg(is_organizer),
+    sqlc.arg(p1_games), sqlc.arg(p2_games))
+returning *;
+
+-- Every report for one tournament, oldest first, with the reporter's name
+-- for the organizer's dispute history.
+-- name: ListMatchResultReportsForTournament :many
+select rr.*, u.display_name
+from match_result_reports rr
+join matches mt on mt.id = rr.match_id
+join rounds rd on rd.id = mt.round_id
+join users u on u.id = rr.reported_by
+where rd.tournament_id = sqlc.arg(tournament_id)
+-- rr.id breaks ties: reported_at is transaction-start time in Postgres, so
+-- two reports can share a timestamp, and "latest wins" must stay stable.
+order by rr.match_id, rr.reported_at, rr.id;
+
+-- name: MatchHasOrganizerReport :one
+select exists (
+    select 1 from match_result_reports
+    where match_id = sqlc.arg(match_id) and is_organizer
+);

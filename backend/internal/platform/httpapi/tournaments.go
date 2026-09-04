@@ -19,6 +19,14 @@ type TournamentPlayerInfo struct {
 	Dropped     bool      `json:"dropped"`
 }
 
+type TournamentResultReportInfo struct {
+	ReporterName string    `json:"reporterName"`
+	IsOrganizer  bool      `json:"isOrganizer"`
+	P1Games      int32     `json:"p1Games"`
+	P2Games      int32     `json:"p2Games"`
+	ReportedAt   time.Time `json:"reportedAt"`
+}
+
 type TournamentMatchInfo struct {
 	ID          uuid.UUID  `json:"id"`
 	TableNumber int32      `json:"tableNumber"`
@@ -28,6 +36,14 @@ type TournamentMatchInfo struct {
 	P2Games     *int32     `json:"p2Games,omitempty"`
 	Draws       *int32     `json:"draws,omitempty"`
 	ReportedAt  *time.Time `json:"reportedAt,omitempty"`
+	// Disputed: the players' latest reports disagree and no organizer has
+	// ruled. Clears when they agree. HadDispute is sticky and
+	// organizer-only. ResultLocked is sent to everyone: it is the same
+	// fact the 409 on a refused report already tells a player.
+	Disputed     bool                         `json:"disputed"`
+	HadDispute   bool                         `json:"hadDispute"`
+	ResultLocked bool                         `json:"resultLocked"`
+	Reports      []TournamentResultReportInfo `json:"reports"`
 }
 
 type TournamentRoundInfo struct {
@@ -60,7 +76,7 @@ type TournamentInfo struct {
 	Standings         []TournamentStandingInfo `json:"standings"`
 }
 
-func tournamentInfoFrom(d *tournaments.Detail) TournamentInfo {
+func tournamentInfoFrom(d *tournaments.Detail, admin bool) TournamentInfo {
 	out := TournamentInfo{
 		EventID: d.EventID, Exists: d.Exists, PlannedRounds: d.PlannedRounds,
 		RecommendedRounds: d.RecommendedRounds, PaidPlayerCount: d.PaidPlayerCount,
@@ -76,11 +92,27 @@ func tournamentInfoFrom(d *tournaments.Detail) TournamentInfo {
 	for i, r := range d.Rounds {
 		matches := make([]TournamentMatchInfo, len(r.Matches))
 		for j, m := range r.Matches {
-			matches[j] = TournamentMatchInfo{
+			reports := make([]TournamentResultReportInfo, len(m.Reports))
+			for k, rep := range m.Reports {
+				reports[k] = TournamentResultReportInfo{
+					ReporterName: rep.ReporterName, IsOrganizer: rep.IsOrganizer,
+					P1Games: rep.P1Games, P2Games: rep.P2Games, ReportedAt: rep.ReportedAt,
+				}
+			}
+			md := TournamentMatchInfo{
 				ID: m.ID, TableNumber: m.TableNumber, Player1ID: m.Player1ID,
 				Player2ID: m.Player2ID, P1Games: m.P1Games, P2Games: m.P2Games,
 				Draws: m.Draws, ReportedAt: m.ReportedAt,
+				Disputed: m.Disputed, HadDispute: m.HadDispute,
+				ResultLocked: m.ResultLocked, Reports: reports,
 			}
+			if !admin {
+				// Players see the live badge and the lock only; the audit
+				// trail is organizer-only.
+				md.HadDispute = false
+				md.Reports = []TournamentResultReportInfo{}
+			}
+			matches[j] = md
 		}
 		out.Rounds[i] = TournamentRoundInfo{Number: r.Number, Status: r.Status, Matches: matches}
 	}
@@ -162,7 +194,7 @@ func (deps Deps) tournamentBody(ctx context.Context, eventID uuid.UUID, admin bo
 	if err != nil {
 		return nil, mapTournamentErr(err)
 	}
-	return &tournamentOutput{Body: tournamentInfoFrom(d)}, nil
+	return &tournamentOutput{Body: tournamentInfoFrom(d, admin)}, nil
 }
 
 type upsertTournamentInput struct {

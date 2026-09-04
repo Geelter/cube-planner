@@ -55,7 +55,7 @@ export function TournamentSection({ eventId }: { eventId: string }) {
   const matches = round.matches ?? [];
   const myMatch =
     myPlayer && matches.find((mt) => mt.player1Id === myPlayer.id || mt.player2Id === myPlayer.id);
-  const canReportMine =
+  const myMatchReportable =
     live &&
     round.status === "published" &&
     myMatch &&
@@ -141,16 +141,30 @@ export function TournamentSection({ eventId }: { eventId: string }) {
         </ul>
       </div>
 
-      {canReportMine && myMatch && (
+      {myMatchReportable && myMatch && (
         <div className="rounded-lg border border-border bg-surface-raised p-3">
-          <h3 className="mb-2 text-sm font-medium text-fg">{m.tournament_your_match()}</h3>
-          <ResultForm
-            match={myMatch}
-            playerNames={playerNames}
-            pending={report.isPending}
-            error={report.error}
-            onSubmit={(result) => report.mutate({ matchId: myMatch.id, result })}
-          />
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-medium text-fg">{m.tournament_your_match()}</h3>
+            {myMatch.disputed && (
+              <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-medium text-danger-fg">
+                {m.tournament_result_disputed()}
+              </span>
+            )}
+          </div>
+          {myMatch.disputed && (
+            <p className="mb-2 text-sm text-fg">{m.tournament_result_disputed_player()}</p>
+          )}
+          {myMatch.resultLocked ? (
+            <p className="text-sm text-fg-muted">{m.tournament_result_locked_by_organizer()}</p>
+          ) : (
+            <ResultForm
+              match={myMatch}
+              playerNames={playerNames}
+              pending={report.isPending}
+              error={report.error}
+              onSubmit={(result) => report.mutate({ matchId: myMatch.id, result })}
+            />
+          )}
         </div>
       )}
 

@@ -1508,9 +1508,13 @@ components:
     TournamentMatchInfo:
       additionalProperties: false
       properties:
+        disputed:
+          type: boolean
         draws:
           format: int32
           type: integer
+        hadDispute:
+          type: boolean
         id:
           type: string
         p1Games:
@@ -1526,6 +1530,14 @@ components:
         reportedAt:
           format: date-time
           type: string
+        reports:
+          items:
+            $ref: "#/components/schemas/TournamentResultReportInfo"
+          type:
+            - array
+            - "null"
+        resultLocked:
+          type: boolean
         tableNumber:
           format: int32
           type: integer
@@ -1533,6 +1545,10 @@ components:
         - id
         - tableNumber
         - player1Id
+        - disputed
+        - hadDispute
+        - resultLocked
+        - reports
       type: object
     TournamentPlayerInfo:
       additionalProperties: false
@@ -1550,6 +1566,29 @@ components:
         - userId
         - displayName
         - dropped
+      type: object
+    TournamentResultReportInfo:
+      additionalProperties: false
+      properties:
+        isOrganizer:
+          type: boolean
+        p1Games:
+          format: int32
+          type: integer
+        p2Games:
+          format: int32
+          type: integer
+        reportedAt:
+          format: date-time
+          type: string
+        reporterName:
+          type: string
+      required:
+        - reporterName
+        - isOrganizer
+        - p1Games
+        - p2Games
+        - reportedAt
       type: object
     TournamentRoundInfo:
       additionalProperties: false

@@ -13,6 +13,10 @@ const match: TournamentMatch = {
   tableNumber: 1,
   player1Id: "a",
   player2Id: "b",
+  disputed: false,
+  hadDispute: false,
+  reports: [],
+  resultLocked: false,
 };
 const names = new Map([
   ["a", "Ann"],

@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { m } from "@/paraglide/messages";
+import { getLocale } from "@/paraglide/runtime";
 import { useMe } from "@/features/auth/api";
 import { Button } from "@/shared/ui/button";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Label } from "@/shared/ui/label";
 import {
   usePairNextRound,
@@ -42,6 +44,26 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
   const [plannedRounds, setPlannedRounds] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SwapSlotRef | null>(null);
   const [editingMatch, setEditingMatch] = useState<string | null>(null);
+  // dirtyMatch tracks which open ResultForm (if any) has unsaved edits;
+  // pendingSwitch holds the row the user tried to open instead, so the
+  // discard-confirm dialog knows what to switch to once confirmed.
+  const [dirtyMatch, setDirtyMatch] = useState<string | null>(null);
+  const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
+
+  const handleDirty = useCallback(
+    (matchId: string) => (dirty: boolean) => setDirtyMatch(dirty ? matchId : null),
+    [],
+  );
+
+  function requestOpen(matchId: string) {
+    const next = editingMatch === matchId ? null : matchId;
+    // Only prompt when the form being replaced actually has unsaved edits.
+    if (dirtyMatch !== null && dirtyMatch !== matchId) {
+      setPendingSwitch(next);
+      return;
+    }
+    setEditingMatch(next);
+  }
 
   if (me.data?.role !== "admin") return null;
   const status = event.data?.status;
@@ -249,23 +271,48 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
                       {mt.draws ? ` (${mt.draws})` : ""}
                     </span>
                   )}
+                  {mt.disputed && (
+                    <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-medium text-danger-fg">
+                      {m.tournament_result_disputed()}
+                    </span>
+                  )}
+                  {mt.hadDispute && !mt.disputed && (
+                    <span className="text-xs text-fg-muted">
+                      {m.tournament_result_had_dispute()}
+                    </span>
+                  )}
                   {mt.player2Id != null && (
                     <Button
                       type="button"
                       size="sm"
                       variant="ghost"
-                      onClick={() => setEditingMatch(editingMatch === mt.id ? null : mt.id)}
+                      onClick={() => requestOpen(mt.id)}
                     >
                       {m.tournament_report_result()}
                     </Button>
                   )}
                 </div>
+                {mt.reports != null && mt.reports.length > 0 && (
+                  <ul className="flex flex-col gap-0.5 pl-1 text-xs text-fg-muted">
+                    {mt.reports.map((r) => (
+                      <li key={`${r.reporterName}-${r.reportedAt}`}>
+                        {m.tournament_result_reported_by({
+                          name: r.reporterName,
+                          p1: r.p1Games,
+                          p2: r.p2Games,
+                        })}{" "}
+                        · {new Date(r.reportedAt).toLocaleTimeString(getLocale())}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {editingMatch === mt.id && (
                   <ResultForm
                     match={mt}
                     playerNames={playerNames}
                     pending={report.isPending}
                     error={report.error}
+                    onDirtyChange={handleDirty(mt.id)}
                     onSubmit={(result) => {
                       report.mutate(
                         { matchId: mt.id, result },
@@ -332,6 +379,22 @@ export function TournamentPanel({ eventId }: { eventId: string }) {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={pendingSwitch !== null}
+        onClose={() => setPendingSwitch(null)}
+        onConfirm={() => {
+          setDirtyMatch(null);
+          setEditingMatch(pendingSwitch);
+          setPendingSwitch(null);
+        }}
+        title={m.tournament_discard_title()}
+        message={m.tournament_discard_message({
+          table: publishedMatches.find((x) => x.id === dirtyMatch)?.tableNumber ?? 0,
+        })}
+        confirmLabel={m.tournament_discard_confirm()}
+        danger
+      />
     </section>
   );
 }

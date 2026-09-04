@@ -3,7 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { m } from "@/paraglide/messages";
-import type { TournamentInfo } from "../api";
+import type { TournamentInfo, TournamentMatch } from "../api";
 
 const pairMut = vi.fn();
 const swapMut = vi.fn();
@@ -95,13 +95,54 @@ function draftTournament(): TournamentInfo {
         number: 1,
         status: "draft",
         matches: [
-          { id: "m1", tableNumber: 1, player1Id: "pl1", player2Id: "pl2" },
-          { id: "m2", tableNumber: 2, player1Id: "pl3", player2Id: "pl4" },
+          matchDefaults({ id: "m1", tableNumber: 1, player1Id: "pl1", player2Id: "pl2" }),
+          matchDefaults({ id: "m2", tableNumber: 2, player1Id: "pl3", player2Id: "pl4" }),
         ],
       },
     ],
     standings: [],
   } as TournamentInfo;
+}
+
+/** Fills in the dispute/report fields every match now carries on the wire. */
+function matchDefaults(overrides: Partial<TournamentMatch>): TournamentMatch {
+  return {
+    id: "m",
+    tableNumber: 1,
+    player1Id: "pl1",
+    disputed: false,
+    hadDispute: false,
+    reports: [],
+    resultLocked: false,
+    ...overrides,
+  };
+}
+
+/** A tournament with one published round holding exactly the given matches. */
+function publishedTournament(matches: Partial<TournamentMatch>[]): TournamentInfo {
+  return {
+    ...draftTournament(),
+    rounds: [
+      {
+        number: 1,
+        status: "published",
+        matches: matches.map((mt) => matchDefaults({ player2Id: "pl2", ...mt })),
+      },
+    ],
+  } as TournamentInfo;
+}
+
+function renderPanelWithMatch(match: Partial<TournamentMatch>) {
+  tournamentData = publishedTournament([match]);
+  renderPanel();
+}
+
+function renderPanelWithTwoMatches() {
+  tournamentData = publishedTournament([
+    { id: "m1", tableNumber: 1, player1Id: "pl1", player2Id: "pl2" },
+    { id: "m2", tableNumber: 2, player1Id: "pl3", player2Id: "pl4" },
+  ]);
+  renderPanel();
 }
 
 test("no tournament yet: shows pair-round-1 CTA", async () => {
@@ -239,4 +280,67 @@ test("all planned rounds completed: pair button hidden, add-round hint shown", (
   renderPanel();
   expect(screen.queryByRole("button", { name: /pair round/i })).not.toBeInTheDocument();
   expect(screen.getByText(/increase planned rounds/i)).toBeInTheDocument();
+});
+
+test("shows a disputed badge and the report history to the organizer", async () => {
+  renderPanelWithMatch({
+    id: "m1",
+    tableNumber: 3,
+    disputed: true,
+    hadDispute: true,
+    reports: [
+      {
+        reporterName: "Ann",
+        isOrganizer: false,
+        p1Games: 2,
+        p2Games: 1,
+        reportedAt: "2026-09-03T14:02:00Z",
+      },
+      {
+        reporterName: "Bob",
+        isOrganizer: false,
+        p1Games: 1,
+        p2Games: 2,
+        reportedAt: "2026-09-03T14:05:00Z",
+      },
+    ],
+  });
+  expect(await screen.findByText("Disputed")).toBeInTheDocument();
+  expect(screen.getByText(/Ann reported 2–1/)).toBeInTheDocument();
+  expect(screen.getByText(/Bob reported 1–2/)).toBeInTheDocument();
+});
+
+test("a resolved-after-disagreement match shows the quiet hadDispute marker, not the badge", async () => {
+  renderPanelWithMatch({ id: "m1", disputed: false, hadDispute: true });
+  expect(await screen.findByText("Resolved after disagreement")).toBeInTheDocument();
+  expect(screen.queryByText("Disputed")).not.toBeInTheDocument();
+});
+
+test("confirms before discarding an unsaved result when opening another table", async () => {
+  renderPanelWithTwoMatches();
+  // Capture the two row toggles up front — once the first form opens, its
+  // own submit button also reads "Report result" and would otherwise be
+  // picked up by a fresh query.
+  const toggles = screen.getAllByRole("button", { name: "Report result" });
+  await userEvent.click(toggles[0]!);
+  await userEvent.clear(screen.getByLabelText("Ann: games won"));
+  await userEvent.type(screen.getByLabelText("Ann: games won"), "2");
+  await userEvent.click(toggles[1]!);
+
+  expect(screen.getByText(/table 1.*has not been submitted/i)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+  // The second table's form is now the open one, showing its own pristine
+  // values — the first table's edited form is gone entirely.
+  expect(screen.queryByLabelText("Ann: games won")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Cid: games won")).toHaveValue(0);
+});
+
+test("opening another table without edits does not prompt", async () => {
+  renderPanelWithTwoMatches();
+  const toggles = screen.getAllByRole("button", { name: "Report result" });
+  await userEvent.click(toggles[0]!);
+  await userEvent.click(toggles[1]!);
+  expect(screen.queryByText(/has not been submitted/i)).not.toBeInTheDocument();
+  // The second table's form is the one now open.
+  expect(screen.getByLabelText("Cid: games won")).toBeInTheDocument();
 });

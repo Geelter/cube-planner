@@ -114,6 +114,42 @@ type MatchDetail struct {
 	P2Games     *int32
 	Draws       *int32
 	ReportedAt  *time.Time
+	// Disputed: the players' latest reports disagree and no organizer has
+	// ruled. Clears the moment they agree again.
+	Disputed bool
+	// HadDispute is sticky and organizer-only: a player who claims a win
+	// and then backs down is a signal worth keeping even after the badge
+	// above clears.
+	HadDispute bool
+	// ResultLocked is true once an organizer has reported this match, at
+	// which point ordinary players may no longer report. Sent to everyone
+	// (unlike HadDispute/Reports) so the player-facing UI can hide the
+	// report form; it leaks nothing beyond what the 409 already tells a
+	// player who tries to report anyway.
+	ResultLocked bool
+	Reports      []ResultReportDetail
+}
+
+// ResultReportDetail is one row of the append-only report log, joined with
+// the reporter's name for the organizer's dispute history.
+type ResultReportDetail struct {
+	ReporterName string
+	IsOrganizer  bool
+	P1Games      int32
+	P2Games      int32
+	ReportedAt   time.Time
+}
+
+// reportScore is the comparable key that makes "did the players agree?" a
+// set-cardinality question.
+type reportScore struct{ p1, p2 int32 }
+
+func distinctScores(per map[uuid.UUID]reportScore) int {
+	seen := map[reportScore]struct{}{}
+	for _, s := range per {
+		seen[s] = struct{}{}
+	}
+	return len(seen)
 }
 
 type RoundDetail struct {
@@ -186,6 +222,38 @@ func (s *Service) Get(ctx context.Context, eventID uuid.UUID, admin bool) (*Deta
 	if err != nil {
 		return nil, err
 	}
+	reports, err := s.queries.ListMatchResultReportsForTournament(ctx, tour.ID)
+	if err != nil {
+		return nil, err
+	}
+	// latest[matchID][reporterID] = that reporter's most recent score. Rows
+	// arrive ordered by (match_id, reported_at), so a plain overwrite
+	// leaves the latest in place.
+	latest := map[uuid.UUID]map[uuid.UUID]reportScore{}
+	organizerReported := map[uuid.UUID]bool{}
+	hadDispute := map[uuid.UUID]bool{}
+	byMatch := map[uuid.UUID][]ResultReportDetail{}
+	for _, r := range reports {
+		byMatch[r.MatchID] = append(byMatch[r.MatchID], ResultReportDetail{
+			ReporterName: r.DisplayName, IsOrganizer: r.IsOrganizer,
+			P1Games: r.P1Games, P2Games: r.P2Games, ReportedAt: r.ReportedAt,
+		})
+		if r.IsOrganizer {
+			organizerReported[r.MatchID] = true
+			continue // the organizer's ruling is not a player disagreement
+		}
+		per, ok := latest[r.MatchID]
+		if !ok {
+			per = map[uuid.UUID]reportScore{}
+			latest[r.MatchID] = per
+		}
+		per[r.ReportedBy] = reportScore{r.P1Games, r.P2Games}
+		// Sticky: evaluated after every report, so a later agreement cannot
+		// erase the fact that the players once disagreed.
+		if distinctScores(per) > 1 {
+			hadDispute[r.MatchID] = true
+		}
+	}
 
 	d := &Detail{
 		EventID: eventID, Exists: true, PlannedRounds: tour.PlannedRounds,
@@ -209,6 +277,10 @@ func (s *Service) Get(ctx context.Context, eventID uuid.UUID, admin bool) (*Deta
 			ID: m.ID, TableNumber: m.TableNumber, Player1ID: m.Player1ID,
 			Player2ID: uuidPtr(m.Player2ID), P1Games: m.P1Games, P2Games: m.P2Games,
 			Draws: m.Draws, ReportedAt: m.ReportedAt,
+			Disputed:     distinctScores(latest[m.ID]) > 1 && !organizerReported[m.ID],
+			HadDispute:   hadDispute[m.ID],
+			ResultLocked: organizerReported[m.ID],
+			Reports:      byMatch[m.ID],
 		})
 		if m.RoundStatus == "draft" {
 			continue // draft matches never count toward standings
@@ -716,6 +788,15 @@ func (s *Service) ReportResult(ctx context.Context, eventID, matchID, callerID u
 		if player2ID == nil {
 			return ErrByeImmutable
 		}
+		organizerReported, err := qtx.MatchHasOrganizerReport(ctx, m.ID)
+		if err != nil {
+			return err
+		}
+		// Players do the reporting until the organizer steps in; from then on
+		// the organizer's result is final and only they may change it.
+		if !admin && organizerReported {
+			return ErrResultLocked
+		}
 		rounds, err := qtx.ListRounds(ctx, tour.ID)
 		if err != nil {
 			return err
@@ -736,6 +817,12 @@ func (s *Service) ReportResult(ctx context.Context, eventID, matchID, callerID u
 			if m.RoundStatus != "published" {
 				return ErrResultLocked
 			}
+		}
+		if _, err := qtx.InsertMatchResultReport(ctx, db.InsertMatchResultReportParams{
+			MatchID: m.ID, ReportedBy: callerID, IsOrganizer: admin,
+			P1Games: r.P1Games, P2Games: r.P2Games,
+		}); err != nil {
+			return err
 		}
 		_, err = qtx.UpdateMatchResult(ctx, db.UpdateMatchResultParams{
 			ID: m.ID, P1Games: &r.P1Games, P2Games: &r.P2Games, Draws: &r.Draws,
