@@ -125,6 +125,40 @@ func TestResolveListParenthesisedNameStillResolves(t *testing.T) {
 	}
 }
 
+func TestResolveListPrintingNameMismatchDoesNotAdoptWrongCard(t *testing.T) {
+	e := newCardsEnv(t)
+	e.seedCard(t, "Lightning Bolt", "leb", "162")
+	// A different card occupies the collector number the user actually typed.
+	e.seedCard(t, "Brainstorm", "leb", "163")
+
+	lines, err := e.svc.ResolveList(context.Background(), "1 Lightning Bolt (LEB) 163")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lines[0].Status != StatusPrintingNotFound {
+		t.Fatalf("want printing-not-found (name mismatch on that slot), got %s", lines[0].Status)
+	}
+	if lines[0].Match != nil {
+		t.Fatalf("must not silently resolve to the card actually occupying that slot, got %+v", lines[0].Match)
+	}
+}
+
+func TestResolveListTypoedNameWithSetFallsBackToFuzzySuggestions(t *testing.T) {
+	e := newCardsEnv(t)
+	e.seedCard(t, "Lightning Bolt", "leb", "162")
+
+	lines, err := e.svc.ResolveList(context.Background(), "1 Lihgtning Blot (LEB)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lines[0].Status != StatusPrintingNotFound {
+		t.Fatalf("want printing-not-found, got %s", lines[0].Status)
+	}
+	if len(lines[0].Suggestions) == 0 {
+		t.Fatalf("a typo'd name with a real set code must still get fuzzy suggestions, got none")
+	}
+}
+
 func TestResolveListSetAwareLineFallsBackToWholeLineAsName(t *testing.T) {
 	e := newCardsEnv(t)
 	// A card whose name ends in a set-code-shaped parenthesis.

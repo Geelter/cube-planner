@@ -284,6 +284,7 @@
   "regs_status_cancelled": "Cancelled",
   "regs_status_expired": "Expired",
   "regs_status_refunded": "Refunded",
+  "regs_status_removed": "Removed",
   "tournament_add_round_hint": "All planned rounds are done — increase planned rounds to pair another one.",
   "tournament_bye": "Bye",
   "tournament_complete_round": "Complete round",
@@ -308,7 +309,6 @@
       }
     }
   ],
-  "tournament_none_yet": "The tournament hasn't started yet.",
   "tournament_none_yet_organizer": "No rounds yet — pair round 1 to start the tournament.",
   "tournament_ogw": "OGW%",
   "tournament_omw": "OMW%",

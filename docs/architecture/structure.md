@@ -107,7 +107,10 @@ src/
    local state (filters, opening dialogs) get no loading prop. Dialogs
    that confirm a mutation defer closing until it settles
    (`mutate(vars, { onSettled: () => close() })`) so the spinner stays
-   visible instead of the dialog vanishing mid-request. Multi-panel tab
+   visible instead of the dialog vanishing mid-request; reach for
+   `shared/ui/confirm-dialog.tsx` rather than hand-rolling that dialog —
+   it already encodes the deferred close, the `pending` spinner and the
+   `danger` variant. Multi-panel tab
    UIs (e.g. tournament rounds) implement the full APG tabs pattern:
    `role="tablist"`/`role="tab"`/`role="tabpanel"`, `aria-selected`,
    `aria-controls`/`aria-labelledby` (via `useId`), roving `tabIndex`
@@ -151,7 +154,10 @@ src/
      `overflow-x-auto` wrapper; dialogs = `shared/ui/dialog.tsx` (handles
      mobile sizing); forms = single-column `max-w-md`. Inputs use ≥16px
      font on mobile (`text-base sm:text-sm`) so iOS Safari does not zoom
-     on focus.
+     on focus. Both overlay primitives lock body scroll while open via
+     `shared/lib/useScrollLock` (ref-counted, because nested overlays are
+     real here) — without it iOS Safari happily scrolls the page behind
+     an open sheet, which `showModal()` alone does not prevent.
 
 ### Adding shadcn/ui components
 

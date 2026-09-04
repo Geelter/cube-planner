@@ -117,6 +117,12 @@ test("groups rows and gates actions by status", () => {
   expect(screen.queryByText("expired")).not.toBeInTheDocument();
 });
 
+test("a removed registration renders the localized label, not the raw status", () => {
+  renderTable("published", [...defaultRows, row({ status: "removed", displayName: "Ewa" })]);
+  expect(screen.getByText("Removed")).toBeInTheDocument();
+  expect(screen.queryByText("removed")).not.toBeInTheDocument();
+});
+
 test("refund flows through the confirm dialog and closes once the mutation settles", async () => {
   renderTable();
   await userEvent.click(screen.getAllByRole("button", { name: "Refund" })[1]!);

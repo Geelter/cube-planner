@@ -7,6 +7,7 @@ import { downloadTextFile } from "@/shared/lib/download";
 import { Alert } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
+import { Spinner } from "@/shared/ui/spinner";
 import { UnauthorizedError, useWantlist } from "../api";
 import {
   wantlistFilename,
@@ -74,7 +75,10 @@ export function WantlistPage() {
       </div>
 
       <fieldset className="flex flex-col gap-1.5">
-        <legend className="text-sm font-medium text-fg">{m.wantlist_match_label()}</legend>
+        <legend className="flex items-center gap-2 text-sm font-medium text-fg">
+          {m.wantlist_match_label()}
+          {wantlist.isFetching && wantlist.isPlaceholderData && <Spinner />}
+        </legend>
         <div className="flex flex-wrap gap-4">
           <div className="flex min-h-11 items-center gap-2">
             <input

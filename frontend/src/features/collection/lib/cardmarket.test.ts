@@ -24,16 +24,18 @@ test("filename slugs the cube name", () => {
 });
 
 const setItems = [
-  { missingQuantity: 1, name: "Lightning Bolt", setCode: "leb" },
-  { missingQuantity: 2, name: "Brainstorm", setCode: "mmq" },
+  { missingQuantity: 1, name: "Lightning Bolt", setCode: "leb", collectorNumber: "162" },
+  { missingQuantity: 2, name: "Brainstorm", setCode: "mmq", collectorNumber: "45" },
 ];
 
 test("the Cardmarket export stays quantity + name only", () => {
   expect(wantlistToCardmarketText(setItems)).toBe("1 Lightning Bolt\n2 Brainstorm");
 });
 
-test("the set-annotated export appends an uppercased set code", () => {
-  expect(wantlistToSetAnnotatedText(setItems)).toBe("1 Lightning Bolt (LEB)\n2 Brainstorm (MMQ)");
+test("the set-annotated export appends an uppercased set code and the collector number, so it round-trips into the importer's printing-selector grammar", () => {
+  expect(wantlistToSetAnnotatedText(setItems)).toBe(
+    "1 Lightning Bolt (LEB) 162\n2 Brainstorm (MMQ) 45",
+  );
 });
 
 test("set-annotated export of an empty list gives an empty string", () => {

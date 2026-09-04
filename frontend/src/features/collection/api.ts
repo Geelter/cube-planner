@@ -91,6 +91,7 @@ export function useImportItems() {
 export function useWantlist(cubeId: string, match: "oracle" | "printing") {
   return useQuery({
     queryKey: ["collection", "wantlist", cubeId, match],
+    placeholderData: keepPreviousData,
     retry: false,
     queryFn: async () => {
       const { data, error, response } = await client.GET("/api/cubes/{cubeId}/wantlist", {

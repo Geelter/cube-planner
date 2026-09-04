@@ -69,6 +69,26 @@ test("has no draws input and hints that equal games are a draw", async () => {
   expect(screen.getByText(/recorded as a draw/i)).toBeInTheDocument();
 });
 
+test("does not assert a draw on mount for an unreported match", () => {
+  // match defaults to no games reported (0-0 internally), which must not
+  // by itself trigger the "this is a draw" hint before anyone has typed.
+  renderForm();
+  expect(screen.queryByText(/recorded as a draw/i)).not.toBeInTheDocument();
+});
+
+test("shows the draw hint on mount when the match was already reported as a draw", () => {
+  render(
+    <ResultForm
+      match={{ ...match, p1Games: 1, p2Games: 1, reportedAt: "2026-09-01T00:00:00Z" }}
+      playerNames={names}
+      onSubmit={vi.fn()}
+      pending={false}
+      error={null}
+    />,
+  );
+  expect(screen.getByText(/recorded as a draw/i)).toBeInTheDocument();
+});
+
 test("reports dirty state as the entered result diverges from the stored one, and clears on unmount", async () => {
   const onDirtyChange = vi.fn();
   renderForm(vi.fn(), onDirtyChange);
