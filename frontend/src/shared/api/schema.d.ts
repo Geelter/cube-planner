@@ -557,6 +557,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/events/{eventId}/registrations/{registrationId}/remove": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Remove a participant without touching money (organizer) */
+    post: operations["removeRegistration"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/events/{eventId}/start": {
     parameters: {
       query?: never;
@@ -1117,6 +1134,7 @@ export interface components {
       email: string;
       /** Format: date-time */
       expiresAt?: string;
+      hasPayment: boolean;
       id: string;
       /** Format: date-time */
       paidAt?: string;
@@ -1346,6 +1364,7 @@ export interface components {
       readonly $schema?: string;
       /** Format: date-time */
       expiresAt?: string;
+      hasPayment: boolean;
       id: string;
       /** Format: date-time */
       paidAt?: string;
@@ -1361,6 +1380,15 @@ export interface components {
         | "removed";
       /** Format: int64 */
       waitlistPos?: number;
+    };
+    RemoveRegistrationInputBody: {
+      /**
+       * Format: uri
+       * @description A URL to the JSON Schema for this object.
+       * @example https://example.com/schemas/RemoveRegistrationInputBody.json
+       */
+      readonly $schema?: string;
+      keepPayment: boolean;
     };
     ReportResultInputBody: {
       /**
@@ -2819,6 +2847,42 @@ export interface operations {
       cookie?: never;
     };
     requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegistrationInfo"];
+        };
+      };
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ErrorModel"];
+        };
+      };
+    };
+  };
+  removeRegistration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        eventId: string;
+        registrationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RemoveRegistrationInputBody"];
+      };
+    };
     responses: {
       /** @description OK */
       200: {

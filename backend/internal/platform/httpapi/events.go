@@ -22,12 +22,17 @@ type RegistrationInfo struct {
 	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
 	WaitlistPos *int64     `json:"waitlistPos,omitempty"`
 	PaidAt      *time.Time `json:"paidAt,omitempty"`
+	// HasPayment: a Stripe charge exists on this row, so removing it needs
+	// an explicit refund decision. Required (never omitted) so the client
+	// can always branch on it.
+	HasPayment bool `json:"hasPayment"`
 }
 
 func registrationInfoFrom(r db.Registration) RegistrationInfo {
 	return RegistrationInfo{
 		ID: r.ID, Status: r.Status, ExpiresAt: r.ExpiresAt,
 		WaitlistPos: r.WaitlistPos, PaidAt: r.PaidAt,
+		HasPayment: r.StripePaymentIntentID != nil,
 	}
 }
 
@@ -95,6 +100,8 @@ func mapEventErr(err error) error {
 		return eventProblem(http.StatusConflict, "registration-not-payable", err.Error())
 	case errors.Is(err, events.ErrInvalidTransition):
 		return eventProblem(http.StatusConflict, "invalid-event-transition", err.Error())
+	case errors.Is(err, events.ErrRemovePaidNeedsDecision):
+		return eventProblem(http.StatusConflict, "remove-needs-decision", err.Error())
 	case errors.Is(err, events.ErrEventLocked):
 		return eventProblem(http.StatusConflict, "event-locked", err.Error())
 	case errors.Is(err, events.ErrCubesLocked):
@@ -379,6 +386,16 @@ type registrationActionInput struct {
 	RegistrationID string `path:"registrationId"`
 }
 
+type removeRegistrationInput struct {
+	EventID        string `path:"eventId"`
+	RegistrationID string `path:"registrationId"`
+	Body           struct {
+		// KeepPayment must be set explicitly to remove a participant whose
+		// fee was charged; the fee is then NOT refunded.
+		KeepPayment bool `json:"keepPayment"`
+	}
+}
+
 func registerEventAdmin(api huma.API, deps Deps) {
 	huma.Register(api, huma.Operation{
 		OperationID: "createEvent",
@@ -520,6 +537,7 @@ func registerEventAdmin(api huma.API, deps Deps) {
 				RegistrationInfo: RegistrationInfo{
 					ID: r.ID, Status: r.Status, ExpiresAt: r.ExpiresAt,
 					WaitlistPos: r.WaitlistPos, PaidAt: r.PaidAt,
+					HasPayment: r.StripePaymentIntentID != nil,
 				},
 				DisplayName: r.DisplayName, Email: r.Email, CreatedAt: r.CreatedAt,
 			}
@@ -571,6 +589,31 @@ func registerEventAdmin(api huma.API, deps Deps) {
 			return nil, eventProblem(http.StatusNotFound, "registration-not-found", "no such registration")
 		}
 		reg, err := deps.Events.DenyRefund(ctx, eventID, regID)
+		if err != nil {
+			return nil, mapEventErr(err)
+		}
+		return &registrationOutput{Body: registrationInfoFrom(*reg)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "removeRegistration",
+		Method:      http.MethodPost,
+		Path:        "/api/events/{eventId}/registrations/{registrationId}/remove",
+		Summary:     "Remove a participant without touching money (organizer)",
+		Tags:        []string{"events"},
+	}, func(ctx context.Context, in *removeRegistrationInput) (*registrationOutput, error) {
+		if _, err := requireAdmin(ctx, deps); err != nil {
+			return nil, err
+		}
+		eventID, err := parseEventID(in.EventID)
+		if err != nil {
+			return nil, err
+		}
+		regID, err := uuid.Parse(in.RegistrationID)
+		if err != nil {
+			return nil, eventProblem(http.StatusNotFound, "registration-not-found", "no such registration")
+		}
+		reg, err := deps.Events.RemoveRegistration(ctx, eventID, regID, in.Body.KeepPayment)
 		if err != nil {
 			return nil, mapEventErr(err)
 		}
