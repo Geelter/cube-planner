@@ -349,7 +349,11 @@ func (s *Service) ResolveList(ctx context.Context, text string) ([]ResolvedLine,
 		case !l.OK:
 			rl.Status = StatusUnmatched
 		case l.SetCode != "" && l.CollectorNumber != "":
-			if ref, ok := exactByPrinting[l.SetCode+"|"+l.CollectorNumber]; ok {
+			ref, ok := exactByPrinting[l.SetCode+"|"+l.CollectorNumber]
+			// The set+collector-number slot must also carry the name the user
+			// typed — otherwise a mistyped collector number silently resolves
+			// to whatever unrelated card actually occupies that slot.
+			if ok && NormalizeName(ref.Name) == NormalizeName(l.Name) {
 				rl.Status, rl.Match = StatusMatched, &ref
 				break
 			}
@@ -420,11 +424,14 @@ func (s *Service) ResolveList(ctx context.Context, text string) ([]ResolvedLine,
 // printingsForName returns every printing of name, for use as
 // printing-not-found suggestions. The oracle id comes from the already
 // batched exact-name lookup, so only misses pay for the extra query —
-// the same trade-off suggest() makes for the name-only branch.
+// the same trade-off suggest() makes for the name-only branch. When the
+// exact name itself doesn't match (a set-bearing line with a misspelled
+// name), it falls back to the same fuzzy suggest() the name-only branch
+// uses, rather than leaving the line a dead end.
 func (s *Service) printingsForName(ctx context.Context, exact map[string][]CardRef, name string) ([]CardRef, error) {
 	matches := exact[NormalizeName(name)]
 	if len(matches) == 0 {
-		return nil, nil
+		return s.suggest(ctx, name)
 	}
 	rows, err := s.queries.GetPrintingsByOracleID(ctx, matches[0].OracleID)
 	if err != nil {
