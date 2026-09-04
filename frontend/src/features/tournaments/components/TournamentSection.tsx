@@ -2,7 +2,7 @@ import { useId, useState, type KeyboardEvent } from "react";
 import { m } from "@/paraglide/messages";
 import { useMe } from "@/features/auth/api";
 import { Button } from "@/shared/ui/button";
-import { Dialog } from "@/shared/ui/dialog";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   NotFoundError,
   usePlayerAction,
@@ -186,36 +186,26 @@ export function TournamentSection({ eventId }: { eventId: string }) {
         </p>
       )}
 
-      <Dialog
+      <ConfirmDialog
         open={confirmDrop}
         onClose={() => setConfirmDrop(false)}
         title={m.tournament_drop_self()}
-      >
-        <p className="text-sm text-fg">{m.tournament_drop_confirm()}</p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => setConfirmDrop(false)}>
-            {m.dialog_close()}
-          </Button>
-          <Button
-            type="button"
-            loading={playerAction.isPending}
-            onClick={() => {
-              // Keep the dialog open while the action is in flight so the
-              // spinner is visible; close once the mutation settles.
-              if (myPlayer) {
-                playerAction.mutate(
-                  { playerId: myPlayer.id, action: "drop" },
-                  { onSettled: () => setConfirmDrop(false) },
-                );
-              } else {
-                setConfirmDrop(false);
-              }
-            }}
-          >
-            {m.tournament_drop()}
-          </Button>
-        </div>
-      </Dialog>
+        message={m.tournament_drop_confirm()}
+        confirmLabel={m.tournament_drop()}
+        pending={playerAction.isPending}
+        onConfirm={() => {
+          // Keep the dialog open while the action is in flight so the
+          // spinner is visible; close once the mutation settles.
+          if (myPlayer) {
+            playerAction.mutate(
+              { playerId: myPlayer.id, action: "drop" },
+              { onSettled: () => setConfirmDrop(false) },
+            );
+          } else {
+            setConfirmDrop(false);
+          }
+        }}
+      />
     </section>
   );
 }

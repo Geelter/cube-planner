@@ -97,6 +97,23 @@ func eventCancelledEmail(u db.User, ev db.Event, refunded bool, baseURL string) 
 	}
 }
 
+func participantRemovedEmail(u db.User, ev db.Event, feeKept bool, baseURL string) pendingEmail {
+	plNote := "Opłata nie została pobrana."
+	enNote := "No fee was charged."
+	if feeKept {
+		plNote = "Opłata nie zostanie zwrócona — skontaktuj się z organizatorem, jeśli to pomyłka."
+		enNote = "Your fee will not be refunded — contact the organizer if this is a mistake."
+	}
+	return pendingEmail{
+		to:      u.Email,
+		subject: fmt.Sprintf("Usunięcie z wydarzenia / Removed from event: %s", ev.Name),
+		body: fmt.Sprintf(
+			"Cześć %s,\n\nOrganizator usunął Cię z %s. %s\n\n---\n\nHi %s,\n\nThe organizer removed you from %s. %s",
+			u.DisplayName, ev.Name, plNote, u.DisplayName, ev.Name, enNote,
+		),
+	}
+}
+
 func paymentAfterExpiryEmail(u db.User, ev db.Event, baseURL string) pendingEmail {
 	return pendingEmail{
 		to:      u.Email,

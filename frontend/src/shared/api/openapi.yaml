@@ -759,6 +759,8 @@ components:
         expiresAt:
           format: date-time
           type: string
+        hasPayment:
+          type: boolean
         id:
           type: string
         paidAt:
@@ -773,6 +775,7 @@ components:
             - refund_requested
             - refunded
             - expired
+            - removed
           type: string
         waitlistPos:
           format: int64
@@ -783,6 +786,7 @@ components:
         - createdAt
         - id
         - status
+        - hasPayment
       type: object
     EventSummary:
       additionalProperties: false
@@ -1231,6 +1235,8 @@ components:
         expiresAt:
           format: date-time
           type: string
+        hasPayment:
+          type: boolean
         id:
           type: string
         paidAt:
@@ -1245,6 +1251,7 @@ components:
             - refund_requested
             - refunded
             - expired
+            - removed
           type: string
         waitlistPos:
           format: int64
@@ -1252,6 +1259,22 @@ components:
       required:
         - id
         - status
+        - hasPayment
+      type: object
+    RemoveRegistrationInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://example.com/schemas/RemoveRegistrationInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        keepPayment:
+          type: boolean
+      required:
+        - keepPayment
       type: object
     ReportResultInputBody:
       additionalProperties: false
@@ -2885,6 +2908,42 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Refund a queued or paid registration (organizer)
+      tags:
+        - events
+  /api/events/{eventId}/registrations/{registrationId}/remove:
+    post:
+      operationId: removeRegistration
+      parameters:
+        - in: path
+          name: eventId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: registrationId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemoveRegistrationInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationInfo"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a participant without touching money (organizer)
       tags:
         - events
   /api/events/{eventId}/start:

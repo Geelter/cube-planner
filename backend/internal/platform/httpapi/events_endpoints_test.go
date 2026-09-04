@@ -25,6 +25,7 @@ type endpointFakeStripe struct {
 	mu       sync.Mutex
 	sessions []events.CheckoutParams
 	refunds  []string
+	expired  []string
 }
 
 func (f *endpointFakeStripe) Configured() bool { return true }
@@ -44,6 +45,13 @@ func (f *endpointFakeStripe) RefundPaymentIntent(_ context.Context, id string) e
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.refunds = append(f.refunds, id)
+	return nil
+}
+
+func (f *endpointFakeStripe) ExpireCheckoutSession(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.expired = append(f.expired, id)
 	return nil
 }
 
@@ -295,4 +303,239 @@ func TestOrganizerLifecycleOverHTTP(t *testing.T) {
 		t.Fatalf("non-admin registrations list: want 403, got %d", resp.StatusCode)
 	}
 	_ = fake
+}
+
+// ---- PR 5: remove endpoint ----
+
+type errorModelBody struct {
+	Type string `json:"type"`
+}
+
+func TestRemoveFreeParticipantOverHTTP(t *testing.T) {
+	srv, pool, q, svc, _ := newEventsServer(t)
+	admin := loggedInClient(t, srv, q, "boss-remove-free@test")
+	makeAdmin(t, pool, "boss-remove-free@test")
+	user := loggedInClient(t, srv, q, "player-remove-free@test")
+
+	evID := seedPublishedEvent(t, pool, svc, 0, 8)
+	if resp := user.do(t, "POST", "/api/events/"+evID.String()+"/register", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("register: %d", resp.StatusCode)
+	}
+	resp := admin.do(t, "GET", "/api/events/"+evID.String()+"/registrations", "")
+	regs := decode[struct {
+		Registrations []registrationInfoBody `json:"registrations"`
+	}](t, resp)
+	if len(regs.Registrations) != 1 {
+		t.Fatalf("want one registration, got %+v", regs)
+	}
+	regID := regs.Registrations[0].ID
+
+	resp = admin.do(t, "POST", "/api/events/"+evID.String()+"/registrations/"+regID+"/remove",
+		`{"keepPayment":false}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("remove: want 200, got %d", resp.StatusCode)
+	}
+	out := decode[registrationInfoBody](t, resp)
+	if out.Status != "removed" {
+		t.Fatalf("want removed, got %s", out.Status)
+	}
+}
+
+func TestRemovePaidParticipantNeedsDecisionOverHTTP(t *testing.T) {
+	srv, pool, q, svc, _ := newEventsServer(t)
+	admin := loggedInClient(t, srv, q, "boss-remove-paid@test")
+	makeAdmin(t, pool, "boss-remove-paid@test")
+	user := loggedInClient(t, srv, q, "player-remove-paid@test")
+
+	evID := seedPublishedEvent(t, pool, svc, 2000, 8)
+	if resp := user.do(t, "POST", "/api/events/"+evID.String()+"/register", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("register: %d", resp.StatusCode)
+	}
+	resp := admin.do(t, "GET", "/api/events/"+evID.String()+"/registrations", "")
+	regs := decode[struct {
+		Registrations []registrationInfoBody `json:"registrations"`
+	}](t, resp)
+	if len(regs.Registrations) != 1 {
+		t.Fatalf("want one registration, got %+v", regs)
+	}
+	regID := regs.Registrations[0].ID
+	paidAt := time.Now()
+	pi := "pi_remove_endpoint_1"
+	regUUID, err := uuid.Parse(regID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.MarkRegistrationPaid(context.Background(), db.MarkRegistrationPaidParams{
+		ID: regUUID, PaidAt: &paidAt, PaymentIntentID: &pi,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// keepPayment=false on a paid row with an intent must 409.
+	resp = admin.do(t, "POST", "/api/events/"+evID.String()+"/registrations/"+regID+"/remove",
+		`{"keepPayment":false}`)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("remove without keepPayment: want 409, got %d", resp.StatusCode)
+	}
+	problem := decode[errorModelBody](t, resp)
+	if problem.Type != "remove-needs-decision" {
+		t.Fatalf("want type remove-needs-decision, got %q", problem.Type)
+	}
+
+	// The same row with keepPayment=true must succeed.
+	resp = admin.do(t, "POST", "/api/events/"+evID.String()+"/registrations/"+regID+"/remove",
+		`{"keepPayment":true}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("remove with keepPayment: want 200, got %d", resp.StatusCode)
+	}
+	out := decode[registrationInfoBody](t, resp)
+	if out.Status != "removed" {
+		t.Fatalf("want removed, got %s", out.Status)
+	}
+}
+
+// TestRemoveOmittedKeepPaymentIsRejected proves the money-safety property
+// the design calls for: `keepPayment` has no `omitempty`, so huma's schema
+// validation makes it required and rejects an omitted field before the
+// handler — let alone the service — ever runs. A stale client that forgets
+// the field cannot silently keep the fee or remove the player: the request
+// never takes effect at all.
+func TestRemoveOmittedKeepPaymentIsRejected(t *testing.T) {
+	srv, pool, q, svc, _ := newEventsServer(t)
+	admin := loggedInClient(t, srv, q, "boss-remove-omit@test")
+	makeAdmin(t, pool, "boss-remove-omit@test")
+	user := loggedInClient(t, srv, q, "player-remove-omit@test")
+
+	evID := seedPublishedEvent(t, pool, svc, 2000, 8)
+	if resp := user.do(t, "POST", "/api/events/"+evID.String()+"/register", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("register: %d", resp.StatusCode)
+	}
+	resp := admin.do(t, "GET", "/api/events/"+evID.String()+"/registrations", "")
+	regs := decode[struct {
+		Registrations []registrationInfoBody `json:"registrations"`
+	}](t, resp)
+	if len(regs.Registrations) != 1 {
+		t.Fatalf("want one registration, got %+v", regs)
+	}
+	regID := regs.Registrations[0].ID
+	paidAt := time.Now()
+	pi := "pi_remove_omit_1"
+	regUUID, err := uuid.Parse(regID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.MarkRegistrationPaid(context.Background(), db.MarkRegistrationPaidParams{
+		ID: regUUID, PaidAt: &paidAt, PaymentIntentID: &pi,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// No "keepPayment" key at all — not even `false`.
+	resp = admin.do(t, "POST", "/api/events/"+evID.String()+"/registrations/"+regID+"/remove", `{}`)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("remove with keepPayment omitted: want 422, got %d", resp.StatusCode)
+	}
+
+	// The row must be untouched: still paid, fee still held, player still in.
+	resp = admin.do(t, "GET", "/api/events/"+evID.String()+"/registrations", "")
+	after := decode[struct {
+		Registrations []registrationInfoBody `json:"registrations"`
+	}](t, resp)
+	if len(after.Registrations) != 1 || after.Registrations[0].Status != "paid" {
+		t.Fatalf("rejected request must not change the row, got %+v", after)
+	}
+}
+
+func TestRemoveRegistrationGating(t *testing.T) {
+	srv, pool, q, svc, _ := newEventsServer(t)
+	admin := loggedInClient(t, srv, q, "boss-remove-gate@test")
+	makeAdmin(t, pool, "boss-remove-gate@test")
+	user := loggedInClient(t, srv, q, "player-remove-gate@test")
+	anon := newCookieClient(t, srv)
+
+	evID := seedPublishedEvent(t, pool, svc, 0, 8)
+	if resp := user.do(t, "POST", "/api/events/"+evID.String()+"/register", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("register: %d", resp.StatusCode)
+	}
+	resp := admin.do(t, "GET", "/api/events/"+evID.String()+"/registrations", "")
+	regs := decode[struct {
+		Registrations []registrationInfoBody `json:"registrations"`
+	}](t, resp)
+	regID := regs.Registrations[0].ID
+
+	// Non-admin caller must 403, before any state change.
+	resp = user.do(t, "POST", "/api/events/"+evID.String()+"/registrations/"+regID+"/remove",
+		`{"keepPayment":false}`)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-admin remove: want 403, got %d", resp.StatusCode)
+	}
+
+	// Anonymous caller must 401.
+	resp = anon.do(t, "POST", "/api/events/"+evID.String()+"/registrations/"+regID+"/remove",
+		`{"keepPayment":false}`)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("anonymous remove: want 401, got %d", resp.StatusCode)
+	}
+
+	// State must be unchanged: removal by the admin still succeeds.
+	resp = admin.do(t, "GET", "/api/events/"+evID.String()+"/registrations", "")
+	regs = decode[struct {
+		Registrations []registrationInfoBody `json:"registrations"`
+	}](t, resp)
+	if regs.Registrations[0].Status != "paid" {
+		t.Fatalf("want status unchanged by rejected callers, got %s", regs.Registrations[0].Status)
+	}
+}
+
+func TestListRegistrationsExposesHasPayment(t *testing.T) {
+	srv, pool, q, svc, _ := newEventsServer(t)
+	admin := loggedInClient(t, srv, q, "boss-haspayment@test")
+	makeAdmin(t, pool, "boss-haspayment@test")
+
+	freeUser := loggedInClient(t, srv, q, "player-free-haspayment@test")
+	freeEvID := seedPublishedEvent(t, pool, svc, 0, 8)
+	if resp := freeUser.do(t, "POST", "/api/events/"+freeEvID.String()+"/register", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("register free: %d", resp.StatusCode)
+	}
+
+	paidUser := loggedInClient(t, srv, q, "player-paid-haspayment@test")
+	paidEvID := seedPublishedEvent(t, pool, svc, 2000, 8)
+	if resp := paidUser.do(t, "POST", "/api/events/"+paidEvID.String()+"/register", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("register paid: %d", resp.StatusCode)
+	}
+	resp := admin.do(t, "GET", "/api/events/"+paidEvID.String()+"/registrations", "")
+	regs := decode[struct {
+		Registrations []registrationInfoBody `json:"registrations"`
+	}](t, resp)
+	paidAt := time.Now()
+	pi := "pi_haspayment_1"
+	regUUID, err := uuid.Parse(regs.Registrations[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.MarkRegistrationPaid(context.Background(), db.MarkRegistrationPaidParams{
+		ID: regUUID, PaidAt: &paidAt, PaymentIntentID: &pi,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	resp = admin.do(t, "GET", "/api/events/"+freeEvID.String()+"/registrations", "")
+	freeRegs := decode[struct {
+		Registrations []struct {
+			HasPayment bool `json:"hasPayment"`
+		} `json:"registrations"`
+	}](t, resp)
+	if len(freeRegs.Registrations) != 1 || freeRegs.Registrations[0].HasPayment {
+		t.Fatalf("want hasPayment=false for the free row, got %+v", freeRegs)
+	}
+
+	resp = admin.do(t, "GET", "/api/events/"+paidEvID.String()+"/registrations", "")
+	paidRegs := decode[struct {
+		Registrations []struct {
+			HasPayment bool `json:"hasPayment"`
+		} `json:"registrations"`
+	}](t, resp)
+	if len(paidRegs.Registrations) != 1 || !paidRegs.Registrations[0].HasPayment {
+		t.Fatalf("want hasPayment=true for the charged row, got %+v", paidRegs)
+	}
 }

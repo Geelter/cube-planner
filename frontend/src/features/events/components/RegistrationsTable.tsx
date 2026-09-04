@@ -2,9 +2,14 @@ import { useState } from "react";
 import { getLocale } from "@/paraglide/runtime";
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui/button";
-import { Dialog } from "@/shared/ui/dialog";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { EventRegistrationRow, EventSummary } from "../api";
-import { useDenyRefund, useEventRegistrations, useRefundRegistration } from "../api";
+import {
+  useDenyRefund,
+  useEventRegistrations,
+  useRefundRegistration,
+  useRemoveRegistration,
+} from "../api";
 
 // `queue` is the only group that outlives `published`: a player who
 // self-cancels past the refund deadline lands in refund_requested, and the
@@ -37,7 +42,9 @@ const GROUPS: { key: string; title: () => string; statuses: string[]; publishedO
   },
 ];
 
-type Confirm = { kind: "refund" | "deny"; row: EventRegistrationRow };
+type Confirm =
+  | { kind: "refund" | "deny"; row: EventRegistrationRow }
+  | { kind: "remove"; row: EventRegistrationRow; keepPayment: boolean };
 
 export function RegistrationsTable({
   eventId,
@@ -49,6 +56,7 @@ export function RegistrationsTable({
   const regs = useEventRegistrations(eventId);
   const refund = useRefundRegistration(eventId);
   const deny = useDenyRefund(eventId);
+  const remove = useRemoveRegistration(eventId);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
 
   if (regs.isPending) return <p className="text-fg-muted">{m.loading()}</p>;
@@ -70,10 +78,11 @@ export function RegistrationsTable({
   );
   if (visible.length === 0) return null;
 
-  const err = refund.error ?? deny.error;
+  const err = refund.error ?? deny.error ?? remove.error;
   const locale = getLocale();
   const refundingId = refund.isPending ? refund.variables : null;
   const denyingId = deny.isPending ? deny.variables : null;
+  const removingId = remove.isPending ? remove.variables.registrationId : null;
 
   const rowMeta = (r: EventRegistrationRow) => {
     if (r.status === "pending_payment" && r.expiresAt) {
@@ -118,7 +127,8 @@ export function RegistrationsTable({
                     </span>
                     <span className="flex items-center gap-3">
                       <span className="text-fg-muted">{rowMeta(r)}</span>
-                      {(r.status === "refund_requested" || r.status === "paid") && (
+                      {(r.status === "refund_requested" ||
+                        (r.status === "paid" && r.hasPayment)) && (
                         <Button
                           type="button"
                           size="sm"
@@ -140,6 +150,21 @@ export function RegistrationsTable({
                           {m.regs_deny()}
                         </Button>
                       )}
+                      {(r.status === "paid" ||
+                        r.status === "pending_payment" ||
+                        r.status === "waitlisted") && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={r.hasPayment ? "danger" : "outline"}
+                          loading={removingId === r.id}
+                          onClick={() =>
+                            setConfirm({ kind: "remove", row: r, keepPayment: r.hasPayment })
+                          }
+                        >
+                          {r.hasPayment ? m.regs_remove_keep() : m.regs_remove()}
+                        </Button>
+                      )}
                     </span>
                   </li>
                 ))}
@@ -148,34 +173,53 @@ export function RegistrationsTable({
           </div>
         );
       })}
-      <Dialog
+      <ConfirmDialog
         open={confirm != null}
         onClose={() => setConfirm(null)}
-        title={confirm?.kind === "deny" ? m.regs_deny() : m.regs_refund()}
-      >
-        <p className="text-sm text-fg">
-          {confirm?.kind === "deny"
-            ? m.regs_deny_confirm({ name: confirm.row.displayName })
-            : confirm
-              ? m.regs_refund_confirm({ name: confirm.row.displayName })
-              : ""}
-        </p>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={() => setConfirm(null)}>
-            {m.dialog_close()}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              if (confirm?.kind === "refund") refund.mutate(confirm.row.id);
-              if (confirm?.kind === "deny") deny.mutate(confirm.row.id);
-              setConfirm(null);
-            }}
-          >
-            {confirm?.kind === "deny" ? m.regs_deny() : m.regs_refund()}
-          </Button>
-        </div>
-      </Dialog>
+        title={
+          confirm?.kind === "deny"
+            ? m.regs_deny()
+            : confirm?.kind === "remove"
+              ? confirm.keepPayment
+                ? m.regs_remove_keep()
+                : m.regs_remove()
+              : m.regs_refund()
+        }
+        message={
+          confirm == null
+            ? ""
+            : confirm.kind === "deny"
+              ? m.regs_deny_confirm({ name: confirm.row.displayName })
+              : confirm.kind === "remove"
+                ? confirm.keepPayment
+                  ? m.regs_remove_keep_confirm({ name: confirm.row.displayName })
+                  : m.regs_remove_confirm({ name: confirm.row.displayName })
+                : m.regs_refund_confirm({ name: confirm.row.displayName })
+        }
+        confirmLabel={
+          confirm?.kind === "deny"
+            ? m.regs_deny()
+            : confirm?.kind === "remove"
+              ? confirm.keepPayment
+                ? m.regs_remove_keep()
+                : m.regs_remove()
+              : m.regs_refund()
+        }
+        pending={refund.isPending || deny.isPending || remove.isPending}
+        danger={confirm?.kind === "remove" && confirm.keepPayment}
+        onConfirm={() => {
+          if (confirm == null) return;
+          if (confirm.kind === "remove") {
+            remove.mutate(
+              { registrationId: confirm.row.id, keepPayment: confirm.keepPayment },
+              { onSettled: () => setConfirm(null) },
+            );
+            return;
+          }
+          const mut = confirm.kind === "deny" ? deny : refund;
+          mut.mutate(confirm.row.id, { onSettled: () => setConfirm(null) });
+        }}
+      />
     </section>
   );
 }
