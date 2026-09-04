@@ -1269,14 +1269,18 @@ export interface components {
       updatedRows: number;
     };
     ImportResolveLine: {
+      /** @description Parsed collector-number selector, empty if none */
+      collectorNumber: string;
       /** Format: int32 */
       lineNumber: number;
       match?: components["schemas"]["ImportCardMatch"];
       /** Format: int32 */
       quantity: number;
       raw: string;
+      /** @description Parsed set selector, empty if none */
+      setCode: string;
       /** @enum {string} */
-      status: "matched" | "ambiguous" | "unmatched";
+      status: "matched" | "ambiguous" | "unmatched" | "printing-not-found";
       suggestions?: components["schemas"]["ImportCardMatch"][] | null;
     };
     Item: {

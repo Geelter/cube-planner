@@ -134,12 +134,14 @@ type ImportCardMatch struct {
 }
 
 type ImportResolveLine struct {
-	LineNumber  int32             `json:"lineNumber"`
-	Raw         string            `json:"raw"`
-	Quantity    int32             `json:"quantity"`
-	Status      string            `json:"status" enum:"matched,ambiguous,unmatched"`
-	Match       *ImportCardMatch  `json:"match,omitempty"`
-	Suggestions []ImportCardMatch `json:"suggestions,omitempty"`
+	LineNumber      int32             `json:"lineNumber"`
+	Raw             string            `json:"raw"`
+	Quantity        int32             `json:"quantity"`
+	Status          string            `json:"status" enum:"matched,ambiguous,unmatched,printing-not-found"`
+	SetCode         string            `json:"setCode" doc:"Parsed set selector, empty if none"`
+	CollectorNumber string            `json:"collectorNumber" doc:"Parsed collector-number selector, empty if none"`
+	Match           *ImportCardMatch  `json:"match,omitempty"`
+	Suggestions     []ImportCardMatch `json:"suggestions,omitempty"`
 }
 
 func importCardMatchFrom(r cards.CardRef) ImportCardMatch {
@@ -157,6 +159,7 @@ func resolveLinesFrom(lines []cards.ResolvedLine) []ImportResolveLine {
 	for i, l := range lines {
 		rl := ImportResolveLine{
 			LineNumber: l.LineNumber, Raw: l.Raw, Quantity: l.Quantity, Status: l.Status,
+			SetCode: l.SetCode, CollectorNumber: l.CollectorNumber,
 		}
 		if l.Match != nil {
 			m := importCardMatchFrom(*l.Match)

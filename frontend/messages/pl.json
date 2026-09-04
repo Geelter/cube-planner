@@ -160,6 +160,7 @@
   "collection_import_resolve_button": "Podgląd importu",
   "collection_import_matched": "Dopasowane ({count})",
   "collection_import_ambiguous": "Wymaga wyboru ({count})",
+  "collection_import_printing_not_found": "Nie znaleziono wydania — wybierz inne ({count})",
   "collection_import_unmatched": "Nie znaleziono ({count})",
   "collection_import_skip": "Pomiń tę linię",
   "collection_import_choice_label": "Dopasowanie dla „{raw}”",

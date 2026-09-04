@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/mjabloniec/cube-planner/backend/internal/db"
 )
 
 const (
@@ -166,22 +168,74 @@ const (
 	StatusMatched   = "matched"
 	StatusAmbiguous = "ambiguous"
 	StatusUnmatched = "unmatched"
+	// StatusPrintingNotFound: the name is real but the requested printing
+	// is not. Distinct from unmatched because the fix is choosing another
+	// printing, not correcting a typo.
+	StatusPrintingNotFound = "printing-not-found"
 )
 
 type ResolvedLine struct {
-	LineNumber  int32
-	Raw         string
-	Quantity    int32
-	Status      string
-	Match       *CardRef
-	Suggestions []CardRef
+	LineNumber      int32
+	Raw             string
+	Quantity        int32
+	Status          string
+	SetCode         string // echo of what was parsed, "" if absent
+	CollectorNumber string
+	Match           *CardRef
+	Suggestions     []CardRef
+}
+
+func cardRefFromSetAndCollectorRow(r db.GetCardsBySetAndCollectorNumbersRow) CardRef {
+	return CardRef{
+		ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
+		ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
+		SetName: r.SetName, CollectorNumber: r.CollectorNumber,
+		Colors:     r.Colors,
+		ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
+	}
+}
+
+func cardRefFromNameAndSetRow(r db.GetCardsByNameAndSetRow) CardRef {
+	return CardRef{
+		ScryfallID: r.ScryfallID, OracleID: r.OracleID, Name: r.Name,
+		ManaCost: r.ManaCost, TypeLine: r.TypeLine, SetCode: r.SetCode,
+		SetName: r.SetName, CollectorNumber: r.CollectorNumber,
+		Colors:     r.Colors,
+		ImageSmall: r.ImageSmall, ImageNormal: r.ImageNormal,
+	}
+}
+
+func cardRefFromCard(c db.Card) CardRef {
+	return CardRef{
+		ScryfallID: c.ScryfallID, OracleID: c.OracleID, Name: c.Name,
+		ManaCost: c.ManaCost, TypeLine: c.TypeLine, SetCode: c.SetCode,
+		SetName: c.SetName, CollectorNumber: c.CollectorNumber,
+		Colors:     c.Colors,
+		ImageSmall: c.ImageSmall, ImageNormal: c.ImageNormal,
+	}
 }
 
 // ResolveList parses pasted text and resolves each line. Pure read:
-// nothing is written. Exact (case-insensitive, normalized) name matches
-// resolve to the oracle card's representative printing; a name shared by
-// several oracle cards falls through to ambiguous; misses get fuzzy
-// suggestions or unmatched.
+// nothing is written.
+//
+// Resolution ladder, first match wins:
+//   - set + collector number given: the exact printing, or
+//     printing-not-found (suggesting every printing of that name).
+//   - set given alone: printings of that name within that set — one is
+//     matched, several (e.g. the four Antiquities Urza's Mine variants)
+//     are ambiguous; none is printing-not-found.
+//   - neither given: exact (case-insensitive, normalized) name match
+//     resolves to the oracle card's representative printing; a name
+//     shared by several oracle cards is ambiguous; misses get fuzzy
+//     suggestions or unmatched.
+//
+// A card name can itself look like it carries a selector ("Sift Through
+// Sands (FOO)"); when the set-aware reading finds nothing, the line is
+// retried as a bare name before giving up (see the loop below).
+//
+// Resolution stays batched: three constant-count queries regardless of
+// line count, plus the existing per-line fuzzy fallback for lines that
+// reach it.
 func (s *Service) ResolveList(ctx context.Context, text string) ([]ResolvedLine, error) {
 	lines, err := ParseImportText(text)
 	if err != nil {
@@ -193,17 +247,52 @@ func (s *Service) ResolveList(ctx context.Context, text string) ([]ResolvedLine,
 
 	nameSet := make(map[string]struct{})
 	var names []string
-	for _, l := range lines {
-		if !l.OK {
-			continue
+	addName := func(n string) {
+		if n == "" {
+			return
 		}
-		n := NormalizeName(l.Name)
 		if _, seen := nameSet[n]; !seen {
 			nameSet[n] = struct{}{}
 			names = append(names, n)
 		}
 	}
-	exact := make(map[string][]CardRef)
+
+	printingPairSeen := make(map[string]struct{})
+	var printingSetCodes, printingCollectorNumbers []string
+	setPairSeen := make(map[string]struct{})
+	var setNames, setNameSetCodes []string
+
+	for _, l := range lines {
+		if !l.OK {
+			continue
+		}
+		addName(NormalizeName(l.Name))
+		if l.SetCode != "" {
+			// For the whole-line retry below to hit without issuing its own
+			// query, the raw line (sans quantity) must already be in the
+			// batched name set.
+			addName(NormalizeName(NameWithoutQuantity(l.Raw)))
+		}
+		switch {
+		case l.SetCode != "" && l.CollectorNumber != "":
+			key := l.SetCode + "|" + l.CollectorNumber
+			if _, seen := printingPairSeen[key]; !seen {
+				printingPairSeen[key] = struct{}{}
+				printingSetCodes = append(printingSetCodes, l.SetCode)
+				printingCollectorNumbers = append(printingCollectorNumbers, l.CollectorNumber)
+			}
+		case l.SetCode != "":
+			key := NormalizeName(l.Name) + "|" + l.SetCode
+			if _, seen := setPairSeen[key]; !seen {
+				setPairSeen[key] = struct{}{}
+				setNames = append(setNames, NormalizeName(l.Name))
+				setNameSetCodes = append(setNameSetCodes, l.SetCode)
+			}
+		}
+	}
+
+	// Three constant-count batches, not one query per line.
+	exact := make(map[string][]CardRef) // normalized name
 	if len(names) > 0 {
 		rows, err := s.queries.GetCardsByNormalizedNames(ctx, names)
 		if err != nil {
@@ -220,12 +309,71 @@ func (s *Service) ResolveList(ctx context.Context, text string) ([]ResolvedLine,
 		}
 	}
 
+	exactByPrinting := make(map[string]CardRef) // "set|collectorNumber"
+	if len(printingSetCodes) > 0 {
+		rows, err := s.queries.GetCardsBySetAndCollectorNumbers(ctx, db.GetCardsBySetAndCollectorNumbersParams{
+			SetCodes:         printingSetCodes,
+			CollectorNumbers: printingCollectorNumbers,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			key := strings.ToLower(r.SetCode) + "|" + strings.ToLower(r.CollectorNumber)
+			exactByPrinting[key] = cardRefFromSetAndCollectorRow(r)
+		}
+	}
+
+	bySetAndName := make(map[string][]CardRef) // "normalizedName|set"
+	if len(setNames) > 0 {
+		rows, err := s.queries.GetCardsByNameAndSet(ctx, db.GetCardsByNameAndSetParams{
+			Names:    setNames,
+			SetCodes: setNameSetCodes,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			key := r.NormalizedName + "|" + strings.ToLower(r.SetCode)
+			bySetAndName[key] = append(bySetAndName[key], cardRefFromNameAndSetRow(r))
+		}
+	}
+
 	out := make([]ResolvedLine, len(lines))
 	for i, l := range lines {
-		rl := ResolvedLine{LineNumber: l.LineNumber, Raw: l.Raw, Quantity: l.Quantity}
+		rl := ResolvedLine{
+			LineNumber: l.LineNumber, Raw: l.Raw, Quantity: l.Quantity,
+			SetCode: l.SetCode, CollectorNumber: l.CollectorNumber,
+		}
 		switch {
 		case !l.OK:
 			rl.Status = StatusUnmatched
+		case l.SetCode != "" && l.CollectorNumber != "":
+			if ref, ok := exactByPrinting[l.SetCode+"|"+l.CollectorNumber]; ok {
+				rl.Status, rl.Match = StatusMatched, &ref
+				break
+			}
+			rl.Status = StatusPrintingNotFound
+			rl.Suggestions, err = s.printingsForName(ctx, exact, l.Name)
+			if err != nil {
+				return nil, err
+			}
+		case l.SetCode != "":
+			refs := bySetAndName[NormalizeName(l.Name)+"|"+l.SetCode]
+			switch len(refs) {
+			case 1:
+				rl.Status, rl.Match = StatusMatched, &refs[0]
+			case 0:
+				rl.Status = StatusPrintingNotFound
+				rl.Suggestions, err = s.printingsForName(ctx, exact, l.Name)
+				if err != nil {
+					return nil, err
+				}
+			default:
+				// The Antiquities-Urza's-Mine case: several printings share
+				// the set — the user must choose.
+				rl.Status, rl.Suggestions = StatusAmbiguous, refs
+			}
 		default:
 			matches := exact[NormalizeName(l.Name)]
 			switch len(matches) {
@@ -251,9 +399,42 @@ func (s *Service) ResolveList(ctx context.Context, text string) ([]ResolvedLine,
 				rl.Suggestions = matches
 			}
 		}
+
+		// Belt-and-braces guard: a card name may itself end in something
+		// set-code-shaped ("Sift Through Sands (FOO)"). If the set-aware
+		// reading found nothing, retry the whole line as a name before
+		// giving up, so no pathological card name becomes unimportable.
+		if (rl.Status == StatusPrintingNotFound || rl.Status == StatusUnmatched) && l.SetCode != "" {
+			if retry := exact[NormalizeName(NameWithoutQuantity(l.Raw))]; len(retry) == 1 {
+				rl.Status, rl.Match = StatusMatched, &retry[0]
+				rl.SetCode, rl.CollectorNumber = "", ""
+				rl.Suggestions = nil
+			}
+		}
+
 		out[i] = rl
 	}
 	return out, nil
+}
+
+// printingsForName returns every printing of name, for use as
+// printing-not-found suggestions. The oracle id comes from the already
+// batched exact-name lookup, so only misses pay for the extra query —
+// the same trade-off suggest() makes for the name-only branch.
+func (s *Service) printingsForName(ctx context.Context, exact map[string][]CardRef, name string) ([]CardRef, error) {
+	matches := exact[NormalizeName(name)]
+	if len(matches) == 0 {
+		return nil, nil
+	}
+	rows, err := s.queries.GetPrintingsByOracleID(ctx, matches[0].OracleID)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]CardRef, len(rows))
+	for i, r := range rows {
+		refs[i] = cardRefFromCard(r)
+	}
+	return refs, nil
 }
 
 func (s *Service) suggest(ctx context.Context, name string) ([]CardRef, error) {

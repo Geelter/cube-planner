@@ -36,6 +36,8 @@ const matchedLine = (name: string, quantity: number, scryfallId = "id"): ImportR
   raw: `${quantity} ${name}`,
   quantity,
   status: "matched",
+  setCode: "",
+  collectorNumber: "",
   match: match(scryfallId, name),
 });
 
@@ -79,9 +81,18 @@ test("paste → review groups matched/ambiguous/unmatched lines", async () => {
         raw: "Blot",
         quantity: 1,
         status: "ambiguous",
+        setCode: "",
+        collectorNumber: "",
         suggestions: [match("s1", "Lightning Bolt"), match("s2", "Lightning Blast")],
       },
-      { lineNumber: 3, raw: "Gibberish", quantity: 1, status: "unmatched" },
+      {
+        lineNumber: 3,
+        raw: "Gibberish",
+        quantity: 1,
+        status: "unmatched",
+        setCode: "",
+        collectorNumber: "",
+      },
     ]),
   );
 
@@ -92,6 +103,54 @@ test("paste → review groups matched/ambiguous/unmatched lines", async () => {
   expect(await screen.findByText("Matched (1)")).toBeInTheDocument();
   expect(screen.getByText("Needs a choice (1)")).toBeInTheDocument();
   expect(screen.getByText("Not found (1)")).toBeInTheDocument();
+});
+
+test("shows the parsed set/collector-number selector next to a matched line", async () => {
+  renderDialog({
+    onApply: () => {},
+    resolved: [
+      {
+        lineNumber: 1,
+        raw: "1 Urza's Mine (ATQ) 83a",
+        quantity: 1,
+        status: "matched",
+        setCode: "atq",
+        collectorNumber: "83a",
+        match: match("mine83a", "Urza's Mine"),
+      },
+    ],
+  });
+
+  await userEvent.type(screen.getByLabelText("Card list"), "1 Urza's Mine (ATQ) 83a");
+  await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
+
+  expect(await screen.findByText("1× Urza's Mine (ATQ) 83a")).toBeInTheDocument();
+});
+
+test("printing-not-found lines get their own group with a printing picker", async () => {
+  renderDialog({
+    onApply: () => {},
+    resolved: [
+      {
+        lineNumber: 1,
+        raw: "1 Lightning Bolt (XYZ) 999",
+        quantity: 1,
+        status: "printing-not-found",
+        setCode: "xyz",
+        collectorNumber: "999",
+        suggestions: [match("leb", "Lightning Bolt"), match("mm2", "Lightning Bolt")],
+      },
+    ],
+  });
+
+  await userEvent.type(screen.getByLabelText("Card list"), "1 Lightning Bolt (XYZ) 999");
+  await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
+
+  expect(await screen.findByText("Printing not found — pick another (1)")).toBeInTheDocument();
+  const select = screen.getByLabelText('Match for "1 Lightning Bolt (XYZ) 999"');
+  expect(select).toBeInTheDocument();
+  // Pre-selected to the first suggestion, matching how ambiguous behaves.
+  expect((select as HTMLSelectElement).value).toBe("leb");
 });
 
 test("hands resolved items to onApply instead of committing", async () => {
