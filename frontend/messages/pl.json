@@ -277,6 +277,7 @@
   "regs_status_cancelled": "Anulowana",
   "regs_status_expired": "Wygasła",
   "regs_status_refunded": "Zwrócona",
+  "regs_status_removed": "Usunięta",
   "tournament_add_round_hint": "Wszystkie zaplanowane rundy rozegrane — zwiększ liczbę planowanych rund, aby sparować kolejną.",
   "tournament_bye": "Wolny los",
   "tournament_complete_round": "Zakończ rundę",

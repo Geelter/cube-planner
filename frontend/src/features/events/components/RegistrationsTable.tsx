@@ -96,6 +96,7 @@ export function RegistrationsTable({
       cancelled: m.regs_status_cancelled(),
       refunded: m.regs_status_refunded(),
       expired: m.regs_status_expired(),
+      removed: m.regs_status_removed(),
     };
     return historyLabels[r.status] ?? r.status;
   };
