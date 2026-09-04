@@ -284,7 +284,6 @@
   "tournament_drop_self": "Drop from tournament",
   "tournament_dropped_flag": "dropped",
   "tournament_games_won": "{name}: games won",
-  "tournament_drawn_games": "Drawn games",
   "tournament_gw": "GW%",
   "tournament_missing_results": [
     {
@@ -310,6 +309,7 @@
   "tournament_rank": "#",
   "tournament_report_result": "Report result",
   "tournament_reroll": "Re-roll",
+  "tournament_result_draw_hint": "Equal game counts are recorded as a draw.",
   "tournament_result_invalid": "Enter a valid best-of-3 score.",
   "tournament_results_heading": "Results — round {number}",
   "tournament_round_tab": "Round {number}",

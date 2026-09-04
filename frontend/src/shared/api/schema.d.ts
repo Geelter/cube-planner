@@ -1398,8 +1398,6 @@ export interface components {
        */
       readonly $schema?: string;
       /** Format: int32 */
-      draws: number;
-      /** Format: int32 */
       p1Games: number;
       /** Format: int32 */
       p2Games: number;

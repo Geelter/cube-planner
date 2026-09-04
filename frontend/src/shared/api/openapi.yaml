@@ -1286,11 +1286,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        draws:
-          format: int32
-          maximum: 3
-          minimum: 0
-          type: integer
         p1Games:
           format: int32
           maximum: 2
@@ -1304,7 +1299,6 @@ components:
       required:
         - p1Games
         - p2Games
-        - draws
       type: object
     ResetPasswordInputBody:
       additionalProperties: false

@@ -263,3 +263,25 @@ func TestStandingsDropped(t *testing.T) {
 		t.Errorf("dropped winner should lead standings flagged, got %+v", top)
 	}
 }
+
+// The result form can now reach 0-0 directly (no drawn-games input to bump
+// the score away from it), so pin that a 0-0 match counts as a draw and
+// does not divide by zero computing GW%.
+func TestZeroZeroCountsAsADrawWithoutGamePoints(t *testing.T) {
+	p1, p2 := uuid.New(), uuid.New()
+	players := []Player{{ID: p1, DisplayName: "Ann"}, {ID: p2, DisplayName: "Bob"}}
+	matches := []Match{{
+		Player1: p1, Player2: &p2,
+		Result: &Result{P1Games: 0, P2Games: 0, Draws: 0},
+	}}
+	got := ComputeStandings(players, matches)
+	for _, s := range got {
+		if s.MatchPoints != 1 {
+			t.Fatalf("%s: a 0-0 match is a draw worth 1 MP, got %d", s.DisplayName, s.MatchPoints)
+		}
+		// games == 0 for this player, so GW% must not divide by zero.
+		if s.GWPercent != 0 {
+			t.Fatalf("%s: want GW%% 0 with no games played, got %v", s.DisplayName, s.GWPercent)
+		}
+	}
+}

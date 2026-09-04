@@ -198,7 +198,6 @@ type reportResultInput struct {
 	Body    struct {
 		P1Games int32 `json:"p1Games" minimum:"0" maximum:"2"`
 		P2Games int32 `json:"p2Games" minimum:"0" maximum:"2"`
-		Draws   int32 `json:"draws" minimum:"0" maximum:"3"`
 	}
 }
 
@@ -341,7 +340,7 @@ func registerTournaments(api huma.API, deps Deps) {
 		}
 		admin := isAdmin(ctx, deps)
 		if err := deps.Tournaments.ReportResult(ctx, id, matchID, uid, admin, tournaments.Result{
-			P1Games: in.Body.P1Games, P2Games: in.Body.P2Games, Draws: in.Body.Draws,
+			P1Games: in.Body.P1Games, P2Games: in.Body.P2Games, Draws: 0,
 		}); err != nil {
 			return nil, mapTournamentErr(err)
 		}
