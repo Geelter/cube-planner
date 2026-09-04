@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
-import type { TournamentInfo } from "../api";
+import type { TournamentInfo, TournamentMatch } from "../api";
 
 const report = vi.fn();
 const playerAct = vi.fn();
@@ -44,6 +44,20 @@ function renderSection() {
   return { ...view, rerenderSame: () => view.rerender(makeUi()) };
 }
 
+/** Fills in the dispute/report fields every match now carries on the wire. */
+function matchDefaults(overrides: Partial<TournamentMatch>): TournamentMatch {
+  return {
+    id: "m",
+    tableNumber: 1,
+    player1Id: "pl1",
+    disputed: false,
+    hadDispute: false,
+    reports: [],
+    resultLocked: false,
+    ...overrides,
+  };
+}
+
 function baseTournament(): TournamentInfo {
   return {
     eventId: "e1",
@@ -60,7 +74,7 @@ function baseTournament(): TournamentInfo {
       {
         number: 1,
         status: "published",
-        matches: [{ id: "m1", tableNumber: 1, player1Id: "pl1", player2Id: "pl2" }],
+        matches: [matchDefaults({ id: "m1", player2Id: "pl2" })],
       },
     ],
     standings: [
@@ -114,12 +128,12 @@ test("stale tab state falls back to exactly one selected tab", async () => {
     {
       number: 1,
       status: "completed",
-      matches: [{ id: "m1", tableNumber: 1, player1Id: "pl1", player2Id: "pl2" }],
+      matches: [matchDefaults({ id: "m1", player2Id: "pl2" })],
     },
     {
       number: 2,
       status: "published",
-      matches: [{ id: "m2", tableNumber: 1, player1Id: "pl2", player2Id: "pl1" }],
+      matches: [matchDefaults({ id: "m2", player1Id: "pl2", player2Id: "pl1" })],
     },
   ];
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -137,12 +151,12 @@ test("stale tab state falls back to exactly one selected tab", async () => {
     {
       number: 2,
       status: "completed",
-      matches: [{ id: "m3", tableNumber: 1, player1Id: "pl1", player2Id: "pl2" }],
+      matches: [matchDefaults({ id: "m3", player2Id: "pl2" })],
     },
     {
       number: 3,
       status: "published",
-      matches: [{ id: "m4", tableNumber: 1, player1Id: "pl2", player2Id: "pl1" }],
+      matches: [matchDefaults({ id: "m4", player1Id: "pl2", player2Id: "pl1" })],
     },
   ];
   view.rerender(
@@ -196,6 +210,30 @@ test("renders nothing when no tournament exists yet", () => {
   tournamentData = { ...baseTournament(), exists: false, rounds: [] };
   const { container } = renderSection();
   expect(container).toBeEmptyDOMElement();
+});
+
+test("shows the disputed badge and message on my own match", () => {
+  tournamentData = baseTournament();
+  tournamentData.rounds![0]!.matches![0] = {
+    ...tournamentData.rounds![0]!.matches![0]!,
+    disputed: true,
+  };
+  renderSection();
+  expect(screen.getByText("Disputed")).toBeInTheDocument();
+  expect(screen.getByText("Your opponent reported a different result.")).toBeInTheDocument();
+  // Still reportable — a dispute alone doesn't lock the match.
+  expect(screen.getByRole("button", { name: "Report result" })).toBeInTheDocument();
+});
+
+test("hides the report form and explains once an organizer has locked the result", () => {
+  tournamentData = baseTournament();
+  tournamentData.rounds![0]!.matches![0] = {
+    ...tournamentData.rounds![0]!.matches![0]!,
+    resultLocked: true,
+  };
+  renderSection();
+  expect(screen.getByText("The organizer recorded this result.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Report result" })).not.toBeInTheDocument();
 });
 
 test("keeps the section rendered while a background refetch is in flight", () => {

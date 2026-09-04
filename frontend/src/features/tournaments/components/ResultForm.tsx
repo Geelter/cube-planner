@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { m } from "@/paraglide/messages";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
@@ -51,18 +51,28 @@ export function ResultForm({
   onSubmit,
   pending,
   error,
+  onDirtyChange,
 }: {
   match: TournamentMatch;
   playerNames: Map<string, string>;
   onSubmit: (result: ResultInput) => void;
   pending: boolean;
   error: Error | null;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [result, setResult] = useState<ResultInput>({
     p1Games: match.p1Games ?? 0,
     p2Games: match.p2Games ?? 0,
   });
   const [touchedInvalid, setTouchedInvalid] = useState(false);
+
+  const dirty = result.p1Games !== (match.p1Games ?? 0) || result.p2Games !== (match.p2Games ?? 0);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    // Clear the flag when this form goes away, or the panel would keep
+    // prompting about a form that no longer exists.
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
 
   return (
     <form

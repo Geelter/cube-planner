@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
-import type { TournamentInfo } from "../api";
+import type { TournamentInfo, TournamentMatch } from "../api";
 
 const report = vi.fn();
 const playerAct = vi.fn();
@@ -36,6 +36,20 @@ function renderSection() {
   );
 }
 
+/** Fills in the dispute/report fields every match now carries on the wire. */
+function matchDefaults(overrides: Partial<TournamentMatch>): TournamentMatch {
+  return {
+    id: "m",
+    tableNumber: 1,
+    player1Id: "pl1",
+    disputed: false,
+    hadDispute: false,
+    reports: [],
+    resultLocked: false,
+    ...overrides,
+  };
+}
+
 function twoRoundTournament(): TournamentInfo {
   return {
     eventId: "e1",
@@ -52,12 +66,12 @@ function twoRoundTournament(): TournamentInfo {
       {
         number: 1,
         status: "completed",
-        matches: [{ id: "m1", tableNumber: 1, player1Id: "pl1", player2Id: "pl2" }],
+        matches: [matchDefaults({ id: "m1", player2Id: "pl2" })],
       },
       {
         number: 2,
         status: "published",
-        matches: [{ id: "m2", tableNumber: 1, player1Id: "pl2", player2Id: "pl1" }],
+        matches: [matchDefaults({ id: "m2", player1Id: "pl2", player2Id: "pl1" })],
       },
     ],
     standings: [],
