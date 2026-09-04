@@ -184,7 +184,7 @@ single local community.
 
 ```
 POST /api/events/{eventId}/registrations/{registrationId}/remove
-body: { keepPayment: bool }   // default false
+body: { keepPayment: bool }   // required; omitting it is rejected
 ```
 
 Admin-only. Re-reads the registration under `GetEventForUpdate` and
@@ -194,8 +194,11 @@ validates there — never trusting the client's view of the row.
   `removed`; frees the spot and runs `promoteLocked` if the row was
   holding one. `keepPayment` is irrelevant.
 - `paid` **with** an intent → requires `keepPayment: true`, else **409
-  `use-refund`**. Defaulting to false means a stale client can never
-  accidentally pocket a fee. On success the row is `removed` and
+  `remove-needs-decision`**. `keepPayment` is a required field rather
+  than a defaulted one: an omitted field is rejected by schema
+  validation before the handler runs, so a stale client can never
+  accidentally pocket a fee (fail-closed, and covered by
+  `TestRemoveOmittedKeepPaymentIsRejected`). On success the row is `removed` and
   `stripe_payment_intent_id` is **preserved**, so a later dashboard
   refund still resolves through `handleChargeRefunded`.
 - `refund_requested` → **409**, directing the organizer to Refund or
